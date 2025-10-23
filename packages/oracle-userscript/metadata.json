@@ -1,0 +1,23 @@
+{
+  "name": "CV Automations — Oracle (Carvana)",
+  "namespace": "cv-userscripts",
+  "version": "0.1.0",
+  "description": "Carvana automation foundation for Oracle FA pages.",
+  "author": "Carvana Automation",
+  "match": [
+    "https://*.fa.us2.oraclecloud.com/*"
+  ],
+  "run-at": "document-end",
+  "noframes": "",
+  "grant": [
+    "GM_getValue",
+    "GM_setValue",
+    "GM_listValues",
+    "GM_deleteValue",
+    "GM_setClipboard",
+    "GM_registerMenuCommand",
+    "GM_unregisterMenuCommand",
+    "GM_addStyle",
+    "unsafeWindow"
+  ]
+}
