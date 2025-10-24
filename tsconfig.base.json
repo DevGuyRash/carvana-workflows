@@ -8,6 +8,8 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "noEmit": true,
+    "incremental": false,
     "types": ["tampermonkey"],
     "paths": {
       "@cv/core/*": ["packages/core/src/*"]

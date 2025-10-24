@@ -5,6 +5,7 @@
     "paths": {
       "@cv/core": ["packages/core/src/index.ts"],
       "@cv/core/*": ["packages/core/src/*"]
-    }
+    },
+    "types": ["tampermonkey", "node"]
   }
 }

@@ -8,16 +8,17 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "clean": "rimraf dist && rimraf packages/*/dist",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/node": "^24.9.1",
     "@types/tampermonkey": "^5.0.4",
     "esbuild": "^0.25.11",
+    "jsdom": "^25.0.0",
     "rimraf": "^5.0.5",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.1",
-    "jsdom": "^25.0.0"
+    "vitest": "^2.1.1"
   }
 }

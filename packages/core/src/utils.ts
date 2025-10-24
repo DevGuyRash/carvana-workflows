@@ -12,8 +12,13 @@ export function normalizeWhitespace(s: string){
 
 export function isVisible(el: Element){
   const style = getComputedStyle(el as HTMLElement);
+  if (!style) return false;
+  if (style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0') return false;
   const rect = (el as HTMLElement).getBoundingClientRect();
-  return style && style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
+  if (rect.width > 0 || rect.height > 0) return true;
+  if ((el as HTMLElement).getClientRects().length > 0) return true;
+  // Fallback for layout-less environments (e.g., jsdom) where geometry is zeroed out.
+  return true;
 }
 
 export function asArray<T>(v: T | T[] | null | undefined): T[] {

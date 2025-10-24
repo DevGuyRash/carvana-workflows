@@ -10,6 +10,14 @@ import { sleep } from './utils';
 import { MenuUI } from './ui';
 import { deepRenderTemplates } from './templating';
 import { extractListData, takeFromElement } from './data';
+import {
+  getActiveProfile,
+  getProfileValues,
+  profileLabel,
+  saveProfileValues,
+  setActiveProfile,
+  type ProfileId
+} from './profiles';
 
 function isGlobalSource(s: SourceSpec): s is GlobalSource {
   return (s as any)?.global != null;
@@ -45,17 +53,25 @@ export class Engine {
     this.ui = new MenuUI(registry, store);
 
     window.addEventListener('cv-menu:run-workflow' as any, (ev: any) => {
-      const id = ev.detail.workflowId as string;
+      const { workflowId, profileId } = ev.detail || {};
+      const id = workflowId as string;
       if (!this.currentPage) return;
       const wf = this.currentPage.workflows.find(w => w.id === id);
-      if (wf) this.runWorkflow(wf).catch(err => console.error(err));
+      if (!wf) return;
+      if (profileId) {
+        setActiveProfile(this.store, wf.id, profileId as ProfileId);
+        this.ui.markActiveProfile(wf.id, profileId as ProfileId);
+      }
+      this.runWorkflow(wf).catch(err => console.error(err));
     });
 
     window.addEventListener('cv-menu:save-options' as any, (ev: any) => {
-      const { workflowId, values } = ev.detail || {};
+      const { workflowId, values, profileId } = ev.detail || {};
       if (!workflowId) return;
-      this.store.set(`wf:opts:${workflowId}`, values || {});
-      alert(`Saved options for ${workflowId}`);
+      const targetProfile = (profileId as ProfileId) || getActiveProfile(this.store, workflowId);
+      saveProfileValues(this.store, workflowId, targetProfile, values || {});
+      this.ui.markActiveProfile(workflowId, targetProfile);
+      alert(`Saved ${profileLabel(targetProfile)} for ${workflowId}`);
     });
   }
 
@@ -130,8 +146,16 @@ export class Engine {
 
   private async evalCondition(c?: ConditionSpec): Promise<boolean>{
     if (!c) return true;
-    if ('exists' in c) return !!findOne(c.exists, { visibleOnly: true });
-    if ('notExists' in c) return !findOne(c.notExists, { visibleOnly: true });
+    if ('exists' in c) {
+      const spec = c.exists;
+      const visibleOnly = spec.visible === true;
+      return !!findOne(spec, { visibleOnly });
+    }
+    if ('notExists' in c) {
+      const spec = c.notExists;
+      const visibleOnly = spec.visible === true;
+      return !findOne(spec, { visibleOnly });
+    }
     if ('textPresent' in c) {
       const el = findOne(c.textPresent.where, { visibleOnly: true });
       if (!el) return false;
@@ -148,12 +172,13 @@ export class Engine {
     return false;
   }
 
-  private getWorkflowOptions(wf: WorkflowDefinition): Record<string, any> {
-    const saved = this.store.get<Record<string, any>>(`wf:opts:${wf.id}`, {});
+  private getWorkflowOptions(wf: WorkflowDefinition, profileOverride?: ProfileId): Record<string, any> {
     const defaults: Record<string, any> = {};
     for (const opt of (wf.options || [])){
       defaults[opt.key] = (opt as any).default;
     }
+    const profileId = profileOverride ?? getActiveProfile(this.store, wf.id);
+    const saved = getProfileValues(this.store, wf.id, profileId);
     return { ...defaults, ...saved };
   }
 
@@ -163,9 +188,13 @@ export class Engine {
     const wasRunning = this.running;
     if (!nested) this.running = true;
 
-    this.store.set('lastWorkflow', { id: wf.id, at: Date.now() });
+    const activeProfile = getActiveProfile(this.store, wf.id);
+    this.store.set('lastWorkflow', { id: wf.id, at: Date.now(), profileId: activeProfile });
 
-    const ctx = { opt: this.getWorkflowOptions(wf) };
+    const ctx = {
+      opt: this.getWorkflowOptions(wf, activeProfile),
+      profile: { id: activeProfile, label: profileLabel(activeProfile) }
+    };
 
     try {
       for (let i=0; i<wf.steps.length; i++){

@@ -1,6 +1,14 @@
 import type { PageDefinition, Registry, Settings, ThemeConfig, WorkflowDefinition, WorkflowOption } from './types';
 import { Store } from './storage';
 import { highlight, findAll } from './selector';
+import {
+  PROFILE_SLOTS,
+  type ProfileId,
+  getActiveProfile,
+  getProfileValues,
+  profileLabel,
+  setActiveProfile
+} from './profiles';
 
 const DEFAULT_THEME: ThemeConfig = {
   primary: '#1f7a8c',
@@ -20,6 +28,7 @@ export class MenuUI {
   private registry: Registry;
   private currentPage?: PageDefinition;
   private currentWorkflow?: WorkflowDefinition;
+  private optionsProfileId: ProfileId | null = null;
   private logs: string[] = [];
 
   constructor(registry: Registry, store: Store){
@@ -63,7 +72,13 @@ export class MenuUI {
   }
 
   setCurrentWorkflow(wf?: WorkflowDefinition){
+    const previousId = this.currentWorkflow?.id;
     this.currentWorkflow = wf;
+    if (!wf) {
+      this.optionsProfileId = null;
+    } else if (wf.id !== previousId || !this.optionsProfileId) {
+      this.optionsProfileId = getActiveProfile(this.store, wf.id);
+    }
     this.renderOptions();
   }
 
@@ -161,18 +176,35 @@ export class MenuUI {
     for (const wf of page.workflows){
       const item = document.createElement('div');
       item.className = 'cv-wf-item';
+      const activeProfile = getActiveProfile(this.store, wf.id);
+      const profilesHtml = PROFILE_SLOTS.map(slot => {
+        const activeClass = slot.id === activeProfile ? ' active' : '';
+        const hint = `Run ${slot.label}${slot.id === activeProfile ? ' (active)' : ''}. Shift+Click to set active without running.`;
+        return `<button class="cv-profile${activeClass}" data-profile="${slot.id}" title="${hint}">${slot.shortLabel}</button>`;
+      }).join('');
+
       item.innerHTML = `
         <div class="cv-wf-title">${wf.label}</div>
         <div class="cv-wf-desc">${wf.description || ''}</div>
-        <div class="cv-wf-actions">
-          <button class="cv-btn cv-run" data-wf="${wf.id}">Run</button>
-          <button class="cv-btn cv-edit" data-wf="${wf.id}">Selectors</button>
-          <button class="cv-btn cv-opt" data-wf="${wf.id}">Options</button>
+        <div class="cv-wf-footer">
+          <div class="cv-wf-profiles" data-wf-profiles="${wf.id}">
+            ${profilesHtml}
+          </div>
+          <div class="cv-wf-actions">
+            <button class="cv-btn cv-run" data-wf="${wf.id}" data-wf-run="${wf.id}">Run</button>
+            <button class="cv-btn cv-edit" data-wf="${wf.id}">Selectors</button>
+            <button class="cv-btn cv-opt" data-wf="${wf.id}">Options</button>
+          </div>
         </div>
       `;
-      item.querySelector('.cv-run')!.addEventListener('click', () => {
-        this.dispatch('run-workflow', { workflowId: wf.id });
-      });
+
+      const runBtn = item.querySelector('[data-wf-run="' + wf.id + '"]') as HTMLButtonElement | null;
+      if (runBtn) {
+        runBtn.textContent = `Run (${profileLabel(activeProfile)})`;
+        runBtn.addEventListener('click', () => {
+          this.dispatch('run-workflow', { workflowId: wf.id });
+        });
+      }
       item.querySelector('.cv-edit')!.addEventListener('click', () => {
         this.showSelectorEditor(wf);
       });
@@ -182,12 +214,44 @@ export class MenuUI {
         tabBtn.click();
         this.renderOptions();
       });
+
+      item.querySelectorAll<HTMLButtonElement>('.cv-profile').forEach(btn => {
+        const rawProfile = btn.getAttribute('data-profile');
+        if (!rawProfile) return;
+        const profileId = rawProfile as ProfileId;
+        btn.addEventListener('click', (event) => {
+          if ((event as MouseEvent).shiftKey) {
+            setActiveProfile(this.store, wf.id, profileId);
+            this.markActiveProfile(wf.id, profileId);
+            return;
+          }
+          this.dispatch('run-workflow', { workflowId: wf.id, profileId });
+        });
+      });
+
       list.appendChild(item);
     }
   }
 
-  private savedOptionsFor(wf: WorkflowDefinition): Record<string, any> {
-    return this.store.get(`wf:opts:${wf.id}`, {});
+  markActiveProfile(workflowId: string, profileId: ProfileId){
+    const wrap = this.shadow.querySelector(`[data-wf-profiles="${workflowId}"]`);
+    if (wrap) {
+      wrap.querySelectorAll<HTMLButtonElement>('.cv-profile').forEach(btn => {
+        const rawId = btn.getAttribute('data-profile');
+        if (!rawId) return;
+        const id = rawId as ProfileId;
+        const slot = PROFILE_SLOTS.find(s => s.id === id);
+        const base = `Run ${slot?.label ?? id}`;
+        btn.classList.toggle('active', id === profileId);
+        btn.title = `${base}${id === profileId ? ' (active)' : ''}. Shift+Click to set active without running.`;
+      });
+    }
+    const runBtn = this.shadow.querySelector(`[data-wf-run="${workflowId}"]`) as HTMLButtonElement | null;
+    if (runBtn) runBtn.textContent = `Run (${profileLabel(profileId)})`;
+  }
+
+  private profileValuesFor(wf: WorkflowDefinition, profileId: ProfileId): Record<string, any> {
+    return getProfileValues(this.store, wf.id, profileId);
   }
 
   private renderOptions(){
@@ -198,7 +262,33 @@ export class MenuUI {
       wrap.innerHTML = '<div class="cv-empty">Select a workflow and click Options.</div>';
       return;
     }
-    const saved = this.savedOptionsFor(wf);
+    const profileId = this.optionsProfileId ?? getActiveProfile(this.store, wf.id);
+    this.optionsProfileId = profileId;
+
+    const tabs = document.createElement('div');
+    tabs.className = 'cv-row cv-profile-tabs';
+    PROFILE_SLOTS.forEach(slot => {
+      const btn = document.createElement('button');
+      btn.className = 'cv-btn cv-profile-tab' + (slot.id === profileId ? ' active' : '');
+      btn.textContent = slot.label;
+      btn.title = `Edit ${slot.label}`;
+      btn.addEventListener('click', () => {
+        this.optionsProfileId = slot.id;
+        this.renderOptions();
+      });
+      tabs.appendChild(btn);
+    });
+    wrap.appendChild(tabs);
+
+    if (!wf.options || wf.options.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'cv-empty';
+      empty.textContent = 'No options defined for this workflow yet.';
+      wrap.appendChild(empty);
+      return;
+    }
+
+    const saved = this.profileValuesFor(wf, profileId);
     const form = document.createElement('div');
     form.className = 'cv-form';
     (wf.options || []).forEach(opt => {
@@ -208,7 +298,7 @@ export class MenuUI {
     row.className = 'cv-row right';
     const save = document.createElement('button');
     save.className = 'cv-btn';
-    save.textContent = 'Save Options';
+    save.textContent = `Save ${profileLabel(profileId)}`;
     save.addEventListener('click', () => {
       const values: Record<string, any> = {};
       (wf.options || []).forEach(opt => {
@@ -226,7 +316,7 @@ export class MenuUI {
           values[opt.key] = (el as HTMLInputElement | HTMLSelectElement).value;
         }
       });
-      this.dispatch('save-options', { workflowId: wf.id, values });
+      this.dispatch('save-options', { workflowId: wf.id, values, profileId });
     });
     row.appendChild(save);
     wrap.appendChild(form);
@@ -385,7 +475,15 @@ export class MenuUI {
       .cv-empty{ opacity: .7; padding: 8px; }
       .cv-wf-item{ border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 8px; margin-bottom: 8px; }
       .cv-wf-title{ font-weight: 600; margin-bottom: 4px; }
-      .cv-wf-actions{ display:flex; gap:8px; }
+      .cv-wf-footer{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+      .cv-wf-profiles{ display:flex; gap:6px; flex-wrap:wrap; }
+      .cv-profile{ background: transparent; color: var(--cv-text); border: 1px solid rgba(255,255,255,.18); padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 12px; line-height: 1.2; }
+      .cv-profile:hover{ border-color: var(--cv-primary); color: var(--cv-primary); }
+      .cv-profile.active{ background: rgba(255,255,255,.12); border-color: var(--cv-primary); color: var(--cv-primary); }
+      .cv-wf-actions{ display:flex; gap:8px; align-items:center; }
+      .cv-profile-tabs{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 8px; }
+      .cv-profile-tab{ background: transparent; border: 1px solid rgba(255,255,255,.18); color: var(--cv-text); padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+      .cv-profile-tab.active{ background: rgba(255,255,255,.1); border-color: var(--cv-primary); color: var(--cv-primary); }
       /* Default CSS variables at scope root (shadow host) */
       :host, .cv-panel{ --cv-primary: ${DEFAULT_THEME.primary}; --cv-bg: ${DEFAULT_THEME.background}; --cv-text: ${DEFAULT_THEME.text}; --cv-accent: ${DEFAULT_THEME.accent}; }
     `;
