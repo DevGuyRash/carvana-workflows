@@ -60,4 +60,49 @@ describe('Engine extract workflows', () => {
     );
     expect(payload.href).toBe(globalThis.location.href);
   });
+
+  it('captures regex-based data and exposes template vars', async () => {
+    const workflow: WorkflowDefinition = {
+      id: 'demo.capture',
+      label: 'Demo Capture',
+      steps: [
+        {
+          kind: 'captureData',
+          id: 'paste',
+          prompt: 'Paste order data',
+          copyToClipboard: true,
+          patterns: [
+            { pattern: 'Order\\s*#\\s*(\\d+)', into: 'orderId' },
+            { pattern: 'Email:\\s*([^\\n]+)', into: 'email' }
+          ]
+        },
+        {
+          kind: 'error',
+          message: 'Order={{vars.orderId}} Email={{vars.email}}'
+        }
+      ]
+    };
+
+    const page: PageDefinition = {
+      id: 'demo',
+      label: 'Demo',
+      detector: { exists: { selector: 'html' } },
+      workflows: [workflow]
+    };
+
+    const engine = new Engine({ pages: [page] }, new Store('spec'));
+    (engine as any).promptForText = vi.fn().mockResolvedValue('Order #42\nEmail: user@test.com');
+
+    const alertMock = globalThis.alert as any;
+    alertMock.mockReset();
+
+    await engine.runWorkflow(workflow, true);
+
+    expect(clipboardMock).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(clipboardMock.mock.calls[0][0]);
+    expect(payload.orderId).toBe('42');
+    expect(payload.email).toBe('user@test.com');
+    expect(payload.__raw).toContain('Order #42');
+    expect(alertMock).toHaveBeenCalledWith('Order=42 Email=user@test.com');
+  });
 });

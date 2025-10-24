@@ -1,5 +1,5 @@
 import type {
-  Action, ActionResult, ConditionSpec, PageDefinition, Registry,
+  Action, ActionResult, CapturePattern, ConditionSpec, PageDefinition, Registry,
   SelectorSpec, Settings, WorkflowDefinition, GlobalSource, SourceSpec
 } from './types';
 import { findOne, findAll } from './selector';
@@ -34,6 +34,15 @@ function readGlobal(g: GlobalSource): string {
     default: return '';
   }
 }
+
+type RunContext = {
+  workflowId: string;
+  opt: Record<string, any>;
+  profile: { id: ProfileId; label: string };
+  vars: Record<string, any>;
+};
+
+type CaptureDataStep = Extract<Action, { kind: 'captureData' }>;
 
 export class Engine {
   private store: Store;
@@ -191,9 +200,11 @@ export class Engine {
     const activeProfile = getActiveProfile(this.store, wf.id);
     this.store.set('lastWorkflow', { id: wf.id, at: Date.now(), profileId: activeProfile });
 
-    const ctx = {
+    const ctx: RunContext = {
+      workflowId: wf.id,
       opt: this.getWorkflowOptions(wf, activeProfile),
-      profile: { id: activeProfile, label: profileLabel(activeProfile) }
+      profile: { id: activeProfile, label: profileLabel(activeProfile) },
+      vars: Object.create(null)
     };
 
     try {
@@ -201,7 +212,7 @@ export class Engine {
         const rawStep = wf.steps[i];
         const step = deepRenderTemplates(rawStep, ctx) as Action;   // inject {{opt.*}}
         this.store.set('lastStep', { workflowId: wf.id, index: i });
-        const res = await this.execStep(step);
+        const res = await this.execStep(step, ctx);
         if (!res.ok) throw new Error(res.error);
         await this.afterActionWaits();
         await sleep(this.settings.interActionDelayMs);
@@ -229,7 +240,7 @@ export class Engine {
     } catch { /* ignore */ }
   }
 
-  private async execStep(step: Action): Promise<ActionResult>{
+  private async execStep(step: Action, ctx: RunContext): Promise<ActionResult>{
     switch (step.kind){
       case 'waitFor': {
         await waitForElement(step.target, step.wait);
@@ -297,6 +308,32 @@ export class Engine {
         if ((step as any).present) this.present(out);
         return { ok: true, data: out };
       }
+      case 'captureData': {
+        const patterns = this.collectCapturePatterns(step, ctx);
+        const rememberKey = step.rememberKey ? `capture:last:${ctx.workflowId}:${step.rememberKey}` : `capture:last:${ctx.workflowId}:${step.id}`;
+        let previous = '';
+        try {
+          previous = this.store.get<string>(rememberKey, '');
+        } catch { previous = ''; }
+        this.ui.appendLog(`captureData[${ctx.workflowId}]: awaiting input for ${step.id}`);
+        const pasted = await this.promptForText(step.prompt, previous);
+        if (pasted == null) {
+          if (step.required === false) {
+            this.ui.appendLog(`captureData[${ctx.workflowId}]: cancelled (optional)`);
+            return { ok: true, data: {} };
+          }
+          return { ok: false, error: 'captureData: cancelled by user' };
+        }
+        if (rememberKey) this.store.set(rememberKey, pasted);
+        const parsed = this.applyCapturePatterns(pasted, patterns);
+        const data = { __raw: pasted, ...parsed };
+        ctx.vars[step.id] = data;
+        Object.assign(ctx.vars, parsed);
+        this.ui.appendLog(`captureData[${ctx.workflowId}]: extracted keys ${Object.keys(parsed).join(', ') || '(none)'}`);
+        if (step.present) this.present(data);
+        if (step.copyToClipboard) copy(JSON.stringify(data, null, 2));
+        return { ok: true, data };
+      }
       case 'branch': {
         const ok = await this.evalCondition(step.condition);
         if (ok && step.thenWorkflow){
@@ -338,5 +375,304 @@ export class Engine {
     } as any);
     document.body.appendChild(pre);
     setTimeout(() => pre.remove(), 4000);
+  }
+
+  private collectCapturePatterns(step: CaptureDataStep, ctx: RunContext): CapturePattern[] {
+    const patterns: CapturePattern[] = [];
+    if (Array.isArray(step.patterns)) patterns.push(...this.normalizePatterns(step.patterns));
+    if (step.optionKey) {
+      const fromOpt = ctx.opt?.[step.optionKey];
+      if (fromOpt != null) patterns.push(...this.normalizePatterns(fromOpt));
+    }
+    return patterns;
+  }
+
+  private normalizePatterns(raw: unknown): CapturePattern[] {
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+      return raw.flatMap(entry => this.normalizePatterns(entry));
+    }
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (!trimmed) return [];
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          return this.normalizePatterns(parsed);
+        } catch { /* fall through to simple format */ }
+      }
+      const eq = trimmed.indexOf('=');
+      if (eq > 0) {
+        const into = trimmed.slice(0, eq).trim();
+        const pattern = trimmed.slice(eq + 1).trim();
+        if (into && pattern) return [{ type: 'regex', into, pattern }];
+      }
+      return [];
+    }
+    if (typeof raw === 'object') {
+      const obj = raw as Record<string, any>;
+      const explicit = obj.pattern || obj.regex || obj.selector || obj.delimiter || obj.into || obj.key || obj.name;
+      if (!explicit) {
+        const entries: CapturePattern[] = [];
+        for (const [into, value] of Object.entries(obj)){
+          if (!into) continue;
+          if (typeof value === 'string') {
+            entries.push({ type: 'regex', into, pattern: value });
+          } else if (value != null) {
+            entries.push(...this.normalizePatterns({ into, ...value }));
+          }
+        }
+        return entries;
+      }
+      const into = (obj.into ?? obj.key ?? obj.name ?? '').toString().trim();
+      const declaredType = (obj.type ?? obj.kind ?? (obj.selector ? 'selector' : obj.delimiter ? 'split' : 'regex')) as string;
+      if (!into && declaredType !== 'split') return [];
+      const trim = obj.trim !== false;
+      if (declaredType === 'selector' || declaredType === 'attr' || declaredType === 'attribute') {
+        const selector = obj.selector?.toString().trim();
+        if (!selector) return [];
+        const pattern: CapturePattern = {
+          type: 'selector',
+          into,
+          selector,
+          attribute: obj.attribute?.toString(),
+          take: obj.take,
+          index: obj.index != null ? Number(obj.index) : undefined,
+          all: obj.all === true || obj.multiple === true,
+          trim
+        };
+        return [pattern];
+      }
+      if (declaredType === 'split') {
+        const delimiter = obj.delimiter != null ? String(obj.delimiter) : '';
+        if (!delimiter) return [];
+        const pattern: CapturePattern = {
+          type: 'split',
+          into: into || 'split',
+          delimiter,
+          index: obj.index != null ? Number(obj.index) : undefined,
+          trim
+        };
+        return [pattern];
+      }
+      const patternValue = (obj.pattern ?? obj.regex);
+      if (!patternValue) return [];
+      const pattern: CapturePattern = {
+        type: 'regex',
+        into,
+        pattern: patternValue.toString(),
+        flags: obj.flags ? obj.flags.toString() : undefined,
+        group: obj.group != null ? Number(obj.group) : obj.capture != null ? Number(obj.capture) : undefined,
+        matchIndex: obj.matchIndex != null ? Number(obj.matchIndex) : obj.index != null && obj.group == null ? Number(obj.index) : undefined,
+        multiple: obj.multiple === true || obj.all === true,
+        trim
+      };
+      return [pattern];
+    }
+    return [];
+  }
+
+  private async promptForText(message: string, previous?: string): Promise<string | null> {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      const overlayStyle: Partial<CSSStyleDeclaration> = {
+        position: 'fixed', inset: '0', background: 'rgba(15,15,20,0.65)', backdropFilter: 'blur(2px)',
+        zIndex: '999999999', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
+      };
+      Object.assign(overlay.style, overlayStyle);
+
+      const modal = document.createElement('div');
+      const modalStyle: Partial<CSSStyleDeclaration> = {
+        width: 'min(640px, 90vw)', maxHeight: '80vh', background: '#111826', color: '#f8fafc',
+        borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 18px 48px rgba(0,0,0,0.45)',
+        padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px', fontFamily: 'ui-sans-serif, system-ui'
+      };
+      Object.assign(modal.style, modalStyle);
+
+      const title = document.createElement('div');
+      title.textContent = message;
+      Object.assign(title.style, { fontWeight: '600', fontSize: '16px' } as Partial<CSSStyleDeclaration>);
+
+      const textarea = document.createElement('textarea');
+      textarea.spellcheck = false;
+      textarea.placeholder = 'Paste data here…';
+      textarea.value = previous ?? '';
+      const textareaStyle: Partial<CSSStyleDeclaration> = {
+        width: '100%', flex: '1 1 auto', minHeight: '180px', background: 'rgba(22,33,55,0.72)',
+        borderRadius: '10px', border: '1px solid rgba(255,255,255,0.12)', color: '#f8fafc',
+        padding: '12px', fontFamily: 'ui-monospace, Consolas, "Liberation Mono", Menlo, monospace',
+        fontSize: '13px', lineHeight: '1.45', resize: 'vertical'
+      };
+      Object.assign(textarea.style, textareaStyle);
+
+      const hint = document.createElement('div');
+      hint.textContent = 'Ctrl/Cmd + Enter to confirm · Esc to cancel';
+      Object.assign(hint.style, { opacity: '0.7', fontSize: '12px' } as Partial<CSSStyleDeclaration>);
+
+      const buttonRow = document.createElement('div');
+      Object.assign(buttonRow.style, { display: 'flex', justifyContent: 'flex-end', gap: '10px' } as Partial<CSSStyleDeclaration>);
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Cancel';
+      Object.assign(cancelBtn.style, this.modalButtonStyle(false));
+
+      const okBtn = document.createElement('button');
+      okBtn.textContent = 'Use Data';
+      Object.assign(okBtn.style, this.modalButtonStyle(true));
+
+      buttonRow.appendChild(cancelBtn);
+      buttonRow.appendChild(okBtn);
+
+      modal.appendChild(title);
+      modal.appendChild(textarea);
+      modal.appendChild(hint);
+      modal.appendChild(buttonRow);
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+
+      const cleanup = () => {
+        document.body.removeChild(overlay);
+        document.removeEventListener('keydown', onKey);
+      };
+
+      const resolveWith = (value: string | null) => {
+        cleanup();
+        resolve(value);
+      };
+
+      const onKey = (ev: KeyboardEvent) => {
+        if (ev.key === 'Escape') {
+          ev.preventDefault();
+          resolveWith(null);
+        }
+        if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') {
+          ev.preventDefault();
+          resolveWith(textarea.value);
+        }
+      };
+
+      cancelBtn.onclick = () => resolveWith(null);
+      okBtn.onclick = () => resolveWith(textarea.value);
+      overlay.addEventListener('click', (ev) => { if (ev.target === overlay) resolveWith(null); });
+
+      document.addEventListener('keydown', onKey);
+      textarea.focus({ preventScroll: true });
+      textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
+    });
+  }
+
+  private modalButtonStyle(primary: boolean): Partial<CSSStyleDeclaration> {
+    return primary
+      ? {
+          background: 'linear-gradient(90deg, #2563eb, #38bdf8)', color: '#fff', border: 'none',
+          padding: '8px 16px', borderRadius: '999px', cursor: 'pointer', fontWeight: '600'
+        }
+      : {
+          background: 'rgba(255,255,255,0.08)', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.12)',
+          padding: '8px 16px', borderRadius: '999px', cursor: 'pointer'
+        };
+  }
+
+  private applyCapturePatterns(source: string, patterns: CapturePattern[]): Record<string, any> {
+    const out: Record<string, any> = {};
+    let parsedDoc: Document | null = null;
+    const ensureDoc = () => {
+      if (!parsedDoc) {
+        try {
+          parsedDoc = new DOMParser().parseFromString(source, 'text/html');
+        } catch {
+          parsedDoc = null;
+        }
+      }
+      return parsedDoc;
+    };
+
+    for (const pattern of patterns){
+      if (!pattern) continue;
+      if (pattern.type === 'selector') {
+        const doc = ensureDoc();
+        if (!doc) {
+          out[pattern.into] = pattern.all ? [] : '';
+          continue;
+        }
+        try {
+          const nodes = Array.from(doc.querySelectorAll(pattern.selector));
+          if (pattern.all) {
+            const values = nodes.map(el => this.captureFromElement(el, pattern));
+            out[pattern.into] = pattern.trim === false ? values : values.map(v => v.trim());
+          } else {
+            const index = Math.max(0, pattern.index ?? 0);
+            const el = nodes[index];
+            if (!el) {
+              out[pattern.into] = '';
+            } else {
+              let val = this.captureFromElement(el, pattern);
+              if (pattern.trim !== false) val = val.trim();
+              out[pattern.into] = val;
+            }
+          }
+        } catch (err) {
+          console.warn('captureData selector pattern error', err);
+          out[pattern.into] = pattern.all ? [] : '';
+        }
+        continue;
+      }
+      if (pattern.type === 'split') {
+        const parts = source.split(pattern.delimiter);
+        if (pattern.index != null) {
+          const idx = pattern.index;
+          const value = parts[idx] ?? '';
+          out[pattern.into] = pattern.trim === false ? value : value.trim();
+        } else {
+          out[pattern.into] = pattern.trim === false ? parts : parts.map(p => p.trim());
+        }
+        continue;
+      }
+      const multiple = pattern.multiple === true;
+      let flags = pattern.flags || 'gm';
+      if (multiple && !flags.includes('g')) flags += 'g';
+      const groupIndex = pattern.group != null ? pattern.group : 1;
+      try {
+        const regex = new RegExp(pattern.pattern, flags);
+        if (pattern.matchIndex != null && !multiple) {
+          const desired = Math.max(1, pattern.matchIndex);
+          let count = 0;
+          let value = '';
+          let match: RegExpExecArray | null;
+          while ((match = regex.exec(source))) {
+            count += 1;
+            if (count === desired) {
+              value = (match[groupIndex] ?? match[0] ?? '').toString();
+              break;
+            }
+            if (!flags.includes('g')) break;
+          }
+          out[pattern.into] = pattern.trim === false ? value : value.trim();
+        } else if (multiple) {
+          const values: string[] = [];
+          let match: RegExpExecArray | null;
+          while ((match = regex.exec(source))) {
+            const captured = (match[groupIndex] ?? match[0] ?? '').toString();
+            values.push(pattern.trim === false ? captured : captured.trim());
+            if (!flags.includes('g')) break;
+          }
+          out[pattern.into] = values;
+        } else {
+          const match = regex.exec(source);
+          const captured = match ? (match[groupIndex] ?? match[0] ?? '').toString() : '';
+          out[pattern.into] = pattern.trim === false ? captured : captured.trim();
+        }
+      } catch (err) {
+        console.warn('captureData regex pattern error', err);
+        out[pattern.into] = multiple ? [] : '';
+      }
+    }
+    return out;
+  }
+
+  private captureFromElement(el: Element, pattern: Extract<CapturePattern, { type: 'selector' }>): string {
+    const take: any = pattern.attribute ? { attribute: pattern.attribute } : pattern.take ?? 'text';
+    const value = takeFromElement(el, take);
+    return value ?? '';
   }
 }

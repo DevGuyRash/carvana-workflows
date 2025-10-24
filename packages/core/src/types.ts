@@ -72,6 +72,11 @@ export type WorkflowOption =
 
 export type TakeSpec = 'text'|'html'|'value'|'href'|{attribute: string}|'raw';
 
+export type CapturePattern =
+  | { type?: 'regex'; into: string; pattern: string; flags?: string; group?: number; matchIndex?: number; multiple?: boolean; trim?: boolean }
+  | { type: 'selector'; into: string; selector: string; attribute?: string; take?: TakeSpec; index?: number; all?: boolean; trim?: boolean }
+  | { type: 'split'; into: string; delimiter: string; index?: number; trim?: boolean };
+
 export type Action =
   | { kind: 'waitFor'; target: SelectorSpec; wait?: WaitOptions; comment?: string }
   | { kind: 'delay'; ms: number; comment?: string }
@@ -87,6 +92,17 @@ export type Action =
       visibleOnly?: boolean;
       copyToClipboard?: boolean;
       present?: boolean;
+      comment?: string;
+    }
+  | { kind: 'captureData';
+      id: string;
+      prompt: string;
+      patterns?: CapturePattern[];
+      optionKey?: string; // optional workflow option containing array/object patterns
+      required?: boolean;
+      present?: boolean;
+      copyToClipboard?: boolean;
+      rememberKey?: string; // optional key to cache last input
       comment?: string;
     }
   | { kind: 'branch'; condition: ConditionSpec; thenWorkflow: string; elseWorkflow?: string; comment?: string }
