@@ -179,7 +179,7 @@ export class MenuUI {
       const activeProfile = getActiveProfile(this.store, wf.id);
       const profilesHtml = PROFILE_SLOTS.map(slot => {
         const activeClass = slot.id === activeProfile ? ' active' : '';
-        const hint = `Run ${slot.label}${slot.id === activeProfile ? ' (active)' : ''}. Shift+Click to set active without running.`;
+        const hint = `Click to activate ${slot.label}${slot.id === activeProfile ? ' (active)' : ''}. Ctrl/Cmd/Alt+Click to run immediately.`;
         return `<button class="cv-profile${activeClass}" data-profile="${slot.id}" title="${hint}">${slot.shortLabel}</button>`;
       }).join('');
 
@@ -220,12 +220,17 @@ export class MenuUI {
         if (!rawProfile) return;
         const profileId = rawProfile as ProfileId;
         btn.addEventListener('click', (event) => {
-          if ((event as MouseEvent).shiftKey) {
-            setActiveProfile(this.store, wf.id, profileId);
-            this.markActiveProfile(wf.id, profileId);
-            return;
+          const mouse = event as MouseEvent;
+          const quickRun = !!(mouse.metaKey || mouse.ctrlKey || mouse.altKey);
+          setActiveProfile(this.store, wf.id, profileId);
+          this.markActiveProfile(wf.id, profileId);
+          if (this.currentWorkflow?.id === wf.id) {
+            this.optionsProfileId = profileId;
+            this.renderOptions();
           }
-          this.dispatch('run-workflow', { workflowId: wf.id, profileId });
+          if (quickRun) {
+            this.dispatch('run-workflow', { workflowId: wf.id, profileId });
+          }
         });
       });
 
@@ -241,9 +246,9 @@ export class MenuUI {
         if (!rawId) return;
         const id = rawId as ProfileId;
         const slot = PROFILE_SLOTS.find(s => s.id === id);
-        const base = `Run ${slot?.label ?? id}`;
+        const base = `Click to activate ${slot?.label ?? id}`;
         btn.classList.toggle('active', id === profileId);
-        btn.title = `${base}${id === profileId ? ' (active)' : ''}. Shift+Click to set active without running.`;
+        btn.title = `${base}${id === profileId ? ' (active)' : ''}. Ctrl/Cmd/Alt+Click to run immediately.`;
       });
     }
     const runBtn = this.shadow.querySelector(`[data-wf-run="${workflowId}"]`) as HTMLButtonElement | null;
