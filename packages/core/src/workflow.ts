@@ -428,14 +428,14 @@ export class Engine {
         continue;
       }
       const hrefBefore = typeof globalThis.location?.href === 'string' ? globalThis.location.href : '';
-      const contextToken = this.resolveAutoRunContext(wf);
+      const contextBefore = this.resolveAutoRunContext(wf);
       const pollInterval = wf.autoRun?.pollIntervalMs;
       const conditionTimeout = wf.autoRun?.waitForConditionMs ?? wf.autoRun?.waitForMs;
       const retryDelay = wf.autoRun?.retryDelayMs ?? 1500;
       const shouldRun = shouldAutoRun(prefs, hrefBefore, {
         now: Date.now(),
         force: opts?.force === true && (!onlyId || onlyId === wf.id),
-        context: contextToken
+        context: contextBefore
       });
       if (!shouldRun) {
         this.updateAutoRunStatus(wf, 'cooldown', `Auto-run pending for ${wf.label}: waiting before next run.`, 'debug');
@@ -473,7 +473,8 @@ export class Engine {
       const ok = await this.runWorkflow(wf, false, { silent: true });
       if (ok) {
         this.clearAutoRunRetry(wf.id);
-        markAutoRun(this.store, wf.id, { href: hrefBefore, at: Date.now(), context: contextToken ?? undefined });
+        const contextAfter = this.resolveAutoRunContext(wf) ?? contextBefore;
+        markAutoRun(this.store, wf.id, { href: hrefBefore, at: Date.now(), context: contextAfter ?? undefined });
         this.updateAutoRunStatus(wf, 'ran', `Auto-run completed ${wf.label}.`);
       } else {
         this.updateAutoRunStatus(wf, 'error', `Auto-run failed for ${wf.label}.`);
