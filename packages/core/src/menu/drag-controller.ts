@@ -94,17 +94,17 @@ export class DragController {
   attach(){
     if (this.active) return;
     this.active = true;
-    this.root.addEventListener('pointerdown', this.handlePointerDown, { passive: false });
-    this.root.addEventListener('keydown', this.handleKeyDown);
-    this.root.addEventListener('focusout', this.handleFocusOut);
+    this.root.addEventListener('pointerdown', this.handlePointerDown as EventListener, { passive: false });
+    this.root.addEventListener('keydown', this.handleKeyDown as EventListener);
+    this.root.addEventListener('focusout', this.handleFocusOut as EventListener);
   }
 
   detach(){
     if (!this.active) return;
     this.active = false;
-    this.root.removeEventListener('pointerdown', this.handlePointerDown);
-    this.root.removeEventListener('keydown', this.handleKeyDown);
-    this.root.removeEventListener('focusout', this.handleFocusOut);
+    this.root.removeEventListener('pointerdown', this.handlePointerDown as EventListener);
+    this.root.removeEventListener('keydown', this.handleKeyDown as EventListener);
+    this.root.removeEventListener('focusout', this.handleFocusOut as EventListener);
     this.cleanupPointerListeners();
     this.clearPointerFrame();
     this.pointerState = null;

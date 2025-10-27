@@ -9,6 +9,7 @@
     "build": "node scripts/build.mjs",
     "build:dev": "US_BASE_URL=http://localhost:4873 node scripts/build.mjs",
     "clean": "rimraf dist && rimraf packages/*/dist",
+    "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

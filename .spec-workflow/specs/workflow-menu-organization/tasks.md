@@ -30,7 +30,7 @@
   - _Requirements: Requirement 2, Requirement 3, Usability_
   - _Prompt: Implement the task for spec workflow-menu-organization, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Product UI Engineer focusing on menu ergonomics | Task: Extend MenuUI to provide hide/unhide controls, Hidden tab with search/filter, and auto-run prompts for hidden workflows | Restrictions: Maintain keyboard access for hide/unhide, reuse tab switching patterns, prevent hidden workflows from auto-run without confirmation | _Leverage: workflow-preferences.ts, autorun.ts | _Requirements: Requirement 2, Requirement 3, Usability | Success: Users can hide workflows, Hidden tab surfaces count/search, unhide restores ordering, and hidden-auto-run conflicts prompt users_
 
-- [ ] 5. Style updates for drag handles and hidden surfaces
+- [x] 5. Style updates for drag handles and hidden surfaces
   - File: packages/core/src/ui.ts (css string)
   - Introduce modern visual treatments for drag handles, drop indicators, hidden badges, and tab badges while meeting contrast guidelines
   - Ensure animations for hide transitions remain performant

@@ -12,8 +12,8 @@ function installPointerEventPolyfill(){
   class PointerEventPolyfill extends MouseEvent {
     pointerId: number;
     isPrimary: boolean;
-    clientX: number;
-    clientY: number;
+    clientX!: number;
+    clientY!: number;
 
     constructor(type: string, init: MockPointerEventInit = {}){
       super(type, init);
