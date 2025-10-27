@@ -1,5 +1,5 @@
 import { Engine, Store, Registry } from '@cv/core';
-import { OracleFallbackPage } from './pages/fallback-demo';
+import { OracleMainPage } from './pages/oracle';
 
 declare global {
   interface Window { __cvBootedOracle?: boolean }
@@ -13,7 +13,7 @@ declare global {
   (window as any).__cvBootedOracle = true;
 
   const store = new Store('cv:oracle');
-  const registry: Registry = { pages: [OracleFallbackPage] }; // demos only
+  const registry: Registry = { pages: [OracleMainPage] };
   const engine = new Engine(registry, store);
   await engine.boot();
 })();
