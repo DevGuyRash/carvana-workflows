@@ -45,7 +45,7 @@
   - _Requirements: Requirement 1, Requirement 2, Requirement 3, Reliability_
   - _Prompt: Implement the task for spec workflow-menu-organization, first run spec-workflow-guide to get the workflow guide then implement the task: Role: TypeScript Test Engineer focusing on core utilities | Task: Write unit tests validating workflow-preferences service ordering/hidden behavior and edge cases | Restrictions: Use Vitest patterns from existing core tests, mock Store interactions deterministically, avoid DOM reliance | _Leverage: autorun.test.ts patterns | _Requirements: Requirement 1, Requirement 2, Requirement 3, Reliability | Success: Tests cover reconciliation, hide/unhide, persistence errors, and pass reliably_
 
-- [ ] 7. Add integration tests for MenuUI interactions
+- [x] 7. Add integration tests for MenuUI interactions
   - File: packages/core/test/ui.menu-organization.test.ts
   - Simulate MenuUI drag reorder, hide/unhide flows, hidden tab rendering, and keyboard support using jsdom helpers
   - _Leverage: packages/core/test/ui.theme.test.ts, packages/core/src/ui.ts_
