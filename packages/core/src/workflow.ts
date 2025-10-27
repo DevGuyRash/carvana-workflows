@@ -1,6 +1,6 @@
 import type {
   Action, ActionResult, CapturePattern, ConditionSpec, PageDefinition, Registry,
-  SelectorSpec, Settings, WorkflowDefinition, GlobalSource, SourceSpec
+  SelectorSpec, Settings, WorkflowDefinition, GlobalSource, SourceSpec, WorkflowMutationWatchConfig
 } from './types';
 import { findOne, findAll } from './selector';
 import { Store } from './storage';
@@ -55,6 +55,8 @@ export class Engine {
   private running = false;
   private autoRunStatuses = new Map<string, string>();
   private autoRunRetryTimers = new Map<string, number>();
+  private mutationWatchers = new Map<string, MutationObserver>();
+  private mutationWatchTimers = new Map<string, number>();
 
   constructor(registry: Registry, store: Store){
     this.store = store;
@@ -173,7 +175,124 @@ export class Engine {
     const page = await this.detectPage();
     this.currentPage = page;
     this.ui.setPage(page);
+    this.teardownMutationWatchers();
+    if (page) {
+      for (const wf of page.workflows) {
+        this.setupMutationWatcher(wf);
+      }
+    }
     await this.handleAutoRun(page);
+  }
+
+  private teardownMutationWatchers(): void {
+    for (const [, observer] of this.mutationWatchers) {
+      observer.disconnect();
+    }
+    this.mutationWatchers.clear();
+    for (const [, timer] of this.mutationWatchTimers) {
+      window.clearTimeout(timer);
+    }
+    this.mutationWatchTimers.clear();
+  }
+
+  private removeMutationWatcher(id: string): void {
+    const observer = this.mutationWatchers.get(id);
+    if (observer) {
+      observer.disconnect();
+      this.mutationWatchers.delete(id);
+    }
+    const timer = this.mutationWatchTimers.get(id);
+    if (timer != null) {
+      window.clearTimeout(timer);
+      this.mutationWatchTimers.delete(id);
+    }
+  }
+
+  private setupMutationWatcher(wf: WorkflowDefinition): void {
+    const config = wf.autoRun?.watchMutations;
+    if (!config || wf.internal) {
+      this.removeMutationWatcher(wf.id);
+      return;
+    }
+    this.removeMutationWatcher(wf.id);
+    this.bindMutationWatcher(wf, config).catch(err => console.error(err));
+  }
+
+  private async bindMutationWatcher(
+    wf: WorkflowDefinition,
+    config: WorkflowMutationWatchConfig
+  ): Promise<void> {
+    try {
+      const root = await waitForElement(config.root, {
+        timeoutMs: 5000,
+        pollIntervalMs: 250,
+        visibleOnly: false
+      });
+      if (!root || !this.currentPage || !this.currentPage.workflows.some(w => w.id === wf.id)) {
+        return;
+      }
+      const observeChildList = config.observeChildList !== false;
+      const observeAttributes = config.observeAttributes !== false;
+      const observeCharacterData = config.observeCharacterData === true;
+
+      if (!observeChildList && !observeAttributes && !observeCharacterData) {
+        return;
+      }
+
+      const observer = new MutationObserver(mutations => {
+        if (!root.isConnected) {
+          observer.disconnect();
+          this.mutationWatchers.delete(wf.id);
+          this.setupMutationWatcher(wf);
+          return;
+        }
+        const relevant = mutations.some(m => {
+          if (m.type === 'childList' && observeChildList) return true;
+          if (m.type === 'attributes' && observeAttributes) return true;
+          if (m.type === 'characterData' && observeCharacterData) return true;
+          return false;
+        });
+        if (!relevant) return;
+        this.queueMutationAutoRun(wf, config);
+      });
+
+      observer.observe(root, {
+        subtree: true,
+        childList: observeChildList,
+        attributes: observeAttributes,
+        characterData: observeCharacterData,
+        attributeFilter: observeAttributes ? config.attributeFilter : undefined
+      });
+
+      this.mutationWatchers.set(wf.id, observer);
+    } catch (err) {
+      console.debug('Mutation watcher setup failed', err);
+    }
+  }
+
+  private queueMutationAutoRun(
+    wf: WorkflowDefinition,
+    config: WorkflowMutationWatchConfig
+  ): void {
+    const debounce = Math.max(50, config.debounceMs ?? 200);
+    const prev = this.mutationWatchTimers.get(wf.id);
+    if (prev != null) {
+      window.clearTimeout(prev);
+    }
+    const timer = window.setTimeout(() => {
+      this.mutationWatchTimers.delete(wf.id);
+      if (!this.currentPage || !this.currentPage.workflows.some(w => w.id === wf.id)) return;
+      this.evalCondition(wf.enabledWhen)
+        .then(ok => {
+          if (!ok) return;
+          return this.handleAutoRun(this.currentPage, {
+            onlyWorkflowId: wf.id,
+            force: true
+          });
+        })
+        .catch(err => console.error(err));
+    }, debounce);
+    this.mutationWatchTimers.set(wf.id, timer);
   }
 
   // NEW: watch history & hash navigation (common in Oracle/Jira SPAs)

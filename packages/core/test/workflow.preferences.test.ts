@@ -4,6 +4,7 @@ import { Store } from '../src/storage';
 import { WorkflowPreferencesService } from '../src/menu/workflow-preferences';
 
 type GmKey = string;
+type MenuPrefPayload = { version: number; order: string[]; hidden: string[] };
 
 const makeWorkflows = (ids: string[]): WorkflowDefinition[] => ids.map(id => ({
   id,
@@ -43,7 +44,7 @@ describe('workflow preferences service', () => {
     expect(lists.ordered.map(w => w.id)).toEqual(['wf.two', 'wf.three']);
     expect(lists.hidden.map(w => w.id)).toEqual(['wf.one']);
 
-    const persisted = store.get('wf:menu:prefs:page', null);
+    const persisted = store.get<MenuPrefPayload | null>('wf:menu:prefs:page', null);
     expect(persisted).not.toBeNull();
     expect(persisted?.order).toEqual(['wf.two', 'wf.one', 'wf.three']);
     expect(persisted?.hidden).toEqual(['wf.one']);
@@ -64,7 +65,7 @@ describe('workflow preferences service', () => {
     expect(lists.ordered.map(w => w.id)).toEqual(['wf.one', 'wf.two', 'wf.three']);
     expect(service.isHidden('wf.two')).toBe(false);
 
-    const persisted = store.get('wf:menu:prefs:page', null);
+    const persisted = store.get<MenuPrefPayload | null>('wf:menu:prefs:page', null);
     expect(persisted?.hidden).toEqual([]);
     expect(persisted?.order).toEqual(['wf.one', 'wf.two', 'wf.three']);
   });
@@ -83,7 +84,7 @@ describe('workflow preferences service', () => {
     expect(lists.ordered.map(w => w.id)).toEqual(['wf.one', 'wf.two']);
     expect(lists.hidden).toHaveLength(0);
 
-    const persisted = store.get('wf:menu:prefs:page', null);
+    const persisted = store.get<MenuPrefPayload | null>('wf:menu:prefs:page', null);
     expect(persisted).not.toBeNull();
     expect(persisted?.version).toBe(1);
     expect(persisted?.order).toEqual(['wf.one', 'wf.two']);
@@ -120,14 +121,14 @@ describe('workflow preferences service', () => {
     expect(lists.ordered.map(w => w.id)).toEqual(['wf.two', 'wf.one']);
     expect(lists.hidden.map(w => w.id)).toEqual(['wf.three']);
 
-    const persisted = store.get('wf:menu:prefs:page', null);
+    const persisted = store.get<MenuPrefPayload | null>('wf:menu:prefs:page', null);
     expect(persisted?.order).toEqual(['wf.two', 'wf.one', 'wf.three']);
     expect(persisted?.hidden).toEqual(['wf.three']);
 
     const unchanged = service.applyMove(workflows, 'wf.three', 0);
     expect(unchanged.ordered.map(w => w.id)).toEqual(['wf.two', 'wf.one']);
     expect(unchanged.hidden.map(w => w.id)).toEqual(['wf.three']);
-    expect(store.get('wf:menu:prefs:page', null)).toEqual(persisted);
+    expect(store.get<MenuPrefPayload | null>('wf:menu:prefs:page', null)).toEqual(persisted);
   });
 
   it('restores defaults to align with runtime workflows and clear hidden state', () => {
@@ -144,7 +145,7 @@ describe('workflow preferences service', () => {
     expect(lists.ordered.map(w => w.id)).toEqual(['wf.one', 'wf.two', 'wf.three']);
     expect(lists.hidden).toHaveLength(0);
 
-    const persisted = store.get('wf:menu:prefs:page', null);
+    const persisted = store.get<MenuPrefPayload | null>('wf:menu:prefs:page', null);
     expect(persisted?.order).toEqual(['wf.one', 'wf.two', 'wf.three']);
     expect(persisted?.hidden).toEqual([]);
   });

@@ -18,7 +18,13 @@ export const OracleExpandInvoiceSearchWorkflow: WorkflowDefinition = {
       visible: true
     },
     respectLoadingIndicator: false,
-    skipReadiness: true
+    skipReadiness: true,
+    watchMutations: {
+      root: { selector: SEARCH_CONTAINER },
+      debounceMs: 300,
+      observeAttributes: false,
+      observeCharacterData: false
+    }
   },
   profiles: { enabled: false },
   enabledWhen: {

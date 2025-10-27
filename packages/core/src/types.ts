@@ -9,7 +9,13 @@ export type TextMatcher =
 
 export type AttributeMatcher =
   | string
-  | { equals?: string; includes?: string; regex?: string; flags?: string };
+  | {
+      equals?: string;
+      includes?: string;
+      regex?: string;
+      flags?: string;
+      caseInsensitive?: boolean;
+    };
 
 export interface SelectorSpec {
   selector?: string;
@@ -108,6 +114,21 @@ export type Action =
   | { kind: 'branch'; condition: ConditionSpec; thenWorkflow: string; elseWorkflow?: string; comment?: string }
   | { kind: 'error'; message: string; comment?: string };
 
+export interface WorkflowMutationWatchConfig {
+  /** Selector describing the DOM subtree to observe for changes */
+  root: SelectorSpec;
+  /** Debounce window before forcing an auto-run retry */
+  debounceMs?: number;
+  /** Observe attribute changes in addition to child mutations (default: true) */
+  observeAttributes?: boolean;
+  /** Observe text mutations (default: false) */
+  observeCharacterData?: boolean;
+  /** Observe child list mutations (default: true) */
+  observeChildList?: boolean;
+  /** Optional attribute filter when observeAttributes is true */
+  attributeFilter?: string[];
+}
+
 export interface WorkflowAutoRunConfig {
   /** Optional timeout when waiting for auto-run conditions to become true */
   waitForMs?: number;
@@ -129,6 +150,8 @@ export interface WorkflowAutoRunConfig {
   retryDelayMs?: number;
   /** When true, skip readiness polling and rely on workflow steps to wait */
   skipReadiness?: boolean;
+  /** Watch for DOM mutations and trigger forced auto-runs when conditions reset */
+  watchMutations?: WorkflowMutationWatchConfig;
 }
 
 export interface WorkflowProfilesConfig {
