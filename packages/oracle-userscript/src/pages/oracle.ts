@@ -4,6 +4,7 @@ import {
   OracleExpandInvoicePerformWorkflow,
   OracleExpandInvoiceSearchWorkflow
 } from '../workflows/oracle-expand-invoice-search';
+import { OracleInvoiceCreatorWorkflow } from '../workflows/oracle-invoice-creator';
 
 export const OracleMainPage: PageDefinition = {
   id: 'oracle.main',
@@ -12,6 +13,7 @@ export const OracleMainPage: PageDefinition = {
   workflows: [
     OracleExpandInvoiceSearchWorkflow,
     OracleExpandInvoicePerformWorkflow,
-    OracleExpandInvoiceEnsureWorkflow
+    OracleExpandInvoiceEnsureWorkflow,
+    OracleInvoiceCreatorWorkflow
   ]
 };
