@@ -13,6 +13,7 @@ import { extractListData, takeFromElement } from './data';
 import {
   getActiveProfile,
   getProfileValues,
+  getProfilesEnabled,
   profileLabel,
   saveProfileValues,
   setActiveProfile,
@@ -52,41 +53,106 @@ export class Engine {
   private ui: MenuUI;
   private currentPage?: PageDefinition;
   private running = false;
+  private autoRunStatuses = new Map<string, string>();
+  private autoRunRetryTimers = new Map<string, number>();
 
   constructor(registry: Registry, store: Store){
     this.store = store;
     this.registry = registry;
     this.settings = store.get<Settings>('settings', {
-      theme: { primary:'#1f7a8c', background:'#0b0c10e6', text:'#f5f7fb', accent:'#ffbd59' },
+      theme: { primary:'#1f7a8c', background:'#0b0c10e6', text:'#f5f7fb', accent:'#ffbd59', panelOpacity: 0.95 },
       interActionDelayMs: 120
     });
-    this.ui = new MenuUI(registry, store);
-
-    window.addEventListener('cv-menu:run-workflow' as any, (ev: any) => {
-      const { workflowId, profileId } = ev.detail || {};
-      const id = workflowId as string;
-      if (!this.currentPage) return;
-      const wf = this.currentPage.workflows.find(w => w.id === id);
-      if (!wf) return;
-      if (profileId) {
-        setActiveProfile(this.store, wf.id, profileId as ProfileId);
-        this.ui.markActiveProfile(wf.id, profileId as ProfileId);
+    this.ui = new MenuUI(registry, store, {
+      'run-workflow': (detail: any) => {
+        this.handleRunWorkflowRequest(detail).catch(err => console.error(err));
+      },
+      'save-options': (detail: any) => {
+        this.handleSaveOptionsRequest(detail).catch(err => console.error(err));
+      },
+      'run-prefs-updated': (detail: any) => {
+        this.onRunPrefsUpdated(detail).catch(err => console.error(err));
       }
-      this.runWorkflow(wf).catch(err => console.error(err));
     });
+  }
 
-    window.addEventListener('cv-menu:save-options' as any, (ev: any) => {
-      const { workflowId, values, profileId } = ev.detail || {};
-      if (!workflowId) return;
-      const targetProfile = (profileId as ProfileId) || getActiveProfile(this.store, workflowId);
-      saveProfileValues(this.store, workflowId, targetProfile, values || {});
+  private async handleRunWorkflowRequest(detail: any): Promise<void> {
+    const { workflowId, profileId } = detail || {};
+    const id = workflowId as string;
+    if (!id || !this.currentPage) return;
+    const wf = this.currentPage.workflows.find(w => w.id === id);
+    if (!wf) return;
+    if (profileId && this.profilesEnabled(wf)) {
+      const resolved = profileId as ProfileId;
+      setActiveProfile(this.store, wf.id, resolved);
+      this.ui.markActiveProfile(wf.id, resolved);
+    }
+    await this.runWorkflow(wf);
+  }
+
+  private async handleSaveOptionsRequest(detail: any): Promise<void> {
+    const { workflowId, values, profileId } = detail || {};
+    if (!workflowId || !this.currentPage) return;
+    const wf = this.currentPage.workflows.find(w => w.id === workflowId);
+    if (!wf) return;
+    const targetProfile = this.resolveProfileId(wf, profileId as ProfileId | undefined);
+    saveProfileValues(this.store, workflowId, targetProfile, values || {});
+    if (this.profilesEnabled(wf)) {
       this.ui.markActiveProfile(workflowId, targetProfile);
-      alert(`Saved ${profileLabel(targetProfile)} for ${workflowId}`);
-    });
+      this.ui.appendLog(`Saved ${profileLabel(targetProfile)} for ${wf.label}`);
+    } else {
+      this.ui.appendLog(`Saved options for ${wf.label}`);
+    }
+  }
 
-    window.addEventListener('cv-menu:run-prefs-updated' as any, (ev: any) => {
-      this.onRunPrefsUpdated(ev.detail).catch(err => console.error(err));
-    });
+  private profilesEnabled(wf: WorkflowDefinition): boolean {
+    const defaultEnabled = wf?.profiles?.enabled ?? true;
+    return getProfilesEnabled(this.store, wf.id, { enabled: defaultEnabled });
+  }
+
+  private updateAutoRunStatus(
+    wf: WorkflowDefinition,
+    status: string,
+    message: string,
+    level: 'info' | 'debug' = 'info'
+  ): void {
+    const prev = this.autoRunStatuses.get(wf.id);
+    if (prev === status && level === 'info') return;
+    this.autoRunStatuses.set(wf.id, status);
+    this.ui.appendLog(message, level);
+  }
+
+  private clearAutoRunRetry(workflowId: string): void {
+    const timer = this.autoRunRetryTimers.get(workflowId);
+    if (timer != null) {
+      window.clearTimeout(timer);
+      this.autoRunRetryTimers.delete(workflowId);
+    }
+  }
+
+  private scheduleAutoRunRetry(wf: WorkflowDefinition, delayMs?: number): void {
+    const delay = Math.max(250, delayMs ?? 1500);
+    this.clearAutoRunRetry(wf.id);
+    const timer = window.setTimeout(() => {
+      this.autoRunRetryTimers.delete(wf.id);
+      if (!this.currentPage) return;
+      this.handleAutoRun(this.currentPage, {
+        onlyWorkflowId: wf.id,
+        force: true
+      }).catch(err => console.error(err));
+    }, delay);
+    this.autoRunRetryTimers.set(wf.id, timer);
+    this.ui.appendLog(`Auto-run retry queued for ${wf.label} in ${(delay / 1000).toFixed(1)}s.`, 'debug');
+  }
+
+  private resolveProfileId(wf: WorkflowDefinition, requested?: ProfileId | null): ProfileId {
+    if (!this.profilesEnabled(wf)) return 'p1';
+    if (requested) return requested;
+    return getActiveProfile(this.store, wf.id);
+  }
+
+  private profileDisplayLabel(wf: WorkflowDefinition, profileId: ProfileId): string {
+    return this.profilesEnabled(wf) ? profileLabel(profileId) : 'Default';
   }
 
   async boot(){
@@ -158,20 +224,63 @@ export class Engine {
     if (!page) return;
     const onlyId = opts?.onlyWorkflowId;
     for (const wf of page.workflows) {
+      if (wf.internal) continue;
       if (onlyId && wf.id !== onlyId) continue;
       const prefs = getRunPrefs(this.store, wf.id);
+      if (!prefs.auto) {
+        this.updateAutoRunStatus(wf, 'disabled', `Auto-run disabled for ${wf.label}.`, 'debug');
+        this.clearAutoRunRetry(wf.id);
+        continue;
+      }
       const hrefBefore = typeof globalThis.location?.href === 'string' ? globalThis.location.href : '';
+      const pollInterval = wf.autoRun?.pollIntervalMs;
+      const conditionTimeout = wf.autoRun?.waitForConditionMs ?? wf.autoRun?.waitForMs;
+      const retryDelay = wf.autoRun?.retryDelayMs ?? 1500;
       const shouldRun = shouldAutoRun(prefs, hrefBefore, {
         now: Date.now(),
         force: opts?.force === true && (!onlyId || onlyId === wf.id)
       });
-      if (!shouldRun) continue;
-      if (this.running) continue;
-      if (!(await this.evalCondition(wf.enabledWhen))) continue;
-      this.ui.appendLog(`Auto-run: ${wf.label}`);
+      if (!shouldRun) {
+        this.updateAutoRunStatus(wf, 'cooldown', `Auto-run pending for ${wf.label}: waiting before next run.`, 'debug');
+        continue;
+      }
+      if (this.running) {
+        this.updateAutoRunStatus(wf, 'busy', `Auto-run skipped for ${wf.label}: another workflow is running.`, 'debug');
+        this.scheduleAutoRunRetry(wf, retryDelay);
+        continue;
+      }
+      const ready = await this.waitForCondition(wf.enabledWhen, {
+        timeoutMs: conditionTimeout,
+        intervalMs: pollInterval
+      });
+      if (!ready) {
+        this.updateAutoRunStatus(wf, 'blocked', `Auto-run skipped for ${wf.label}: conditions not met yet.`, 'debug');
+        this.scheduleAutoRunRetry(wf, retryDelay);
+        continue;
+      }
+      const readyTimeout = wf.autoRun?.waitForReadyMs ?? wf.autoRun?.waitForMs;
+      const skipReadiness = wf.autoRun?.skipReadiness === true;
+      if (!skipReadiness) {
+        this.updateAutoRunStatus(wf, 'waiting-ready', `Auto-run waiting for ${wf.label} to become interactive...`, 'debug');
+        const interactive = await this.waitForAutoRunReadiness(wf, {
+          timeoutMs: readyTimeout,
+          intervalMs: pollInterval
+        });
+        if (!interactive) {
+          this.updateAutoRunStatus(wf, 'ready-timeout', `Auto-run timed out waiting for ${wf.label} readiness.`, 'debug');
+          this.scheduleAutoRunRetry(wf, retryDelay);
+          continue;
+        }
+      }
+      this.updateAutoRunStatus(wf, 'starting', `Auto-run starting ${wf.label}...`);
       const ok = await this.runWorkflow(wf, false, { silent: true });
       if (ok) {
+        this.clearAutoRunRetry(wf.id);
         markAutoRun(this.store, wf.id, { href: hrefBefore, at: Date.now() });
+        this.updateAutoRunStatus(wf, 'ran', `Auto-run completed ${wf.label}.`);
+      } else {
+        this.updateAutoRunStatus(wf, 'error', `Auto-run failed for ${wf.label}.`);
+        this.scheduleAutoRunRetry(wf, retryDelay);
       }
     }
   }
@@ -202,6 +311,98 @@ export class Engine {
     return undefined;
   }
 
+  private async waitForCondition(
+    condition?: ConditionSpec,
+    opts?: { timeoutMs?: number; intervalMs?: number }
+  ): Promise<boolean> {
+    if (!condition) return true;
+    const timeoutMs = Math.max(0, opts?.timeoutMs ?? 0);
+    const intervalMs = Math.max(25, opts?.intervalMs ?? 150);
+    const deadline = Date.now() + timeoutMs;
+    while (true) {
+      if (await this.evalCondition(condition)) return true;
+      if (timeoutMs === 0 || Date.now() >= deadline) return false;
+      await sleep(intervalMs);
+    }
+  }
+
+  private selectorMatches(spec?: SelectorSpec): boolean {
+    if (!spec) return true;
+    try {
+      const visibleOnly = spec.visible === true;
+      return !!findOne(spec, { visibleOnly });
+    } catch {
+      return false;
+    }
+  }
+
+  private selectorInteractable(spec?: SelectorSpec): boolean {
+    if (!spec) return true;
+    try {
+      const el = findOne(spec, { visibleOnly: true });
+      if (!el) return false;
+      const rect = (el as HTMLElement).getBoundingClientRect?.();
+      if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+      const ariaExpanded = el.getAttribute('aria-expanded');
+      if (ariaExpanded && ariaExpanded.toLowerCase() === 'false') {
+        return true;
+      }
+      const ariaDisabled = el.getAttribute('aria-disabled');
+      if (ariaDisabled && ariaDisabled.toLowerCase() === 'true') return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private isLoadingActive(): boolean {
+    const indicator = this.settings.loadingIndicator;
+    if (!indicator) return false;
+    try {
+      const visibleOnly = indicator.visible === true;
+      return !!findOne(indicator, { visibleOnly });
+    } catch {
+      return false;
+    }
+  }
+
+  private async waitForAutoRunReadiness(
+    wf: WorkflowDefinition,
+    opts?: { timeoutMs?: number; intervalMs?: number }
+  ): Promise<boolean> {
+    const timeoutMs = Math.max(0, opts?.timeoutMs ?? 0);
+    const intervalMs = Math.max(25, opts?.intervalMs ?? wf.autoRun?.pollIntervalMs ?? 150);
+    const deadline = timeoutMs > 0 ? Date.now() + timeoutMs : 0;
+    const respectLoading = wf.autoRun?.respectLoadingIndicator !== false;
+    const waitFor = wf.autoRun?.waitForSelector;
+    const waitForHidden = wf.autoRun?.waitForHiddenSelector;
+    const waitForInteractable = wf.autoRun?.waitForInteractableSelector;
+
+    while (true) {
+      if (respectLoading && this.isLoadingActive()) {
+        if (timeoutMs > 0 && Date.now() >= deadline) return false;
+        await sleep(intervalMs);
+        continue;
+      }
+      if (waitFor && !this.selectorMatches(waitFor)) {
+        if (timeoutMs > 0 && Date.now() >= deadline) return false;
+        await sleep(intervalMs);
+        continue;
+      }
+      if (waitForHidden && this.selectorMatches(waitForHidden)) {
+        if (timeoutMs > 0 && Date.now() >= deadline) return false;
+        await sleep(intervalMs);
+        continue;
+      }
+      if (waitForInteractable && !this.selectorInteractable(waitForInteractable)) {
+        if (timeoutMs > 0 && Date.now() >= deadline) return false;
+        await sleep(intervalMs);
+        continue;
+      }
+      return true;
+    }
+  }
+
   private async evalCondition(c?: ConditionSpec): Promise<boolean>{
     if (!c) return true;
     if ('exists' in c) {
@@ -230,12 +431,12 @@ export class Engine {
     return false;
   }
 
-  private getWorkflowOptions(wf: WorkflowDefinition, profileOverride?: ProfileId): Record<string, any> {
+  private getWorkflowOptions(wf: WorkflowDefinition, profileOverride?: ProfileId | null): Record<string, any> {
     const defaults: Record<string, any> = {};
     for (const opt of (wf.options || [])){
       defaults[opt.key] = (opt as any).default;
     }
-    const profileId = profileOverride ?? getActiveProfile(this.store, wf.id);
+    const profileId = this.resolveProfileId(wf, profileOverride ?? null);
     const saved = getProfileValues(this.store, wf.id, profileId);
     return { ...defaults, ...saved };
   }
@@ -247,23 +448,28 @@ export class Engine {
   ): Promise<boolean> {
     if (!wf) return false;
     if (this.running && !nested) {
-      if (!options.silent) alert('A workflow is already running.');
+      if (!options.silent) this.ui.appendLog(`Skipped ${wf.label}: another workflow in progress.`);
       return false;
     }
     const wasRunning = this.running;
     if (!nested) this.running = true;
 
-    const activeProfile = getActiveProfile(this.store, wf.id);
+    const activeProfile = this.resolveProfileId(wf, null);
+    const displayLabel = this.profileDisplayLabel(wf, activeProfile);
     this.store.set('lastWorkflow', { id: wf.id, at: Date.now(), profileId: activeProfile });
 
     const ctx: RunContext = {
       workflowId: wf.id,
       opt: this.getWorkflowOptions(wf, activeProfile),
-      profile: { id: activeProfile, label: profileLabel(activeProfile) },
+      profile: { id: activeProfile, label: displayLabel },
       vars: Object.create(null)
     };
 
     let success = false;
+
+    if (!nested && !options.silent) {
+      this.ui.appendLog(`Running ${wf.label} (${displayLabel})`);
+    }
 
     try {
       for (let i=0; i<wf.steps.length; i++){
@@ -271,16 +477,21 @@ export class Engine {
         const step = deepRenderTemplates(rawStep, ctx) as Action;   // inject {{opt.*}}
         this.store.set('lastStep', { workflowId: wf.id, index: i });
         const res = await this.execStep(step, ctx);
-        if (!res.ok) throw new Error(res.error);
+        if (!res.ok) {
+          const stepKind = (rawStep as any)?.kind ?? `step ${i}`;
+          const reason = res.error ?? 'unknown error';
+          throw new Error(`${stepKind}: ${reason}`);
+        }
         await this.afterActionWaits();
         await sleep(this.settings.interActionDelayMs);
       }
       success = true;
-      if (!nested && !options.silent) alert(`Workflow "${wf.label}" completed.`);
+      if (!nested && !options.silent) this.ui.appendLog(`Workflow "${wf.label}" completed successfully.`);
     } catch (e: any) {
       console.error(e);
       success = false;
-      if (!nested && !options.silent) alert(`Workflow "${wf.label}" failed: ${e.message}`);
+      const message = e?.message ?? String(e ?? 'unknown error');
+      this.ui.appendLog(`Workflow "${wf.label}" failed: ${message}`, options.silent ? 'debug' : 'info');
     } finally {
       if (!nested) this.running = wasRunning;
     }
@@ -312,12 +523,37 @@ export class Engine {
         return { ok: true };
       }
       case 'click': {
+        const attemptClick = async (): Promise<ActionResult> => {
+          const el = findOne(step.target, { visibleOnly: true });
+          if (!el) return { ok: false, error: 'click: target not found' };
+          (el as HTMLElement).click();
+          return { ok: true };
+        };
+
         if (step.preWait) await waitForElement(step.target, step.preWait);
-        const el = findOne(step.target, { visibleOnly: true });
-        if (!el) return { ok: false, error: 'click: target not found' };
-        (el as HTMLElement).click();
-        if (step.postWaitFor) await waitForElement(step.postWaitFor, { timeoutMs: 15000, visibleOnly: true });
-        return { ok: true };
+
+        let result = await attemptClick();
+        if (!result.ok) return result;
+
+        const postWait = step.postWaitFor;
+        if (!postWait) return { ok: true };
+
+        const timeout = step.postWaitTimeoutMs ?? 15000;
+        const start = Date.now();
+        const poll = step.postWaitPollMs ?? 250;
+
+        while (Date.now() - start <= timeout) {
+          try {
+            await waitForElement(postWait, { timeoutMs: poll, visibleOnly: true });
+            return { ok: true };
+          } catch {
+            result = await attemptClick();
+            if (!result.ok) return result;
+            await sleep(Math.min(poll, 200));
+          }
+        }
+
+        return { ok: false, error: 'click: post wait timeout' };
       }
       case 'type': {
         const el = findOne(step.target, { visibleOnly: true }) as HTMLInputElement | HTMLTextAreaElement | null;

@@ -80,7 +80,7 @@ export type CapturePattern =
 export type Action =
   | { kind: 'waitFor'; target: SelectorSpec; wait?: WaitOptions; comment?: string }
   | { kind: 'delay'; ms: number; comment?: string }
-  | { kind: 'click'; target: SelectorSpec; preWait?: WaitOptions; postWaitFor?: SelectorSpec; comment?: string }
+  | { kind: 'click'; target: SelectorSpec; preWait?: WaitOptions; postWaitFor?: SelectorSpec; postWaitTimeoutMs?: number; postWaitPollMs?: number; comment?: string }
   | { kind: 'type'; target: SelectorSpec; text: string; clearFirst?: boolean; perKeystrokeDelayMs?: number; postEnter?: boolean; comment?: string }
   | { kind: 'selectFromList'; list: SelectorSpec; item: SelectorSpec; comment?: string }
   | { kind: 'extract'; items: { from: SourceSpec; take?: TakeSpec; intoKey: string }[]; copyToClipboard?: boolean; present?: boolean; comment?: string }
@@ -108,6 +108,34 @@ export type Action =
   | { kind: 'branch'; condition: ConditionSpec; thenWorkflow: string; elseWorkflow?: string; comment?: string }
   | { kind: 'error'; message: string; comment?: string };
 
+export interface WorkflowAutoRunConfig {
+  /** Optional timeout when waiting for auto-run conditions to become true */
+  waitForMs?: number;
+  /** Optional poll interval while waiting for auto-run conditions */
+  pollIntervalMs?: number;
+  /** Override timeout for auto-run condition evaluation */
+  waitForConditionMs?: number;
+  /** Override timeout for readiness checks after conditions are met */
+  waitForReadyMs?: number;
+  /** Require a selector to be present before starting */
+  waitForSelector?: SelectorSpec;
+  /** Require a selector to disappear before starting */
+  waitForHiddenSelector?: SelectorSpec;
+  /** Require an element to become interactable (visible, sized, enabled) */
+  waitForInteractableSelector?: SelectorSpec;
+  /** When false, skip waiting on global loading indicator */
+  respectLoadingIndicator?: boolean;
+  /** If the workflow fails to run, retry after this delay (ms). Requires repeat=true. */
+  retryDelayMs?: number;
+  /** When true, skip readiness polling and rely on workflow steps to wait */
+  skipReadiness?: boolean;
+}
+
+export interface WorkflowProfilesConfig {
+  /** Disable profile switching UI when set to false */
+  enabled?: boolean;
+}
+
 export interface WorkflowDefinition {
   id: string;
   label: string;
@@ -116,6 +144,12 @@ export interface WorkflowDefinition {
   steps: Action[];
   /** Persisted options available as {{opt.KEY}} */
   options?: WorkflowOption[];
+  /** Controls auto-run behaviour (e.g., wait for conditions) */
+  autoRun?: WorkflowAutoRunConfig;
+  /** Controls profile selector behaviour */
+  profiles?: WorkflowProfilesConfig;
+  /** Marks helper workflows that should stay hidden from UI/autorun */
+  internal?: boolean;
 }
 
 export interface PageDefinition {
