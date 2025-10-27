@@ -9,6 +9,7 @@ import {
   profileLabel,
   setActiveProfile
 } from './profiles';
+import { getRunPrefs, updateRunPrefs, type WorkflowRunPrefs } from './autorun';
 
 const DEFAULT_THEME: ThemeConfig = {
   primary: '#1f7a8c',
@@ -183,9 +184,23 @@ export class MenuUI {
         return `<button class="cv-profile${activeClass}" data-profile="${slot.id}" title="${hint}">${slot.shortLabel}</button>`;
       }).join('');
 
+      let runPrefs: WorkflowRunPrefs = getRunPrefs(this.store, wf.id);
+
       item.innerHTML = `
         <div class="cv-wf-title">${wf.label}</div>
         <div class="cv-wf-desc">${wf.description || ''}</div>
+        <div class="cv-wf-meta">
+          <div class="cv-wf-switches">
+            <label class="cv-switch" title="Run automatically when this page is detected">
+              <input type="checkbox" data-wf-auto="${wf.id}" ${runPrefs.auto ? 'checked' : ''}>
+              <span>Auto run</span>
+            </label>
+            <label class="cv-switch" title="Re-run automatically even if this page has already run">
+              <input type="checkbox" data-wf-repeat="${wf.id}" ${runPrefs.repeat ? 'checked' : ''} ${runPrefs.auto ? '' : 'disabled'}>
+              <span>Repeat</span>
+            </label>
+          </div>
+        </div>
         <div class="cv-wf-footer">
           <div class="cv-wf-profiles" data-wf-profiles="${wf.id}">
             ${profilesHtml}
@@ -203,6 +218,32 @@ export class MenuUI {
         runBtn.textContent = `Run (${profileLabel(activeProfile)})`;
         runBtn.addEventListener('click', () => {
           this.dispatch('run-workflow', { workflowId: wf.id });
+        });
+      }
+
+      const autoToggle = item.querySelector(`[data-wf-auto="${wf.id}"]`) as HTMLInputElement | null;
+      const repeatToggle = item.querySelector(`[data-wf-repeat="${wf.id}"]`) as HTMLInputElement | null;
+
+      if (autoToggle) {
+        repeatToggle && (repeatToggle.disabled = !runPrefs.auto);
+        autoToggle.addEventListener('change', () => {
+          const prev = runPrefs;
+          runPrefs = updateRunPrefs(this.store, wf.id, { auto: autoToggle.checked });
+          if (repeatToggle) {
+            repeatToggle.disabled = !runPrefs.auto;
+            if (!runPrefs.auto) repeatToggle.checked = false;
+          }
+          this.dispatch('run-prefs-updated', { workflowId: wf.id, prefs: runPrefs, prev });
+        });
+      }
+
+      if (repeatToggle) {
+        repeatToggle.disabled = !runPrefs.auto;
+        repeatToggle.addEventListener('change', () => {
+          const prev = runPrefs;
+          runPrefs = updateRunPrefs(this.store, wf.id, { repeat: repeatToggle.checked });
+          repeatToggle.checked = runPrefs.repeat;
+          this.dispatch('run-prefs-updated', { workflowId: wf.id, prefs: runPrefs, prev });
         });
       }
       item.querySelector('.cv-edit')!.addEventListener('click', () => {
@@ -480,6 +521,14 @@ export class MenuUI {
       .cv-empty{ opacity: .7; padding: 8px; }
       .cv-wf-item{ border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 8px; margin-bottom: 8px; }
       .cv-wf-title{ font-weight: 600; margin-bottom: 4px; }
+      .cv-wf-meta{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin: 6px 0; }
+      .cv-wf-switches{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+      .cv-switch{ display:inline-flex; align-items:center; gap:6px; font-size:12px; color: rgba(255,255,255,.85); }
+      .cv-switch input{ position:relative; width:30px; height:16px; border-radius:999px; appearance:none; -webkit-appearance:none; background: rgba(255,255,255,.18); outline:none; cursor:pointer; transition: background .15s ease; }
+      .cv-switch input::after{ content:''; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background: var(--cv-bg); transition: transform .15s ease, background .15s ease; }
+      .cv-switch input:checked{ background: var(--cv-primary); }
+      .cv-switch input:checked::after{ transform: translateX(14px); background: var(--cv-text); }
+      .cv-switch input:disabled{ opacity:.4; cursor:not-allowed; }
       .cv-wf-footer{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
       .cv-wf-profiles{ display:flex; gap:6px; flex-wrap:wrap; }
       .cv-profile{ background: transparent; color: var(--cv-text); border: 1px solid rgba(255,255,255,.18); padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 12px; line-height: 1.2; }

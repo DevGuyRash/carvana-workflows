@@ -51,7 +51,7 @@ describe('Engine extract workflows', () => {
     };
 
     const engine = new Engine({ pages: [page] }, new Store('spec')); // MenuUI init ok in jsdom
-    await engine.runWorkflow(workflow);
+    await expect(engine.runWorkflow(workflow)).resolves.toBe(true);
 
     expect(clipboardMock).toHaveBeenCalledTimes(1);
     const payload = JSON.parse(clipboardMock.mock.calls[0][0]);
@@ -96,7 +96,7 @@ describe('Engine extract workflows', () => {
     const alertMock = globalThis.alert as any;
     alertMock.mockReset();
 
-    await engine.runWorkflow(workflow, true);
+    await expect(engine.runWorkflow(workflow, true)).resolves.toBe(true);
 
     expect(clipboardMock).toHaveBeenCalledTimes(1);
     const payload = JSON.parse(clipboardMock.mock.calls[0][0]);

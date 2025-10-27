@@ -18,6 +18,7 @@ import {
   setActiveProfile,
   type ProfileId
 } from './profiles';
+import { getRunPrefs, shouldAutoRun, markAutoRun } from './autorun';
 
 function isGlobalSource(s: SourceSpec): s is GlobalSource {
   return (s as any)?.global != null;
@@ -82,6 +83,10 @@ export class Engine {
       this.ui.markActiveProfile(workflowId, targetProfile);
       alert(`Saved ${profileLabel(targetProfile)} for ${workflowId}`);
     });
+
+    window.addEventListener('cv-menu:run-prefs-updated' as any, (ev: any) => {
+      this.onRunPrefsUpdated(ev.detail).catch(err => console.error(err));
+    });
   }
 
   async boot(){
@@ -102,6 +107,7 @@ export class Engine {
     const page = await this.detectPage();
     this.currentPage = page;
     this.ui.setPage(page);
+    await this.handleAutoRun(page);
   }
 
   // NEW: watch history & hash navigation (common in Oracle/Jira SPAs)
@@ -143,6 +149,49 @@ export class Engine {
 
     window.addEventListener('popstate', recheck);
     window.addEventListener('hashchange', recheck);
+  }
+
+  private async handleAutoRun(
+    page?: PageDefinition,
+    opts?: { onlyWorkflowId?: string; force?: boolean }
+  ): Promise<void> {
+    if (!page) return;
+    const onlyId = opts?.onlyWorkflowId;
+    for (const wf of page.workflows) {
+      if (onlyId && wf.id !== onlyId) continue;
+      const prefs = getRunPrefs(this.store, wf.id);
+      const hrefBefore = typeof globalThis.location?.href === 'string' ? globalThis.location.href : '';
+      const shouldRun = shouldAutoRun(prefs, hrefBefore, {
+        now: Date.now(),
+        force: opts?.force === true && (!onlyId || onlyId === wf.id)
+      });
+      if (!shouldRun) continue;
+      if (this.running) continue;
+      if (!(await this.evalCondition(wf.enabledWhen))) continue;
+      this.ui.appendLog(`Auto-run: ${wf.label}`);
+      const ok = await this.runWorkflow(wf, false, { silent: true });
+      if (ok) {
+        markAutoRun(this.store, wf.id, { href: hrefBefore, at: Date.now() });
+      }
+    }
+  }
+
+  private async onRunPrefsUpdated(detail: any): Promise<void> {
+    const workflowId = detail?.workflowId as string | undefined;
+    if (!workflowId || !this.currentPage) return;
+    const wf = this.currentPage.workflows.find(w => w.id === workflowId);
+    if (!wf) return;
+
+    const prevAuto = !!detail?.prev?.auto;
+    const prevRepeat = !!detail?.prev?.repeat;
+    const nextPrefs = getRunPrefs(this.store, workflowId);
+    if (!nextPrefs.auto) return;
+
+    const force = (!prevAuto && nextPrefs.auto) || (!prevRepeat && nextPrefs.repeat);
+    await this.handleAutoRun(this.currentPage, {
+      onlyWorkflowId: workflowId,
+      force
+    });
   }
 
   private async detectPage(): Promise<PageDefinition|undefined>{
@@ -191,9 +240,16 @@ export class Engine {
     return { ...defaults, ...saved };
   }
 
-  async runWorkflow(wf: WorkflowDefinition, nested = false){
-    if (!wf) return;
-    if (this.running && !nested) { alert('A workflow is already running.'); return; }
+  async runWorkflow(
+    wf: WorkflowDefinition,
+    nested = false,
+    options: { silent?: boolean } = {}
+  ): Promise<boolean> {
+    if (!wf) return false;
+    if (this.running && !nested) {
+      if (!options.silent) alert('A workflow is already running.');
+      return false;
+    }
     const wasRunning = this.running;
     if (!nested) this.running = true;
 
@@ -207,6 +263,8 @@ export class Engine {
       vars: Object.create(null)
     };
 
+    let success = false;
+
     try {
       for (let i=0; i<wf.steps.length; i++){
         const rawStep = wf.steps[i];
@@ -217,13 +275,16 @@ export class Engine {
         await this.afterActionWaits();
         await sleep(this.settings.interActionDelayMs);
       }
-      if (!nested) alert(`Workflow "${wf.label}" completed.`);
+      success = true;
+      if (!nested && !options.silent) alert(`Workflow "${wf.label}" completed.`);
     } catch (e: any) {
       console.error(e);
-      if (!nested) alert(`Workflow "${wf.label}" failed: ${e.message}`);
+      success = false;
+      if (!nested && !options.silent) alert(`Workflow "${wf.label}" failed: ${e.message}`);
     } finally {
       if (!nested) this.running = wasRunning;
     }
+    return success;
   }
 
   private async afterActionWaits(){

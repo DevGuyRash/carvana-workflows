@@ -9,3 +9,4 @@ export * from './ui';
 export * from './workflow';
 export * from './templating';
 export * from './data';
+export * from './autorun';
