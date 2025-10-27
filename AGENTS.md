@@ -47,10 +47,26 @@ You can add new actions; see **“Adding a new Action”** below.
 
 ## Adding a Page
 
-Create a file like `packages/jira-userscript/src/pages/my-page.ts`:
+Create a page file like `packages/jira-userscript/src/pages/my-page.ts` and a workflow file such as `packages/jira-userscript/src/workflows/jira-my-do-something.ts`.
 
 ```ts
-import type { PageDefinition, WorkflowDefinition } from '@cv/core';
+// packages/jira-userscript/src/workflows/jira-my-do-something.ts
+import type { WorkflowDefinition } from '@cv/core';
+
+export const JiraMyDoSomethingWorkflow: WorkflowDefinition = {
+  id: 'jira.my.do.something',
+  label: 'Do Something',
+  steps: [
+    { kind: 'click', target: { text: { includes: 'Open Menu', caseInsensitive: true }, tag: 'button' }, postWaitFor: { role: 'listbox' } },
+    { kind: 'selectFromList', list: { role: 'listbox' }, item: { text: { equals: 'Desired Item', caseInsensitive: true } } }
+  ]
+};
+```
+
+```ts
+// packages/jira-userscript/src/pages/my-page.ts
+import type { PageDefinition } from '@cv/core';
+import { JiraMyDoSomethingWorkflow } from '../workflows/jira-my-do-something';
 
 export const MyPage: PageDefinition = {
   id: 'jira.my.page',
@@ -61,19 +77,8 @@ export const MyPage: PageDefinition = {
       { textPresent: { where: { selector: 'h1, [data-test-id="page-title"]' }, matcher: { includes: 'My Page', caseInsensitive: true } } }
     ]
   },
-  workflows: []
+  workflows: [JiraMyDoSomethingWorkflow]
 };
-
-const MyWorkflow: WorkflowDefinition = {
-  id: 'jira.my.do.something',
-  label: 'Do Something',
-  steps: [
-    { kind: 'click', target: { text: { includes: 'Open Menu', caseInsensitive: true }, tag: 'button' }, postWaitFor: { role: 'listbox' } },
-    { kind: 'selectFromList', list: { role: 'listbox' }, item: { text: { equals: 'Desired Item', caseInsensitive: true } } }
-  ]
-};
-
-MyPage.workflows.push(MyWorkflow);
 ```
 
 Register the page in your `src/index.ts` (order matters: first match wins) and rebuild.
@@ -88,6 +93,18 @@ Register the page in your `src/index.ts` (order matters: first match wins) and r
 * Use `branch` to handle missing elements or alternate paths.
 * Use `extract` + `present` for quick UI feedback, and `copyToClipboard` to move data to your clipboard.
 * Toggle **Auto run** in the Workflows tab to launch a workflow automatically when its page detector matches; enable **Repeat** to allow re-running on subsequent detections (with guardrails that prevent rapid loops).
+* Store each workflow definition in its own file (e.g., `src/workflows/<workflow-id>.ts`) and import it into the page module; avoid defining multiple workflows inside a single page file.
+* For long-running single clicks that must succeed (e.g., Oracle’s “Expand Search — Invoice”), use the shared `click` action’s `postWaitFor` + optional `postWaitTimeoutMs`/`postWaitPollMs` so the engine keeps retrying until the expected state appears, instead of building ad-hoc loops inside workflows.
+
+### Oracle auto-run reliability notes
+
+When automating Oracle panels, the DOM swaps the expand/collapse anchor without changing the surrounding markup. The reliable pattern is:
+
+1. **Detection**: Branch once you detect any matching “Search: Invoice” button, then check the current `aria-expanded` value inside the helper workflow.
+2. **Click helper**: In the helper workflow, call `click` with `postWaitFor` targeting the `aria-expanded='true'` selector. The shared `click` action now retries automatically, so you do not need manual polling.
+3. **Fallback helper**: If the button is already expanded, run an `ensure` helper that simply waits for the expanded button and second-row container.
+
+This approach avoids duplicating auto-run logic per workflow and keeps Oracle-specific helpers internal by setting `internal: true` on helper workflows.
 
 ---
 
