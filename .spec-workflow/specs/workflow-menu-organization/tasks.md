@@ -1,4 +1,4 @@
-- [ ] 1. Implement workflow preferences persistence service
+- [x] 1. Implement workflow preferences persistence service
   - File: packages/core/src/menu/workflow-preferences.ts
   - Create a typed service to persist ordering and hidden-state metadata with versioning, reconciliation, and Store-backed serialization
   - Export helper to surface ordered and hidden workflow lists for MenuUI consumers
@@ -6,7 +6,7 @@
   - _Requirements: Requirement 1, Requirement 2, Requirement 3_
   - _Prompt: Implement the task for spec workflow-menu-organization, first run spec-workflow-guide to get the workflow guide then implement the task: Role: TypeScript Platform Engineer focused on state persistence | Task: Build workflow-preferences service providing ordered/hidden retrieval, mutation APIs, and fault-tolerant reconciliation against runtime workflow IDs | Restrictions: Keep serialization format versioned, avoid direct DOM coupling, reuse Store patterns from storage.ts | _Leverage: storage.ts, autorun.ts serialization helpers | _Requirements: Requirement 1, Requirement 2, Requirement 3 | Success: New service persists order/hidden state, gracefully handles missing/corrupt data, and exposes methods consumed by MenuUI_
 
-- [ ] 2. Add drag interaction controller utility
+- [x] 2. Add drag interaction controller utility
   - File: packages/core/src/menu/drag-controller.ts
   - Implement pointer and keyboard handlers to reorder list items via callbacks while respecting accessibility focus management
   - Provide attach/detach lifecycle tied to MenuUI list elements
@@ -14,7 +14,7 @@
   - _Requirements: Requirement 1, Usability_
   - _Prompt: Implement the task for spec workflow-menu-organization, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Frontend Interaction Engineer specializing in accessible drag-and-drop | Task: Create reusable drag-controller utility supporting pointer and keyboard reordering callbacks for workflow items | Restrictions: No global event leakage outside Shadow DOM, maintain 60fps-friendly updates, ensure keyboard shortcuts mirror drag semantics | _Leverage: ui.ts event patterns | _Requirements: Requirement 1, Usability | Success: Utility attaches to workflow list, emits stable reorder callbacks, and supports both pointer and keyboard interactions_
 
-- [ ] 3. Integrate preferences and drag controller into MenuUI workflows tab
+- [x] 3. Integrate preferences and drag controller into MenuUI workflows tab
   - File: packages/core/src/ui.ts
   - Use WorkflowPreferencesService and DragController to render ordered lists, reveal drag handles, handle reorder persistence, and debounce writes
   - Show visual drop indicators and announce status updates
