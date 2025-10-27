@@ -1,5 +1,5 @@
 import { Engine, Store, Registry } from '@cv/core';
-import { JiraFallbackPage } from './pages/fallback-demo';
+import { JiraDemoPage } from './pages/jira';
 
 declare global {
   interface Window { __cvBootedJira?: boolean }
@@ -13,7 +13,7 @@ declare global {
   (window as any).__cvBootedJira = true;
 
   const store = new Store('cv:jira');
-  const registry: Registry = { pages: [JiraFallbackPage] }; // demos only
+  const registry: Registry = { pages: [JiraDemoPage] };
   const engine = new Engine(registry, store);
   await engine.boot();
 })();
