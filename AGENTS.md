@@ -10,7 +10,7 @@ This document is the hands-on guide for building and evolving automations (pages
 - **Workflow**: A sequence of **actions** (click/type/wait/extract/branch/error). You can persist and resume.
 - **Selectors**: Robust, composable definitions (`SelectorSpec`) that locate elements without brittleness.
 - **Engine**: Runs workflows, stores last step/workflow, and integrates with the menu.
-- **Menu**: A Shadow‑DOM panel with tabs (Workflows, Selectors, Theme, Storage, Logs). You can edit selectors at runtime.
+- **Menu**: A Shadow‑DOM panel with tabs (Workflows, Selectors, Options, Theme, Storage, Logs). You can edit selectors at runtime and control workflow auto-run behavior directly from the Workflows tab.
 
 ---
 
@@ -87,6 +87,7 @@ Register the page in your `src/index.ts` (order matters: first match wins) and r
 * Use `waitFor` when you need to wait for contents to appear.
 * Use `branch` to handle missing elements or alternate paths.
 * Use `extract` + `present` for quick UI feedback, and `copyToClipboard` to move data to your clipboard.
+* Toggle **Auto run** in the Workflows tab to launch a workflow automatically when its page detector matches; enable **Repeat** to allow re-running on subsequent detections (with guardrails that prevent rapid loops).
 
 ---
 
@@ -129,6 +130,7 @@ Engine stores:
 * `lastWorkflow` (id + timestamp)
 * `lastStep` (index)
 * Config and selectors via `Store` (GM_*), export/import in **Storage** tab.
+* Auto-run preferences per workflow (`auto`, `repeat`, `lastRun` metadata) so automations remember whether to launch themselves.
 
 You can store arbitrary KV per workflow if you need it (extend in your actions).
 
@@ -164,6 +166,7 @@ Rebuild and reinstall.
 * If the menu isn’t visible, ensure your userscript is enabled and the URL matches your `@match`.
 * If a page doesn’t show expected workflows, your **detector** likely didn’t match. Temporarily switch to a fallback demo page or relax your detector.
 * Use browser devtools + Console for logs.
+* To test userscripts in Tampermonkey/Violentmonkey with auto-update, run `npm run serve:userscripts` (serves `dist/` on `http://localhost:4873`) and build with `npm run build:dev` so the emitted metadata includes `@downloadURL`/`@updateURL` pointing to that server. Install once from the served URL; subsequent builds auto-update.
 
 ---
 
