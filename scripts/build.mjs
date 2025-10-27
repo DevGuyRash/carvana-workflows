@@ -26,11 +26,27 @@ function loadMeta(pkgDir){
   return meta;
 }
 
+function normalizeBaseUrl(raw){
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+}
+
 async function buildOne(pkgName){
   const pkgDir = path.join(root, 'packages', pkgName);
   const outDir = path.join(root, 'dist');
   const entry = path.join(pkgDir, 'src', 'index.ts');
   const meta = loadMeta(pkgDir);
+  const slug = pkgName.replace('-userscript','');
+  const baseUrl = normalizeBaseUrl(process.env.US_BASE_URL || meta.downloadURL?.replace(/\/[\w.-]+\.user\.js$/, '') || '');
+
+  if (baseUrl) {
+    const fileUrl = `${baseUrl}/${slug}.user.js`;
+    meta.downloadURL = fileUrl;
+    meta.updateURL = fileUrl;
+  }
+
   const banner = toMetaBlock(meta) + '\n';
 
   await build({

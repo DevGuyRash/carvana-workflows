@@ -7,10 +7,12 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:dev": "US_BASE_URL=http://localhost:4873 node scripts/build.mjs",
     "clean": "rimraf dist && rimraf packages/*/dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "serve:userscripts": "node scripts/serve-userscripts.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.9.1",
