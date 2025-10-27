@@ -5,6 +5,7 @@ export type ProfileId = 'p1' | 'p2' | 'p3';
 export interface WorkflowProfiles {
   active: ProfileId;
   profiles: Record<ProfileId, Record<string, any> | undefined>;
+  enabled: boolean;
 }
 
 export const PROFILE_SLOTS: ReadonlyArray<{ id: ProfileId; label: string; shortLabel: string }> = [
@@ -39,10 +40,19 @@ function deepClone<T>(value: T): T {
   return value;
 }
 
-function sanitize(store: Store, workflowId: string, raw: any): WorkflowProfiles {
-  const defaultActive = PROFILE_IDS[0];
+function sanitize(
+  store: Store,
+  workflowId: string,
+  raw: any,
+  defaults?: { enabled?: boolean; active?: ProfileId }
+): WorkflowProfiles {
+  const requestedDefaultActive = defaults?.active && PROFILE_IDS.includes(defaults.active)
+    ? defaults.active
+    : PROFILE_IDS[0];
+  const defaultActive = requestedDefaultActive;
+  const defaultEnabled = defaults?.enabled ?? true;
   let changed = false;
-  const active = PROFILE_IDS.includes(raw?.active) ? (raw.active as ProfileId) : defaultActive;
+  const active = PROFILE_IDS.includes(raw?.active) ? (raw.active as ProfileId) : requestedDefaultActive;
   if (active !== raw?.active) changed = true;
 
   const profiles: Record<ProfileId, Record<string, any> | undefined> = {
@@ -63,6 +73,14 @@ function sanitize(store: Store, workflowId: string, raw: any): WorkflowProfiles 
     }
   }
 
+  let enabled: boolean;
+  if (raw?.enabled === true || raw?.enabled === false) {
+    enabled = raw.enabled;
+  } else {
+    enabled = defaultEnabled;
+    if (raw?.enabled != null) changed = true;
+  }
+
   // Legacy migration from single-option storage
   const legacyKey = `wf:opts:${workflowId}`;
   if (!profiles[defaultActive]) {
@@ -75,15 +93,16 @@ function sanitize(store: Store, workflowId: string, raw: any): WorkflowProfiles 
     }
   }
 
-  const state: WorkflowProfiles = { active, profiles };
+  const state: WorkflowProfiles = { active, profiles, enabled };
   if (changed) persist(store, workflowId, state);
   return state;
 }
 
 function persist(store: Store, workflowId: string, state: WorkflowProfiles): void {
-  const payload: { active: ProfileId; profiles: Record<string, Record<string, any>> } = {
+  const payload: { active: ProfileId; profiles: Record<string, Record<string, any>>; enabled: boolean } = {
     active: state.active,
-    profiles: {} as Record<string, Record<string, any>>
+    profiles: {} as Record<string, Record<string, any>>,
+    enabled: state.enabled
   };
   for (const id of PROFILE_IDS) {
     const val = state.profiles[id];
@@ -94,9 +113,17 @@ function persist(store: Store, workflowId: string, state: WorkflowProfiles): voi
   store.set(profileKey(workflowId), payload);
 }
 
-export function readProfiles(store: Store, workflowId: string): WorkflowProfiles {
-  const raw = store.get<any>(profileKey(workflowId), { active: PROFILE_IDS[0], profiles: {} });
-  return sanitize(store, workflowId, raw);
+export function readProfiles(
+  store: Store,
+  workflowId: string,
+  defaults?: { enabled?: boolean; active?: ProfileId }
+): WorkflowProfiles {
+  const raw = store.get<any>(profileKey(workflowId), {
+    active: defaults?.active && PROFILE_IDS.includes(defaults.active) ? defaults.active : PROFILE_IDS[0],
+    profiles: {},
+    enabled: defaults?.enabled ?? true
+  });
+  return sanitize(store, workflowId, raw, defaults);
 }
 
 export function getActiveProfile(store: Store, workflowId: string): ProfileId {
@@ -127,4 +154,21 @@ export function saveProfileValues(store: Store, workflowId: string, profileId: P
 export function profileLabel(profileId: ProfileId): string {
   const slot = PROFILE_SLOTS.find(s => s.id === profileId);
   return slot ? slot.label : profileId;
+}
+
+export function setProfilesEnabled(store: Store, workflowId: string, enabled: boolean): WorkflowProfiles {
+  const state = readProfiles(store, workflowId);
+  if (state.enabled !== enabled) {
+    state.enabled = enabled;
+    persist(store, workflowId, state);
+  }
+  return state;
+}
+
+export function getProfilesEnabled(
+  store: Store,
+  workflowId: string,
+  defaults?: { enabled?: boolean; active?: ProfileId }
+): boolean {
+  return readProfiles(store, workflowId, defaults).enabled;
 }
