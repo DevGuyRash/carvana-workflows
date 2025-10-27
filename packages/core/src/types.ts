@@ -152,7 +152,27 @@ export interface WorkflowAutoRunConfig {
   skipReadiness?: boolean;
   /** Watch for DOM mutations and trigger forced auto-runs when conditions reset */
   watchMutations?: boolean | WorkflowMutationWatchConfig;
+  /** Derive a context token to decide whether to rerun when URL stays the same */
+  context?: WorkflowAutoRunContext;
 }
+
+export type WorkflowAutoRunContext =
+  | string
+  | (() => string | null | undefined)
+  | {
+      /** Element to inspect for context (optional when using resolver) */
+      selector?: SelectorSpec;
+      /** Attribute name to read; when omitted falls back to textContent if textContent=true */
+      attribute?: string;
+      /** When true, use textContent from the selector (trimmed when trim=true) */
+      textContent?: boolean;
+      /** Trim whitespace when pulling textContent */
+      trim?: boolean;
+      /** Fallback token when selector lookup fails */
+      fallback?: string;
+      /** Custom resolver overrides selector/attribute/text handling */
+      resolve?: () => string | null | undefined;
+    };
 
 export interface WorkflowProfilesConfig {
   /** Disable profile switching UI when set to false */

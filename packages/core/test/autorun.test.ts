@@ -60,6 +60,15 @@ describe('workflow auto-run preferences', () => {
     expect(shouldAutoRun(prefs, href, { now: 1000 + AUTO_REPEAT_MIN_INTERVAL_MS + 1 })).toBe(true);
   });
 
+  it('re-runs when context token changes even without repeat', () => {
+    updateRunPrefs(store, 'wf.demo', { auto: true, repeat: false });
+    const href = 'https://example.test/foo';
+    markAutoRun(store, 'wf.demo', { href, at: 1000, context: 'expanded' });
+    const prefs = getRunPrefs(store, 'wf.demo');
+    expect(shouldAutoRun(prefs, href, { context: 'expanded' })).toBe(false);
+    expect(shouldAutoRun(prefs, href, { context: 'collapsed' })).toBe(true);
+  });
+
   it('forces run when requested', () => {
     updateRunPrefs(store, 'wf.demo', { auto: true });
     markAutoRun(store, 'wf.demo', { href: 'https://example.test/foo', at: 1000 });

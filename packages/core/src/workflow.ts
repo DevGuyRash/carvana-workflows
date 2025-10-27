@@ -323,6 +323,54 @@ export class Engine {
     return undefined;
   }
 
+  private resolveAutoRunContext(wf: WorkflowDefinition): string | undefined {
+    const ctx = wf.autoRun?.context;
+    if (!ctx) return undefined;
+    try {
+      if (typeof ctx === 'string') {
+        return ctx || undefined;
+      }
+      if (typeof ctx === 'function') {
+        const val = ctx();
+        return val && val.length > 0 ? val : undefined;
+      }
+      const {
+        resolve,
+        selector,
+        attribute,
+        textContent,
+        trim = true,
+        fallback
+      } = ctx;
+      if (typeof resolve === 'function') {
+        const val = resolve();
+        if (val && val.length > 0) {
+          return val;
+        }
+      }
+      const target = selector ? findOne(selector, { visibleOnly: false }) : null;
+      if (!target) {
+        return fallback;
+      }
+      if (attribute) {
+        const attrVal = target.getAttribute(attribute);
+        if (attrVal && attrVal.length > 0) {
+          return attrVal;
+        }
+      }
+      if (textContent) {
+        const text = target.textContent ?? '';
+        const processed = trim ? text.trim() : text;
+        if (processed.length > 0) {
+          return processed;
+        }
+      }
+      return fallback;
+    } catch {
+      return undefined;
+    }
+  }
+
   // NEW: watch history & hash navigation (common in Oracle/Jira SPAs)
   private setupSpaDetection() {
     const recheck = () => {
@@ -380,12 +428,14 @@ export class Engine {
         continue;
       }
       const hrefBefore = typeof globalThis.location?.href === 'string' ? globalThis.location.href : '';
+      const contextToken = this.resolveAutoRunContext(wf);
       const pollInterval = wf.autoRun?.pollIntervalMs;
       const conditionTimeout = wf.autoRun?.waitForConditionMs ?? wf.autoRun?.waitForMs;
       const retryDelay = wf.autoRun?.retryDelayMs ?? 1500;
       const shouldRun = shouldAutoRun(prefs, hrefBefore, {
         now: Date.now(),
-        force: opts?.force === true && (!onlyId || onlyId === wf.id)
+        force: opts?.force === true && (!onlyId || onlyId === wf.id),
+        context: contextToken
       });
       if (!shouldRun) {
         this.updateAutoRunStatus(wf, 'cooldown', `Auto-run pending for ${wf.label}: waiting before next run.`, 'debug');
@@ -423,7 +473,7 @@ export class Engine {
       const ok = await this.runWorkflow(wf, false, { silent: true });
       if (ok) {
         this.clearAutoRunRetry(wf.id);
-        markAutoRun(this.store, wf.id, { href: hrefBefore, at: Date.now() });
+        markAutoRun(this.store, wf.id, { href: hrefBefore, at: Date.now(), context: contextToken ?? undefined });
         this.updateAutoRunStatus(wf, 'ran', `Auto-run completed ${wf.label}.`);
       } else {
         this.updateAutoRunStatus(wf, 'error', `Auto-run failed for ${wf.label}.`);

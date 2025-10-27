@@ -3,6 +3,7 @@ import { Store } from './storage';
 export interface LastRunInfo {
   href: string;
   at: number;
+  context?: string;
 }
 
 export interface WorkflowRunPrefs {
@@ -25,8 +26,9 @@ function sanitizeLastRun(raw: any): LastRunInfo | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const href = typeof raw.href === 'string' ? raw.href : '';
   const at = typeof raw.at === 'number' && Number.isFinite(raw.at) ? raw.at : Date.now();
+  const context = typeof raw.context === 'string' ? raw.context : undefined;
   if (!href) return undefined;
-  return { href, at };
+  return { href, at, context };
 }
 
 function sanitizePrefs(raw: any): WorkflowRunPrefs {
@@ -74,16 +76,20 @@ export function updateRunPrefs(store: Store, workflowId: string, patch: RunPrefs
   return persist(store, workflowId, sanitized);
 }
 
-export function markAutoRun(store: Store, workflowId: string, info: { href: string; at?: number }): WorkflowRunPrefs {
+export function markAutoRun(
+  store: Store,
+  workflowId: string,
+  info: { href: string; at?: number; context?: string }
+): WorkflowRunPrefs {
   return updateRunPrefs(store, workflowId, {
-    lastRun: { href: info.href, at: info.at ?? Date.now() }
+    lastRun: { href: info.href, at: info.at ?? Date.now(), context: info.context }
   });
 }
 
 export function shouldAutoRun(
   prefs: WorkflowRunPrefs,
   href: string,
-  options?: { now?: number; force?: boolean }
+  options?: { now?: number; force?: boolean; context?: string }
 ): boolean {
   if (!prefs.auto) return false;
   if (options?.force) return true;
@@ -91,6 +97,7 @@ export function shouldAutoRun(
   const now = options?.now ?? Date.now();
   const last = prefs.lastRun;
   if (!last) return true;
+  if (options?.context && last.context && options.context !== last.context) return true;
   if (last.href !== href) return true;
   if (!prefs.repeat) return false;
   return now - last.at >= AUTO_REPEAT_MIN_INTERVAL_MS;

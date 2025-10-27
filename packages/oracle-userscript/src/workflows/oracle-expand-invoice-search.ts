@@ -22,6 +22,14 @@ export const OracleExpandInvoiceSearchWorkflow: WorkflowDefinition = {
     watchMutations: {
       debounceMs: 300,
       attributeFilter: ['aria-expanded']
+    },
+    context: {
+      selector: {
+        selector: BUTTON_SELECTOR,
+        within: { selector: SEARCH_CONTAINER }
+      },
+      attribute: 'aria-expanded',
+      fallback: 'unknown'
     }
   },
   profiles: { enabled: false },
