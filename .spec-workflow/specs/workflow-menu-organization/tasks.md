@@ -22,7 +22,7 @@
   - _Requirements: Requirement 1, Non-Functional Performance_
   - _Prompt: Implement the task for spec workflow-menu-organization, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Senior TypeScript UI Engineer maintaining MenuUI | Task: Wire new persistence service and drag controller into MenuUI to enable drag handles, reorder persistence, and live indicators | Restrictions: Preserve existing workflow footer behavior, debounce persistence within 250ms, avoid mutating workflow definitions directly | _Leverage: workflow-preferences.ts, drag-controller.ts | _Requirements: Requirement 1, Non-Functional Performance | Success: Workflows tab supports drag handles with smooth reordering, stored order persists across reloads, existing profile/autorun controls remain functional_
 
-- [ ] 4. Implement hide/unhide controls and Hidden tab experience
+- [x] 4. Implement hide/unhide controls and Hidden tab experience
   - File: packages/core/src/ui.ts
   - Add hide toggles, animate removal, and introduce Hidden tab rendering with search/filter, counters, and unhide action handling
   - Ensure auto-run toggles respect hidden status with prompting behavior

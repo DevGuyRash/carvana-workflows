@@ -12,7 +12,7 @@ import {
   setProfilesEnabled
 } from './profiles';
 import { getRunPrefs, updateRunPrefs, type WorkflowRunPrefs } from './autorun';
-import { WorkflowPreferencesService } from './menu/workflow-preferences';
+import { WorkflowPreferencesService, type WorkflowVisibilityLists } from './menu/workflow-preferences';
 import { DragController, type DragAnnouncement, type DragReorderDetail } from './menu/drag-controller';
 
 type MenuHandlers = {
@@ -53,10 +53,18 @@ export class MenuUI {
   private handlers?: MenuHandlers;
   private workflowList: HTMLElement | null = null;
   private workflowAnnouncer: HTMLElement | null = null;
+  private hiddenList: HTMLElement | null = null;
+  private hiddenEmpty: HTMLElement | null = null;
+  private hiddenCountBadge: HTMLElement | null = null;
+  private hiddenFilterInput: HTMLInputElement | null = null;
   private dragController: DragController | null = null;
   private workflowPreferences: WorkflowPreferencesService | null = null;
   private workflowPreferencesPageId: string | null = null;
+  private hiddenWorkflowsCache: WorkflowDefinition[] = [];
   private visibleWorkflowsCache: WorkflowDefinition[] = [];
+  private hiddenFilterValue = '';
+  private hiddenAutoPrompted = new Set<string>();
+  private focusAfterRenderWorkflowId: string | null = null;
   private pendingReorderDetail: { id: string; toIndex: number } | null = null;
   private pendingReorderTimer: number | null = null;
   private readonly reorderPersistDelayMs = 200;
@@ -95,6 +103,16 @@ export class MenuUI {
       this.workflowList.setAttribute('role', 'list');
     }
     this.workflowAnnouncer = this.shadow.getElementById('cv-wf-announcer') as HTMLElement | null;
+    this.hiddenList = this.shadow.getElementById('cv-hidden-list') as HTMLElement | null;
+    if (this.hiddenList) {
+      this.hiddenList.setAttribute('role', 'list');
+    }
+    this.hiddenEmpty = this.shadow.getElementById('cv-hidden-empty') as HTMLElement | null;
+    this.hiddenCountBadge = this.shadow.getElementById('cv-hidden-count') as HTMLElement | null;
+    this.hiddenFilterInput = this.shadow.getElementById('cv-hidden-search') as HTMLInputElement | null;
+    if (this.hiddenFilterInput) {
+      this.hiddenFilterInput.setAttribute('aria-label', 'Search hidden workflows');
+    }
 
     this.gear = document.createElement('button');
     this.gear.className = 'cv-gear';
@@ -115,6 +133,11 @@ export class MenuUI {
     } else {
       this.workflowPreferences = null;
       this.workflowPreferencesPageId = null;
+    }
+    this.hiddenAutoPrompted.clear();
+    this.hiddenFilterValue = '';
+    if (this.hiddenFilterInput) {
+      this.hiddenFilterInput.value = '';
     }
     this.cancelPendingPersistence();
     this.clearDropIndicator();
@@ -298,6 +321,10 @@ export class MenuUI {
         this.renderLogs(filterInput.value);
       });
     }
+
+    if (this.hiddenFilterInput) {
+      this.hiddenFilterInput.addEventListener('input', this.handleHiddenFilterInput);
+    }
   }
 
   private renderWorkflows(){
@@ -308,25 +335,32 @@ export class MenuUI {
     this.dragController = null;
     list.innerHTML = '';
     this.clearDropIndicator();
-    if (this.workflowAnnouncer) {
-      this.workflowAnnouncer.textContent = '';
-    }
+    this.announceWorkflowStatus('');
 
     const page = this.currentPage;
     if (!page){
       list.innerHTML = '<div class="cv-empty">No page detected yet</div>';
       this.visibleWorkflowsCache = [];
+      this.hiddenWorkflowsCache = [];
+      this.updateHiddenBadge(0);
+      this.renderHiddenWorkflows();
       return;
     }
 
-    const workflows = this.getVisibleWorkflows(page);
-    if (!workflows.length){
-      list.innerHTML = '<div class="cv-empty">No workflows available</div>';
-      this.visibleWorkflowsCache = [];
-      return;
-    }
-
+    const partition = this.partitionWorkflows(page);
+    const workflows = partition.ordered;
     this.visibleWorkflowsCache = [...workflows];
+    this.hiddenWorkflowsCache = [...partition.hidden];
+    this.updateHiddenBadge(this.hiddenWorkflowsCache.length);
+    this.renderHiddenWorkflows();
+
+    if (!workflows.length){
+      list.innerHTML = this.hiddenWorkflowsCache.length
+        ? '<div class="cv-empty">All workflows are hidden. Use the Hidden tab to manage them.</div>'
+        : '<div class="cv-empty">No workflows available</div>';
+      this.focusWorkflowAfterRender();
+      return;
+    }
 
     for (const wf of workflows){
       const item = document.createElement('div');
@@ -375,6 +409,7 @@ export class MenuUI {
             <button class="cv-btn cv-run" data-wf="${wf.id}" data-wf-run="${wf.id}">Run</button>
             <button class="cv-btn cv-edit" data-wf="${wf.id}">Selectors</button>
             <button class="cv-btn cv-opt" data-wf="${wf.id}">Options</button>
+            <button type="button" class="cv-btn secondary cv-hide" data-wf-hide="${wf.id}">Hide</button>
           </div>
         </div>
       `;
@@ -448,6 +483,12 @@ export class MenuUI {
         });
       }
 
+      const hideBtn = item.querySelector(`[data-wf-hide="${wf.id}"]`) as HTMLButtonElement | null;
+      if (hideBtn) {
+        hideBtn.setAttribute('aria-label', `Hide ${wf.label}`);
+        hideBtn.addEventListener('click', () => this.handleHideWorkflow(wf, item));
+      }
+
       list.appendChild(item);
     }
 
@@ -461,16 +502,241 @@ export class MenuUI {
       });
       this.dragController.attach();
     }
+
+    this.focusWorkflowAfterRender();
   }
 
-  private getVisibleWorkflows(page: PageDefinition): WorkflowDefinition[] {
+  private renderHiddenWorkflows(){
+    const list = this.hiddenList;
+    const empty = this.hiddenEmpty;
+    if (!list || !empty) return;
+
+    const hidden = this.hiddenWorkflowsCache;
+    this.promptHiddenAutoRunIfNeeded(hidden);
+
+    const searchInput = this.hiddenFilterInput;
+    if (searchInput) {
+      if (!hidden.length) {
+        if (!searchInput.disabled) searchInput.disabled = true;
+        if (searchInput.value !== '') searchInput.value = '';
+        this.hiddenFilterValue = '';
+      } else {
+        if (searchInput.disabled) searchInput.disabled = false;
+        if (searchInput.value !== this.hiddenFilterValue) searchInput.value = this.hiddenFilterValue;
+      }
+    }
+
+    list.innerHTML = '';
+    if (!hidden.length) {
+      empty.hidden = false;
+      empty.textContent = 'Hidden workflows appear here after you hide them from the Workflows tab.';
+      return;
+    }
+
+    const query = this.hiddenFilterValue.trim().toLowerCase();
+    const filtered = hidden.filter(wf => {
+      if (!query) return true;
+      const haystack = `${wf.label} ${(wf.description ?? '')} ${wf.id}`.toLowerCase();
+      return haystack.includes(query);
+    });
+
+    if (!filtered.length) {
+      empty.hidden = false;
+      empty.textContent = 'No hidden workflows match your search.';
+      return;
+    }
+
+    empty.hidden = true;
+
+    for (const wf of filtered) {
+      const prefs = getRunPrefs(this.store, wf.id);
+      const item = document.createElement('div');
+      item.className = 'cv-hidden-item';
+      item.setAttribute('role', 'listitem');
+      item.innerHTML = `
+        <div class="cv-hidden-main">
+          <div class="cv-hidden-title">${wf.label}</div>
+          <div class="cv-hidden-desc">${wf.description ?? ''}</div>
+          <div class="cv-hidden-meta">
+            ${prefs.auto ? '<span class="cv-hidden-badge">Auto-run enabled</span>' : ''}
+          </div>
+        </div>
+        <div class="cv-hidden-actions">
+          <button type="button" class="cv-btn secondary cv-hidden-unhide" data-hidden-unhide="${wf.id}">Unhide</button>
+        </div>
+      `;
+      const unhideBtn = item.querySelector<HTMLButtonElement>('[data-hidden-unhide]');
+      if (unhideBtn) {
+        unhideBtn.setAttribute('aria-label', `Unhide ${wf.label}`);
+        unhideBtn.addEventListener('click', () => this.handleUnhideWorkflow(wf));
+      }
+      list.appendChild(item);
+    }
+  }
+
+  private updateHiddenBadge(count: number){
+    const badge = this.hiddenCountBadge;
+    if (badge) {
+      badge.textContent = count > 0 ? String(count) : '0';
+      badge.classList.toggle('cv-tab-badge-active', count > 0);
+    }
+    const tab = this.shadow.querySelector('[data-tab="cv-tab-hidden"]') as HTMLElement | null;
+    if (tab) {
+      tab.classList.toggle('cv-tab-empty', count === 0);
+      tab.setAttribute('aria-label', count > 0 ? `Hidden workflows (${count})` : 'Hidden workflows');
+    }
+  }
+
+  private handleHiddenFilterInput = (event: Event) => {
+    const input = event.target as HTMLInputElement | null;
+    this.hiddenFilterValue = input?.value ?? '';
+    this.renderHiddenWorkflows();
+  };
+
+  private promptHiddenAutoRunIfNeeded(hidden: WorkflowDefinition[]){
+    for (const wf of hidden) {
+      const prefs = getRunPrefs(this.store, wf.id);
+      if (!prefs.auto) {
+        this.hiddenAutoPrompted.delete(wf.id);
+        continue;
+      }
+      if (this.hiddenAutoPrompted.has(wf.id)) continue;
+      const keepAuto = this.requestHiddenConfirmation(`${wf.label} is hidden but auto-run is enabled. Select OK to keep auto-run active while hidden, or Cancel to disable auto-run.`, false);
+      if (!keepAuto) {
+        const prev = prefs;
+        const next = updateRunPrefs(this.store, wf.id, { auto: false, repeat: false });
+        this.dispatch('run-prefs-updated', { workflowId: wf.id, prefs: next, prev });
+        this.appendLog(`Auto-run disabled for ${wf.label} while hidden.`);
+        this.hiddenAutoPrompted.delete(wf.id);
+      } else {
+        this.appendLog(`Auto-run kept active for hidden workflow ${wf.label}.`);
+        this.hiddenAutoPrompted.add(wf.id);
+      }
+    }
+  }
+
+  private announceWorkflowStatus(message: string){
+    if (this.workflowAnnouncer) {
+      this.workflowAnnouncer.textContent = message;
+    }
+  }
+
+  private handleHideWorkflow(wf: WorkflowDefinition, sourceItem: HTMLElement){
+    const page = this.currentPage;
+    if (!page) return;
+    const preferences = this.ensureWorkflowPreferences(page);
+    if (!preferences) {
+      this.appendLog(`Unable to hide ${wf.label}: missing workflow preferences.`);
+      return;
+    }
+
+    const workflows = this.getAllDraggableWorkflows();
+    if (!workflows.length) return;
+
+    const prefs = getRunPrefs(this.store, wf.id);
+    if (prefs.auto) {
+      const keepAuto = this.requestHiddenConfirmation(`${wf.label} has auto-run enabled. Select OK to keep auto-run active while hiding it, or Cancel to disable auto-run before hiding.`, false);
+      if (!keepAuto) {
+        const prev = prefs;
+        const next = updateRunPrefs(this.store, wf.id, { auto: false, repeat: false });
+        this.dispatch('run-prefs-updated', { workflowId: wf.id, prefs: next, prev });
+        this.hiddenAutoPrompted.delete(wf.id);
+        this.appendLog(`Auto-run disabled for ${wf.label} while hiding.`);
+      } else {
+        this.hiddenAutoPrompted.add(wf.id);
+      }
+    } else {
+      this.hiddenAutoPrompted.delete(wf.id);
+    }
+
+    const partition = preferences.toggleHidden(workflows, wf.id, true);
+    this.visibleWorkflowsCache = [...partition.ordered];
+    this.hiddenWorkflowsCache = [...partition.hidden];
+    this.updateHiddenBadge(this.hiddenWorkflowsCache.length);
+    this.renderHiddenWorkflows();
+    this.appendLog(`Hidden ${wf.label}.`);
+    this.animateWorkflowHide(sourceItem, wf);
+  }
+
+  private animateWorkflowHide(sourceItem: HTMLElement | null, wf: WorkflowDefinition){
+    if (!sourceItem) {
+      this.renderWorkflows();
+      this.announceWorkflowStatus(`${wf.label} moved to Hidden tab.`);
+      return;
+    }
+
+    sourceItem.classList.add('cv-wf-hiding');
+    let settled = false;
+    const finalize = () => {
+      if (settled) return;
+      settled = true;
+      sourceItem.removeEventListener('transitionend', finalize);
+      this.renderWorkflows();
+      this.announceWorkflowStatus(`${wf.label} moved to Hidden tab.`);
+    };
+    const raf = typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+      ? window.requestAnimationFrame.bind(window)
+      : ((cb: FrameRequestCallback) => window.setTimeout(cb, 16));
+    raf(() => {
+      sourceItem.classList.add('cv-wf-hiding-active');
+    });
+    sourceItem.addEventListener('transitionend', finalize);
+    window.setTimeout(finalize, 220);
+  }
+
+  private handleUnhideWorkflow(wf: WorkflowDefinition){
+    const page = this.currentPage;
+    if (!page) return;
+    const preferences = this.ensureWorkflowPreferences(page);
+    if (!preferences) return;
+
+    const workflows = this.getAllDraggableWorkflows();
+    const partition = preferences.toggleHidden(workflows, wf.id, false);
+    this.visibleWorkflowsCache = [...partition.ordered];
+    this.hiddenWorkflowsCache = [...partition.hidden];
+    this.updateHiddenBadge(this.hiddenWorkflowsCache.length);
+    this.hiddenAutoPrompted.delete(wf.id);
+    this.focusAfterRenderWorkflowId = wf.id;
+    this.appendLog(`Unhid ${wf.label}.`);
+    this.renderWorkflows();
+    this.announceWorkflowStatus(`${wf.label} restored to Workflows tab.`);
+  }
+
+  private focusWorkflowAfterRender(){
+    if (!this.focusAfterRenderWorkflowId) return;
+    const workflowId = this.focusAfterRenderWorkflowId;
+    const hideTarget = this.shadow.querySelector<HTMLButtonElement>(`[data-wf-hide="${workflowId}"]`);
+    const fallback = this.shadow.querySelector<HTMLButtonElement>(`[data-wf-run="${workflowId}"]`);
+    (hideTarget ?? fallback)?.focus({ preventScroll: true });
+    this.focusAfterRenderWorkflowId = null;
+  }
+
+  private requestHiddenConfirmation(message: string, defaultDecision: boolean): boolean {
+    const win: any = typeof window !== 'undefined' ? window : undefined;
+    const confirmFn = typeof win?.confirm === 'function' ? win.confirm.bind(win) : null;
+    if (confirmFn) {
+      try {
+        return confirmFn(message);
+      } catch {
+        return defaultDecision;
+      }
+    }
+    return defaultDecision;
+  }
+
+  private partitionWorkflows(page: PageDefinition): WorkflowVisibilityLists {
     const workflows = page.workflows.filter(w => !(w as any).internal);
-    if (!workflows.length) return [];
-    if (!page.id) return workflows;
+    if (!workflows.length) {
+      return { ordered: [], hidden: [] };
+    }
+    if (!page.id) {
+      return { ordered: workflows, hidden: [] };
+    }
     const prefs = this.ensureWorkflowPreferences(page);
-    if (!prefs) return workflows;
-    const partitioned = prefs.partition(workflows);
-    return partitioned.ordered;
+    if (!prefs) {
+      return { ordered: workflows, hidden: [] };
+    }
+    return prefs.partition(workflows);
   }
 
   private getAllDraggableWorkflows(): WorkflowDefinition[] {
@@ -604,6 +870,8 @@ export class MenuUI {
   private workflowLabelFor(id: string): string {
     const fromVisible = this.visibleWorkflowsCache.find(w => w.id === id);
     if (fromVisible) return fromVisible.label;
+    const fromHidden = this.hiddenWorkflowsCache.find(w => w.id === id);
+    if (fromHidden) return fromHidden.label;
     const fromPage = this.currentPage?.workflows.find(w => w.id === id);
     return fromPage?.label ?? id;
   }
@@ -819,6 +1087,7 @@ export class MenuUI {
       <div class="cv-title">Carvana Automations</div>
       <div class="cv-tabs">
         <button class="cv-tab active" data-tab="cv-tab-workflows">Workflows</button>
+        <button class="cv-tab" data-tab="cv-tab-hidden">Hidden <span id="cv-hidden-count" class="cv-tab-badge"></span></button>
         <button class="cv-tab" data-tab="cv-tab-selectors">Selectors</button>
         <button class="cv-tab" data-tab="cv-tab-options">Options</button>
         <button class="cv-tab" data-tab="cv-tab-theme">Theme</button>
@@ -829,6 +1098,14 @@ export class MenuUI {
     <div id="cv-tab-workflows" class="cv-section active">
       <div id="cv-wf-announcer" class="cv-visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
       <div id="cv-wf-list"></div>
+    </div>
+    <div id="cv-tab-hidden" class="cv-section">
+      <div class="cv-hidden-header">
+        <label class="cv-visually-hidden" for="cv-hidden-search">Search hidden workflows</label>
+        <input id="cv-hidden-search" class="cv-input" type="search" placeholder="Search hidden workflows" autocomplete="off" spellcheck="false">
+      </div>
+      <div id="cv-hidden-empty" class="cv-empty">Hidden workflows appear here after you hide them from the Workflows tab.</div>
+      <div id="cv-hidden-list" class="cv-hidden-list" role="list"></div>
     </div>
     <div id="cv-tab-selectors" class="cv-section">
       <div class="cv-row">
@@ -905,6 +1182,9 @@ export class MenuUI {
       .cv-tab{ background: transparent; color: var(--cv-text); border: 1px solid rgba(255,255,255,.18); padding: 6px 10px; border-radius: 6px; cursor: pointer; flex: 0 0 auto; white-space: nowrap; transition: border-color .18s ease, color .18s ease, background .18s ease; }
       .cv-tab:hover{ border-color: var(--cv-accent); color: var(--cv-accent); }
       .cv-tab.active{ border-color: var(--cv-accent); color: var(--cv-accent); background: rgba(255,255,255,.08); }
+      .cv-tab.cv-tab-empty{ opacity: .78; }
+      .cv-tab .cv-tab-badge{ display:inline-flex; align-items:center; justify-content:center; margin-left:6px; min-width:18px; padding:0 6px; border-radius:999px; font-size:11px; background: rgba(255,255,255,.14); color: var(--cv-text); opacity:.54; transition: background .18s ease, color .18s ease, opacity .18s ease; }
+      .cv-tab .cv-tab-badge.cv-tab-badge-active{ background: var(--cv-accent); color: var(--cv-bg); opacity:1; }
       .cv-section{ display: none; padding: 10px; }
       .cv-section.active{ display:block; max-height: calc(70vh - 58px); overflow-y: auto; }
       .cv-row{ display:flex; gap:10px; align-items:center; margin: 8px 0; flex-wrap: wrap; }
@@ -944,6 +1224,19 @@ export class MenuUI {
       .cv-profile:hover{ border-color: var(--cv-accent); color: var(--cv-accent); }
       .cv-profile.active{ background: rgba(255,255,255,.12); border-color: var(--cv-accent); color: var(--cv-accent); }
       .cv-wf-actions{ display:flex; gap:8px; align-items:center; }
+      .cv-wf-hiding{ pointer-events:none; transition: opacity .2s ease, transform .2s ease; }
+      .cv-wf-hiding.cv-wf-hiding-active{ opacity:0; transform: translateY(-2px); }
+      .cv-hidden-header{ display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+      .cv-hidden-header input{ flex:1; }
+      .cv-hidden-list{ display:flex; flex-direction:column; gap:8px; }
+      .cv-hidden-item{ border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 8px; display:flex; gap:8px; align-items:flex-start; justify-content:space-between; }
+      .cv-hidden-main{ flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
+      .cv-hidden-title{ font-weight:600; }
+      .cv-hidden-desc{ font-size:12px; opacity:.78; }
+      .cv-hidden-meta{ display:flex; flex-wrap:wrap; gap:6px; font-size:11px; opacity:.78; }
+      .cv-hidden-badge{ display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; background: rgba(255,255,255,.15); color: var(--cv-text); text-transform:uppercase; letter-spacing:.5px; font-size:10px; }
+      .cv-hidden-actions{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
+      .cv-hidden-unhide{ white-space:nowrap; }
       .cv-profile-tabs{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 8px; }
       .cv-profile-tab{ background: transparent; border: 1px solid rgba(255,255,255,.18); color: var(--cv-text); padding: 6px 14px; border-radius: 999px; cursor: pointer; transition: border-color .15s ease, color .15s ease, background .15s ease; }
       .cv-profile-tab:hover{ border-color: var(--cv-accent); color: var(--cv-accent); }
