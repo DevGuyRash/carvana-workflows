@@ -120,6 +120,25 @@ export class MenuUI {
       this.store.set('settings', this.settings);
     });
 
+    const colorIds = ['cv-theme-primary', 'cv-theme-bg', 'cv-theme-text', 'cv-theme-accent'];
+    let activeColorInput: HTMLInputElement | null = null;
+
+    const handleFocusRequest = (input: HTMLInputElement) => {
+      if (activeColorInput && activeColorInput !== input) {
+        activeColorInput.blur();
+      }
+    };
+
+    colorIds.forEach(id => {
+      const input = this.shadow.getElementById(id) as HTMLInputElement | null;
+      if (!input) return;
+      const onFocusRequest = () => handleFocusRequest(input);
+      input.addEventListener('pointerdown', onFocusRequest);
+      input.addEventListener('mousedown', onFocusRequest);
+      input.addEventListener('focus', () => { activeColorInput = input; });
+      input.addEventListener('blur', () => { if (activeColorInput === input) activeColorInput = null; });
+    });
+
     this.shadow.getElementById('cv-export')?.addEventListener('click', () => {
       const json = JSON.stringify(this.store.exportAll(), null, 2);
       navigator.clipboard.writeText(json);
@@ -507,10 +526,10 @@ export class MenuUI {
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, 'Helvetica Neue', Arial, 'Apple Color Emoji','Segoe UI Emoji';
       }
       .cv-panel.open{ transform: translateY(0); opacity: 1; pointer-events: all; }
-      .cv-header{ display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: linear-gradient(0deg, rgba(255,255,255,.02), transparent); }
-      .cv-title{ font-weight: 600; letter-spacing: .3px; }
-      .cv-tabs{ display:flex; gap:6px; }
-      .cv-tab{ background: transparent; color: var(--cv-text); border: 1px solid rgba(255,255,255,.18); padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+      .cv-header{ display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; background: linear-gradient(0deg, rgba(255,255,255,.02), transparent); }
+      .cv-title{ font-weight: 600; letter-spacing: .3px; font-size: 16px; width: 100%; }
+      .cv-tabs{ display:flex; flex-wrap: wrap; gap:6px; width:100%; }
+      .cv-tab{ background: transparent; color: var(--cv-text); border: 1px solid rgba(255,255,255,.18); padding: 6px 10px; border-radius: 6px; cursor: pointer; flex: 0 0 auto; white-space: nowrap; }
       .cv-tab.active{ background: rgba(255,255,255,.08); }
       .cv-section{ display: none; padding: 10px; }
       .cv-section.active{ display:block; max-height: calc(70vh - 58px); overflow-y: auto; }
@@ -539,7 +558,7 @@ export class MenuUI {
       .cv-profile-tab{ background: transparent; border: 1px solid rgba(255,255,255,.18); color: var(--cv-text); padding: 6px 14px; border-radius: 999px; cursor: pointer; }
       .cv-profile-tab.active{ background: rgba(255,255,255,.1); border-color: var(--cv-primary); color: var(--cv-primary); }
       /* Default CSS variables at scope root (shadow host) */
-      :host, .cv-panel{ --cv-primary: ${DEFAULT_THEME.primary}; --cv-bg: ${DEFAULT_THEME.background}; --cv-text: ${DEFAULT_THEME.text}; --cv-accent: ${DEFAULT_THEME.accent}; }
+      :host{ --cv-primary: ${DEFAULT_THEME.primary}; --cv-bg: ${DEFAULT_THEME.background}; --cv-text: ${DEFAULT_THEME.text}; --cv-accent: ${DEFAULT_THEME.accent}; }
     `;
   }
 
