@@ -12,6 +12,8 @@ import {
   setProfilesEnabled
 } from './profiles';
 import { getRunPrefs, updateRunPrefs, type WorkflowRunPrefs } from './autorun';
+import { WorkflowPreferencesService } from './menu/workflow-preferences';
+import { DragController, type DragAnnouncement, type DragReorderDetail } from './menu/drag-controller';
 
 type MenuHandlers = {
   'run-workflow'?: (detail: any) => void;
@@ -49,6 +51,15 @@ export class MenuUI {
   private logs: MenuLogEntry[] = [];
   private showDebugLogs = false;
   private handlers?: MenuHandlers;
+  private workflowList: HTMLElement | null = null;
+  private workflowAnnouncer: HTMLElement | null = null;
+  private dragController: DragController | null = null;
+  private workflowPreferences: WorkflowPreferencesService | null = null;
+  private workflowPreferencesPageId: string | null = null;
+  private visibleWorkflowsCache: WorkflowDefinition[] = [];
+  private pendingReorderDetail: { id: string; toIndex: number } | null = null;
+  private pendingReorderTimer: number | null = null;
+  private readonly reorderPersistDelayMs = 200;
 
   constructor(registry: Registry, store: Store, handlers?: MenuHandlers){
     this.registry = registry;
@@ -79,6 +90,12 @@ export class MenuUI {
     this.container.innerHTML = this.panelHtml();
     this.shadow.appendChild(this.container);
 
+    this.workflowList = this.shadow.getElementById('cv-wf-list') as HTMLElement | null;
+    if (this.workflowList) {
+      this.workflowList.setAttribute('role', 'list');
+    }
+    this.workflowAnnouncer = this.shadow.getElementById('cv-wf-announcer') as HTMLElement | null;
+
     this.gear = document.createElement('button');
     this.gear.className = 'cv-gear';
     this.gear.title = 'Carvana Automations';
@@ -93,6 +110,14 @@ export class MenuUI {
 
   setPage(page?: PageDefinition){
     this.currentPage = page;
+    if (page) {
+      this.ensureWorkflowPreferences(page);
+    } else {
+      this.workflowPreferences = null;
+      this.workflowPreferencesPageId = null;
+    }
+    this.cancelPendingPersistence();
+    this.clearDropIndicator();
     this.renderWorkflows();
     this.appendLog(`Detected page: ${page?.label ?? 'Unknown'}`);
   }
@@ -276,17 +301,40 @@ export class MenuUI {
   }
 
   private renderWorkflows(){
-    const list = this.shadow.getElementById('cv-wf-list')!;
+    const list = this.workflowList;
+    if (!list) return;
+
+    this.dragController?.detach();
+    this.dragController = null;
     list.innerHTML = '';
+    this.clearDropIndicator();
+    if (this.workflowAnnouncer) {
+      this.workflowAnnouncer.textContent = '';
+    }
+
     const page = this.currentPage;
     if (!page){
       list.innerHTML = '<div class="cv-empty">No page detected yet</div>';
+      this.visibleWorkflowsCache = [];
       return;
     }
-    for (const wf of page.workflows){
-      if ((wf as any).internal) continue;
+
+    const workflows = this.getVisibleWorkflows(page);
+    if (!workflows.length){
+      list.innerHTML = '<div class="cv-empty">No workflows available</div>';
+      this.visibleWorkflowsCache = [];
+      return;
+    }
+
+    this.visibleWorkflowsCache = [...workflows];
+
+    for (const wf of workflows){
       const item = document.createElement('div');
       item.className = 'cv-wf-item';
+      item.setAttribute('data-drag-item', '');
+      item.setAttribute('role', 'listitem');
+      item.dataset.dragId = wf.id;
+
       const profilesEnabled = this.profilesEnabled(wf);
       const activeProfile = profilesEnabled ? getActiveProfile(this.store, wf.id) : 'p1';
       const profilesHtml = profilesEnabled
@@ -300,8 +348,15 @@ export class MenuUI {
       let runPrefs: WorkflowRunPrefs = getRunPrefs(this.store, wf.id);
 
       item.innerHTML = `
-        <div class="cv-wf-title">${wf.label}</div>
-        <div class="cv-wf-desc">${wf.description || ''}</div>
+        <div class="cv-wf-row">
+          <button type="button" class="cv-wf-handle" data-drag-handle title="Drag to reorder">
+            <span aria-hidden="true">⋮⋮</span>
+          </button>
+          <div class="cv-wf-main">
+            <div class="cv-wf-title">${wf.label}</div>
+            <div class="cv-wf-desc">${wf.description || ''}</div>
+          </div>
+        </div>
         <div class="cv-wf-meta">
           <div class="cv-wf-switches">
             <label class="cv-switch" title="Run automatically when this page is detected">
@@ -323,6 +378,11 @@ export class MenuUI {
           </div>
         </div>
       `;
+
+      const handleBtn = item.querySelector('.cv-wf-handle') as HTMLButtonElement | null;
+      if (handleBtn) {
+        handleBtn.setAttribute('aria-label', `Drag to reorder ${wf.label}`);
+      }
 
       const runBtn = item.querySelector('[data-wf-run="' + wf.id + '"]') as HTMLButtonElement | null;
       if (runBtn) {
@@ -390,6 +450,162 @@ export class MenuUI {
 
       list.appendChild(item);
     }
+
+    if (workflows.length > 1) {
+      this.dragController = new DragController({
+        list,
+        root: this.shadow,
+        onPreview: this.handleDragPreview,
+        onReorder: this.handleDragReorder,
+        announce: this.handleDragAnnounce
+      });
+      this.dragController.attach();
+    }
+  }
+
+  private getVisibleWorkflows(page: PageDefinition): WorkflowDefinition[] {
+    const workflows = page.workflows.filter(w => !(w as any).internal);
+    if (!workflows.length) return [];
+    if (!page.id) return workflows;
+    const prefs = this.ensureWorkflowPreferences(page);
+    if (!prefs) return workflows;
+    const partitioned = prefs.partition(workflows);
+    return partitioned.ordered;
+  }
+
+  private getAllDraggableWorkflows(): WorkflowDefinition[] {
+    const page = this.currentPage;
+    if (!page) return [];
+    return page.workflows.filter(w => !(w as any).internal);
+  }
+
+  private ensureWorkflowPreferences(page: PageDefinition): WorkflowPreferencesService | null {
+    if (!page.id) return null;
+    if (!this.workflowPreferences || this.workflowPreferencesPageId !== page.id) {
+      this.workflowPreferences = new WorkflowPreferencesService(this.store, page.id);
+      this.workflowPreferencesPageId = page.id;
+    }
+    return this.workflowPreferences;
+  }
+
+  private clearDropIndicator(){
+    const list = this.workflowList;
+    if (!list) return;
+    list.removeAttribute('data-drop-tail');
+    list.querySelectorAll<HTMLElement>('[data-drop-target]').forEach(el => el.removeAttribute('data-drop-target'));
+  }
+
+  private showDropIndicator(detail: DragReorderDetail){
+    const list = this.workflowList;
+    if (!list) return;
+    this.clearDropIndicator();
+    const items = Array.from(list.querySelectorAll<HTMLElement>('[data-drag-item]'));
+    if (!items.length) return;
+    const targetIndex = Math.max(0, Math.min(detail.toIndex, items.length - 1));
+    const target = items[targetIndex];
+    if (!target) return;
+    const position = detail.toIndex > detail.fromIndex ? 'after' : 'before';
+    target.setAttribute('data-drop-target', position);
+  }
+
+  private applyDomReorder(detail: DragReorderDetail){
+    const list = this.workflowList;
+    if (!list) return;
+    const items = Array.from(list.querySelectorAll<HTMLElement>('[data-drag-item]'));
+    const target = items.find(el => el.dataset.dragId === detail.id);
+    if (!target) return;
+
+    const siblings = items.filter(el => el !== target);
+    const nextIndex = Math.max(0, Math.min(detail.toIndex, siblings.length));
+    const reference = siblings[nextIndex] ?? null;
+
+    if (reference) {
+      list.insertBefore(target, reference);
+    } else {
+      list.appendChild(target);
+    }
+
+    const handle = target.querySelector<HTMLElement>('[data-drag-handle]');
+    handle?.focus({ preventScroll: true });
+    this.dragController?.refresh();
+  }
+
+  private reorderVisibleCache(detail: DragReorderDetail){
+    if (!this.visibleWorkflowsCache.length) return;
+    const index = this.visibleWorkflowsCache.findIndex(w => w.id === detail.id);
+    if (index === -1) return;
+    const [entry] = this.visibleWorkflowsCache.splice(index, 1);
+    const nextIndex = Math.max(0, Math.min(detail.toIndex, this.visibleWorkflowsCache.length));
+    this.visibleWorkflowsCache.splice(nextIndex, 0, entry);
+  }
+
+  private scheduleReorderPersistence(detail: DragReorderDetail){
+    if (!this.currentPage || !this.workflowPreferences) return;
+    this.pendingReorderDetail = { id: detail.id, toIndex: detail.toIndex };
+    if (this.pendingReorderTimer !== null) {
+      window.clearTimeout(this.pendingReorderTimer);
+    }
+    this.pendingReorderTimer = window.setTimeout(() => {
+      this.pendingReorderTimer = null;
+      const payload = this.pendingReorderDetail;
+      this.pendingReorderDetail = null;
+      if (!payload || !this.currentPage || !this.workflowPreferences) return;
+      const workflows = this.getAllDraggableWorkflows();
+      this.workflowPreferences.applyMove(workflows, payload.id, payload.toIndex);
+      this.renderWorkflows();
+    }, this.reorderPersistDelayMs);
+  }
+
+  private cancelPendingPersistence(){
+    if (this.pendingReorderTimer !== null) {
+      window.clearTimeout(this.pendingReorderTimer);
+      this.pendingReorderTimer = null;
+    }
+    this.pendingReorderDetail = null;
+  }
+
+  private handleDragPreview = (detail: DragReorderDetail) => {
+    this.showDropIndicator(detail);
+  };
+
+  private handleDragReorder = (detail: DragReorderDetail) => {
+    this.clearDropIndicator();
+    this.applyDomReorder(detail);
+    this.reorderVisibleCache(detail);
+    this.scheduleReorderPersistence(detail);
+  };
+
+  private handleDragAnnounce = (announcement: DragAnnouncement) => {
+    if (announcement.type === 'cancel' || announcement.type === 'drop') {
+      this.clearDropIndicator();
+    }
+    const text = this.formatDragAnnouncement(announcement);
+    if (text && this.workflowAnnouncer) {
+      this.workflowAnnouncer.textContent = text;
+    }
+  };
+
+  private formatDragAnnouncement(announcement: DragAnnouncement): string {
+    const label = this.workflowLabelFor(announcement.id);
+    switch (announcement.type) {
+      case 'lift':
+        return `${label} lifted. Position ${announcement.index + 1} of ${announcement.total}.`;
+      case 'move':
+        return `${label} moved to position ${announcement.toIndex + 1} of ${announcement.total}.`;
+      case 'drop':
+        return `${label} dropped at position ${announcement.toIndex + 1} of ${announcement.total}.`;
+      case 'cancel':
+        return `${label} reorder canceled.`;
+      default:
+        return '';
+    }
+  }
+
+  private workflowLabelFor(id: string): string {
+    const fromVisible = this.visibleWorkflowsCache.find(w => w.id === id);
+    if (fromVisible) return fromVisible.label;
+    const fromPage = this.currentPage?.workflows.find(w => w.id === id);
+    return fromPage?.label ?? id;
   }
 
   markActiveProfile(workflowId: string, profileId: ProfileId){
@@ -611,6 +827,7 @@ export class MenuUI {
       </div>
     </div>
     <div id="cv-tab-workflows" class="cv-section active">
+      <div id="cv-wf-announcer" class="cv-visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
       <div id="cv-wf-list"></div>
     </div>
     <div id="cv-tab-selectors" class="cv-section">
@@ -702,6 +919,15 @@ export class MenuUI {
       .cv-input{ background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.18); border-radius: 6px; padding: 6px 8px; color: var(--cv-text); font-size: 12px; min-width: 160px; }
       .cv-empty{ opacity: .7; padding: 8px; }
       .cv-wf-item{ border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+      .cv-wf-row{ display:flex; align-items:flex-start; gap:8px; margin-bottom:6px; }
+      .cv-wf-main{ flex:1; min-width:0; }
+      .cv-wf-handle{ background: transparent; border: 1px solid rgba(255,255,255,.18); color: var(--cv-text); border-radius: 6px; width: 32px; height: 32px; display:flex; align-items:center; justify-content:center; cursor: grab; transition: border-color .15s ease, background .15s ease; }
+      .cv-wf-handle:hover{ border-color: var(--cv-accent); background: rgba(255,255,255,.08); }
+      .cv-wf-handle:focus{ outline: 2px solid var(--cv-accent); outline-offset: 2px; }
+      .cv-wf-handle span{ pointer-events:none; font-size:16px; line-height:1; }
+      .cv-wf-item[data-drop-target="before"]{ box-shadow: inset 0 3px 0 0 var(--cv-accent); }
+      .cv-wf-item[data-drop-target="after"]{ box-shadow: inset 0 -3px 0 0 var(--cv-accent); }
+      .cv-visually-hidden{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
       .cv-wf-title{ font-weight: 600; margin-bottom: 4px; }
       .cv-wf-meta{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin: 6px 0; }
       .cv-wf-switches{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }

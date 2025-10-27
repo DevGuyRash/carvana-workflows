@@ -10,3 +10,5 @@ export * from './workflow';
 export * from './templating';
 export * from './data';
 export * from './autorun';
+export * from './menu/workflow-preferences';
+export * from './menu/drag-controller';
