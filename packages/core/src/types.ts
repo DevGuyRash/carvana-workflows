@@ -115,8 +115,8 @@ export type Action =
   | { kind: 'error'; message: string; comment?: string };
 
 export interface WorkflowMutationWatchConfig {
-  /** Selector describing the DOM subtree to observe for changes */
-  root: SelectorSpec;
+  /** Selector describing the DOM subtree to observe for changes. When omitted we derive from auto-run selectors. */
+  root?: SelectorSpec;
   /** Debounce window before forcing an auto-run retry */
   debounceMs?: number;
   /** Observe attribute changes in addition to child mutations (default: true) */
@@ -151,7 +151,7 @@ export interface WorkflowAutoRunConfig {
   /** When true, skip readiness polling and rely on workflow steps to wait */
   skipReadiness?: boolean;
   /** Watch for DOM mutations and trigger forced auto-runs when conditions reset */
-  watchMutations?: WorkflowMutationWatchConfig;
+  watchMutations?: boolean | WorkflowMutationWatchConfig;
 }
 
 export interface WorkflowProfilesConfig {

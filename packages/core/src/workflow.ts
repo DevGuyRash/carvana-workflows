@@ -209,8 +209,8 @@ export class Engine {
   }
 
   private setupMutationWatcher(wf: WorkflowDefinition): void {
-    const config = wf.autoRun?.watchMutations;
-    if (!config || wf.internal) {
+    const config = this.resolveMutationWatchConfig(wf);
+    if (!config) {
       this.removeMutationWatcher(wf.id);
       return;
     }
@@ -222,6 +222,7 @@ export class Engine {
     wf: WorkflowDefinition,
     config: WorkflowMutationWatchConfig
   ): Promise<void> {
+    if (!config.root) return;
     try {
       const root = await waitForElement(config.root, {
         timeoutMs: 5000,
@@ -293,6 +294,33 @@ export class Engine {
         .catch(err => console.error(err));
     }, debounce);
     this.mutationWatchTimers.set(wf.id, timer);
+  }
+
+  private resolveMutationWatchConfig(wf: WorkflowDefinition): WorkflowMutationWatchConfig | null {
+    if (wf.internal) return null;
+    const watch = wf.autoRun?.watchMutations;
+    if (!watch) return null;
+    const base: WorkflowMutationWatchConfig = watch === true ? {} : watch;
+    const root = base.root ?? this.deriveMutationRoot(wf);
+    if (!root) return null;
+    return { ...base, root };
+  }
+
+  private deriveMutationRoot(wf: WorkflowDefinition): SelectorSpec | undefined {
+    const auto = wf.autoRun;
+    if (!auto) return undefined;
+    const candidates: (SelectorSpec | undefined)[] = [
+      auto.waitForSelector?.within,
+      auto.waitForSelector,
+      auto.waitForHiddenSelector?.within,
+      auto.waitForHiddenSelector,
+      auto.waitForInteractableSelector?.within,
+      auto.waitForInteractableSelector
+    ];
+    for (const spec of candidates) {
+      if (spec) return spec;
+    }
+    return undefined;
   }
 
   // NEW: watch history & hash navigation (common in Oracle/Jira SPAs)

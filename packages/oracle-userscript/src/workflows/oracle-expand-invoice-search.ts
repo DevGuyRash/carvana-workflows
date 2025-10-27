@@ -20,10 +20,8 @@ export const OracleExpandInvoiceSearchWorkflow: WorkflowDefinition = {
     respectLoadingIndicator: false,
     skipReadiness: true,
     watchMutations: {
-      root: { selector: SEARCH_CONTAINER },
       debounceMs: 300,
-      observeAttributes: false,
-      observeCharacterData: false
+      attributeFilter: ['aria-expanded']
     }
   },
   profiles: { enabled: false },
