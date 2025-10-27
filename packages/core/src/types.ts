@@ -130,6 +130,7 @@ export interface ThemeConfig {
   background: string;
   text: string;
   accent: string;
+  panelOpacity: number;
 }
 
 export interface Settings {

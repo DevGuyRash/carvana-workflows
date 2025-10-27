@@ -13,10 +13,10 @@ import { getRunPrefs, updateRunPrefs, type WorkflowRunPrefs } from './autorun';
 
 const DEFAULT_THEME: ThemeConfig = {
   primary: '#1f7a8c',
-  // Use an opaque default to avoid “transparent-looking” panel before theme apply
   background: '#0b0c10',
   text: '#f5f7fb',
-  accent: '#ffbd59'
+  accent: '#ffbd59',
+  panelOpacity: 0.95
 };
 
 export class MenuUI {
@@ -35,7 +35,12 @@ export class MenuUI {
   constructor(registry: Registry, store: Store){
     this.registry = registry;
     this.store = store;
-    this.settings = store.get<Settings>('settings', { theme: DEFAULT_THEME, interActionDelayMs: 120 });
+    const storedSettings = store.get<Settings>('settings', { theme: DEFAULT_THEME, interActionDelayMs: 120 });
+    const normalizedTheme = this.normalizeTheme(storedSettings?.theme);
+    this.settings = { ...storedSettings, theme: normalizedTheme };
+    if (!storedSettings?.theme || typeof storedSettings.theme.panelOpacity !== 'number') {
+      this.store.set('settings', this.settings);
+    }
 
     // --- Single-instance guard: remove any previous host (e.g., SPA nav)
     const existing = document.getElementById('cv-menu-host');
@@ -115,10 +120,26 @@ export class MenuUI {
       const bg = (this.shadow.getElementById('cv-theme-bg') as HTMLInputElement).value;
       const text = (this.shadow.getElementById('cv-theme-text') as HTMLInputElement).value;
       const accent = (this.shadow.getElementById('cv-theme-accent') as HTMLInputElement).value;
-      this.settings.theme = { primary, background: bg, text, accent };
+      const opacityEl = this.shadow.getElementById('cv-theme-opacity') as HTMLInputElement | null;
+      const panelOpacity = opacityEl ? parseFloat(opacityEl.value) : this.settings.theme.panelOpacity;
+      this.settings.theme = this.normalizeTheme({ primary, background: bg, text, accent, panelOpacity });
       this.applyTheme();
       this.store.set('settings', this.settings);
     });
+
+    this.shadow.getElementById('cv-theme-reset')?.addEventListener('click', () => {
+      this.settings.theme = { ...DEFAULT_THEME };
+      this.applyTheme();
+      this.store.set('settings', this.settings);
+    });
+
+    const opacityInput = this.shadow.getElementById('cv-theme-opacity') as HTMLInputElement | null;
+    if (opacityInput) {
+      opacityInput.addEventListener('input', () => {
+        const value = parseFloat(opacityInput.value);
+        this.updateOpacityLabel(value);
+      });
+    }
 
     const colorIds = ['cv-theme-primary', 'cv-theme-bg', 'cv-theme-text', 'cv-theme-accent'];
     let activeColorInput: HTMLInputElement | null = null;
@@ -490,12 +511,20 @@ export class MenuUI {
       <div id="cv-options-wrap"></div>
     </div>
     <div id="cv-tab-theme" class="cv-section">
-      <div class="cv-row">
+      <div class="cv-theme-grid">
         <label>Primary <input type="color" id="cv-theme-primary" value="#1f7a8c"></label>
         <label>Background <input type="color" id="cv-theme-bg" value="#0b0c10"></label>
         <label>Text <input type="color" id="cv-theme-text" value="#f5f7fb"></label>
         <label>Accent <input type="color" id="cv-theme-accent" value="#ffbd59"></label>
-        <button id="cv-theme-apply" class="cv-btn">Apply</button>
+        <div class="cv-opacity">
+          <span>Opacity</span>
+          <input type="range" id="cv-theme-opacity" min="0.5" max="1" step="0.01" value="0.95">
+          <span id="cv-theme-opacity-value">95%</span>
+        </div>
+        <div class="cv-theme-actions">
+          <button id="cv-theme-apply" class="cv-btn">Apply</button>
+          <button id="cv-theme-reset" class="cv-btn secondary">Reset</button>
+        </div>
       </div>
     </div>
     <div id="cv-tab-storage" class="cv-section">
@@ -514,29 +543,34 @@ export class MenuUI {
     return `
       :host { all: initial; }
       .cv-gear{
-        position: fixed; bottom: 16px; right: 16px; z-index: 999999999;
+        position: fixed; bottom: 16px; right: 16px; z-index: 2147483647;
         border-radius: 50%; width: 44px; height: 44px; border: none; cursor: pointer;
         background: var(--cv-primary); color: var(--cv-text); box-shadow: 0 2px 10px rgba(0,0,0,.4);
       }
       .cv-panel{
         position: fixed; bottom: 72px; right: 16px; width: 480px; max-height: 70vh; overflow: hidden;
-        background: var(--cv-bg); color: var(--cv-text); border: 1px solid rgba(255,255,255,.08);
+        background: var(--cv-panel-bg, var(--cv-bg)); color: var(--cv-text); border: 1px solid rgba(255,255,255,.08);
         border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.45);
         transform: translateY(12px); opacity: 0; pointer-events: none; transition: all .18s ease;
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, 'Helvetica Neue', Arial, 'Apple Color Emoji','Segoe UI Emoji';
+        z-index: 2147483647;
       }
       .cv-panel.open{ transform: translateY(0); opacity: 1; pointer-events: all; }
       .cv-header{ display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; background: linear-gradient(0deg, rgba(255,255,255,.02), transparent); }
       .cv-title{ font-weight: 600; letter-spacing: .3px; font-size: 16px; width: 100%; }
       .cv-tabs{ display:flex; flex-wrap: wrap; gap:6px; width:100%; }
-      .cv-tab{ background: transparent; color: var(--cv-text); border: 1px solid rgba(255,255,255,.18); padding: 6px 10px; border-radius: 6px; cursor: pointer; flex: 0 0 auto; white-space: nowrap; }
-      .cv-tab.active{ background: rgba(255,255,255,.08); }
+      .cv-tab{ background: transparent; color: var(--cv-text); border: 1px solid rgba(255,255,255,.18); padding: 6px 10px; border-radius: 6px; cursor: pointer; flex: 0 0 auto; white-space: nowrap; transition: border-color .18s ease, color .18s ease, background .18s ease; }
+      .cv-tab:hover{ border-color: var(--cv-accent); color: var(--cv-accent); }
+      .cv-tab.active{ border-color: var(--cv-accent); color: var(--cv-accent); background: rgba(255,255,255,.08); }
       .cv-section{ display: none; padding: 10px; }
       .cv-section.active{ display:block; max-height: calc(70vh - 58px); overflow-y: auto; }
-      .cv-row{ display:flex; gap:10px; align-items:center; margin: 8px 0; }
+      .cv-row{ display:flex; gap:10px; align-items:center; margin: 8px 0; flex-wrap: wrap; }
       .cv-row.right{ justify-content:flex-end; }
       .cv-textarea{ width: 100%; min-height: 240px; background: rgba(0,0,0,.3); color: var(--cv-text); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; }
-      .cv-btn{ background: var(--cv-primary); color: var(--cv-text); border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+      .cv-btn{ background: var(--cv-primary); color: var(--cv-text); border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: background .15s ease, color .15s ease, border-color .15s ease; }
+      .cv-btn:hover{ background: var(--cv-accent); }
+      .cv-btn.secondary{ background: transparent; border: 1px solid rgba(255,255,255,.2); color: var(--cv-text); }
+      .cv-btn.secondary:hover{ border-color: var(--cv-accent); color: var(--cv-accent); }
       .cv-empty{ opacity: .7; padding: 8px; }
       .cv-wf-item{ border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 8px; margin-bottom: 8px; }
       .cv-wf-title{ font-weight: 600; margin-bottom: 4px; }
@@ -550,25 +584,85 @@ export class MenuUI {
       .cv-switch input:disabled{ opacity:.4; cursor:not-allowed; }
       .cv-wf-footer{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
       .cv-wf-profiles{ display:flex; gap:6px; flex-wrap:wrap; }
-      .cv-profile{ background: transparent; color: var(--cv-text); border: 1px solid rgba(255,255,255,.18); padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 12px; line-height: 1.2; }
-      .cv-profile:hover{ border-color: var(--cv-primary); color: var(--cv-primary); }
-      .cv-profile.active{ background: rgba(255,255,255,.12); border-color: var(--cv-primary); color: var(--cv-primary); }
+      .cv-profile{ background: transparent; color: var(--cv-text); border: 1px solid rgba(255,255,255,.18); padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 12px; line-height: 1.2; transition: border-color .15s ease, color .15s ease, background .15s ease; }
+      .cv-profile:hover{ border-color: var(--cv-accent); color: var(--cv-accent); }
+      .cv-profile.active{ background: rgba(255,255,255,.12); border-color: var(--cv-accent); color: var(--cv-accent); }
       .cv-wf-actions{ display:flex; gap:8px; align-items:center; }
       .cv-profile-tabs{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 8px; }
-      .cv-profile-tab{ background: transparent; border: 1px solid rgba(255,255,255,.18); color: var(--cv-text); padding: 6px 14px; border-radius: 999px; cursor: pointer; }
-      .cv-profile-tab.active{ background: rgba(255,255,255,.1); border-color: var(--cv-primary); color: var(--cv-primary); }
+      .cv-profile-tab{ background: transparent; border: 1px solid rgba(255,255,255,.18); color: var(--cv-text); padding: 6px 14px; border-radius: 999px; cursor: pointer; transition: border-color .15s ease, color .15s ease, background .15s ease; }
+      .cv-profile-tab:hover{ border-color: var(--cv-accent); color: var(--cv-accent); }
+      .cv-profile-tab.active{ background: rgba(255,255,255,.1); border-color: var(--cv-accent); color: var(--cv-accent); }
+      .cv-theme-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:12px; align-items:center; }
+      .cv-theme-grid label{ display:flex; flex-direction:column; gap:6px; font-size:12px; color: var(--cv-text); }
+      .cv-theme-grid input[type="color"]{ width:100%; min-width: 120px; height:34px; border:1px solid rgba(255,255,255,.2); border-radius:6px; background:transparent; padding:0; }
+      .cv-opacity{ display:flex; align-items:center; gap:8px; color: var(--cv-text); font-size: 12px; grid-column: span 2; }
+      .cv-opacity input{ flex:1; min-width:140px; }
+      .cv-opacity span{ min-width: 44px; text-align: right; opacity: .8; }
+      .cv-theme-actions{ display:flex; gap:10px; align-items:center; grid-column: span 2; }
       /* Default CSS variables at scope root (shadow host) */
-      :host{ --cv-primary: ${DEFAULT_THEME.primary}; --cv-bg: ${DEFAULT_THEME.background}; --cv-text: ${DEFAULT_THEME.text}; --cv-accent: ${DEFAULT_THEME.accent}; }
+      :host{ --cv-primary: ${DEFAULT_THEME.primary}; --cv-bg: ${DEFAULT_THEME.background}; --cv-text: ${DEFAULT_THEME.text}; --cv-accent: ${DEFAULT_THEME.accent}; --cv-panel-bg: rgba(11,12,16,0.95); }
     `;
   }
 
   private applyTheme(){
-    // Apply custom properties to the shadow **host**, which cascade inside the shadow tree
+    this.settings.theme = this.normalizeTheme(this.settings.theme);
     const hostEl = this.shadow.host as HTMLElement;
-    hostEl.style.setProperty('--cv-primary', this.settings.theme.primary);
-    hostEl.style.setProperty('--cv-bg', this.settings.theme.background);
-    hostEl.style.setProperty('--cv-text', this.settings.theme.text);
-    hostEl.style.setProperty('--cv-accent', this.settings.theme.accent);
+    const theme = this.settings.theme;
+    hostEl.style.setProperty('--cv-primary', theme.primary);
+    hostEl.style.setProperty('--cv-bg', theme.background);
+    hostEl.style.setProperty('--cv-text', theme.text);
+    hostEl.style.setProperty('--cv-accent', theme.accent);
+    hostEl.style.setProperty('--cv-panel-bg', this.toRgba(theme.background, theme.panelOpacity));
+    this.syncThemeControls();
+  }
+
+  private normalizeTheme(theme?: Partial<ThemeConfig>): ThemeConfig {
+    const merged: ThemeConfig = {
+      ...DEFAULT_THEME,
+      ...(theme ?? {})
+    };
+    const opacity = Number.isFinite(merged.panelOpacity) ? Math.min(1, Math.max(0.5, merged.panelOpacity)) : DEFAULT_THEME.panelOpacity;
+    return { ...merged, panelOpacity: opacity };
+  }
+
+  private toRgba(color: string, alpha: number): string {
+    const hex = (color || '').trim();
+    const match = hex.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (!match) return `rgba(11,12,16,${Math.min(1, Math.max(0, alpha)).toFixed(2)})`;
+    let value = match[1];
+    if (value.length === 3) {
+      value = value.split('').map(ch => ch + ch).join('');
+    }
+    const r = parseInt(value.slice(0, 2), 16);
+    const g = parseInt(value.slice(2, 4), 16);
+    const b = parseInt(value.slice(4, 6), 16);
+    const a = Math.min(1, Math.max(0, alpha));
+    return `rgba(${r}, ${g}, ${b}, ${a.toFixed(2)})`;
+  }
+
+  private syncThemeControls(){
+    const theme = this.settings.theme;
+    const setInputValue = (id: string, value: string) => {
+      const el = this.shadow.getElementById(id) as HTMLInputElement | null;
+      if (el && el.value !== value) el.value = value;
+    };
+    setInputValue('cv-theme-primary', theme.primary);
+    setInputValue('cv-theme-bg', theme.background);
+    setInputValue('cv-theme-text', theme.text);
+    setInputValue('cv-theme-accent', theme.accent);
+    const opacityInput = this.shadow.getElementById('cv-theme-opacity') as HTMLInputElement | null;
+    if (opacityInput) {
+      const normalized = theme.panelOpacity.toFixed(2);
+      if (opacityInput.value !== normalized) opacityInput.value = normalized;
+    }
+    this.updateOpacityLabel(theme.panelOpacity);
+  }
+
+  private updateOpacityLabel(value: number){
+    const el = this.shadow.getElementById('cv-theme-opacity-value');
+    if (!el) return;
+    const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
+    el.textContent = `${pct}%`;
   }
 
   private dispatch(type: string, detail: any){
