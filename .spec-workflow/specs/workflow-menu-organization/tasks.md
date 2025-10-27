@@ -38,7 +38,7 @@
   - _Requirements: Requirement 1, Requirement 2, Requirement 3, Usability_
   - _Prompt: Implement the task for spec workflow-menu-organization, first run spec-workflow-guide to get the workflow guide then implement the task: Role: UI Engineer with expertise in design systems | Task: Update MenuUI CSS to add drag handle affordances, hidden badges, and animations that feel modern and accessible | Restrictions: Keep CSS scoped to Shadow DOM, avoid heavy box-shadows that hurt performance, ensure focus states remain visible | _Leverage: MenuUI css() | _Requirements: Requirement 1, Requirement 2, Requirement 3, Usability | Success: Visual design clearly communicates drag, hide, and hidden states, animations run smoothly, all new elements meet WCAG AA_
 
-- [ ] 6. Add unit tests for preferences and hiding logic
+- [x] 6. Add unit tests for preferences and hiding logic
   - File: packages/core/test/workflow.preferences.test.ts
   - Cover order reconciliation, hide toggles, persistence version fallback, and auto-run prompt interactions at service level
   - _Leverage: packages/core/test/autorun.test.ts patterns_
