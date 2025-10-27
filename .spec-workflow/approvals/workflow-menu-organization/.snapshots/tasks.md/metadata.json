@@ -1,0 +1,14 @@
+{
+  "filePath": ".spec-workflow/specs/workflow-menu-organization/tasks.md",
+  "currentVersion": 1,
+  "snapshots": [
+    {
+      "version": 1,
+      "filename": "snapshot-001.json",
+      "timestamp": "2025-10-27T10:11:46.150Z",
+      "trigger": "initial",
+      "approvalId": "approval_1761559906148_75i1uelzg",
+      "approvalTitle": "workflow-menu-organization tasks"
+    }
+  ]
+}

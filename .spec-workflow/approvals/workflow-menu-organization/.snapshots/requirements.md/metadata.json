@@ -1,0 +1,14 @@
+{
+  "filePath": ".spec-workflow/specs/workflow-menu-organization/requirements.md",
+  "currentVersion": 1,
+  "snapshots": [
+    {
+      "version": 1,
+      "filename": "snapshot-001.json",
+      "timestamp": "2025-10-27T10:07:19.808Z",
+      "trigger": "initial",
+      "approvalId": "approval_1761559639804_rsnnvn8xq",
+      "approvalTitle": "workflow-menu-organization requirements"
+    }
+  ]
+}
