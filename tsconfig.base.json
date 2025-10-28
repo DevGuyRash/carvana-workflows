@@ -5,6 +5,7 @@
     "lib": ["ES2021", "DOM", "DOM.Iterable"],
     "strict": true,
     "moduleResolution": "Bundler",
+    "baseUrl": ".",
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -12,6 +13,7 @@
     "incremental": false,
     "types": ["tampermonkey"],
     "paths": {
+      "@cv/core": ["packages/core/src/index.ts"],
       "@cv/core/*": ["packages/core/src/*"]
     }
   }

@@ -3,6 +3,19 @@ import type { WorkflowDefinition } from '@cv/core';
 const SEARCH_CONTAINER = "div[role='search'][aria-labelledby*='::indReqLab']";
 const BUTTON_SELECTOR = "a[role='button'][aria-label*='Search: Invoice']";
 
+const resolvePanelState = (): 'expanded' | 'collapsed' => {
+  const container = document.querySelector(SEARCH_CONTAINER);
+  const row = container?.querySelector(':scope > div:nth-of-type(2)') as HTMLElement | null;
+  if (!row) return 'collapsed';
+  const style = getComputedStyle(row);
+  if (row.hidden) return 'collapsed';
+  if (row.getAttribute('aria-hidden') === 'true') return 'collapsed';
+  if (style.display === 'none') return 'collapsed';
+  if (style.visibility === 'hidden') return 'collapsed';
+  if (style.height === '0px') return 'collapsed';
+  return 'expanded';
+};
+
 export const OracleExpandInvoiceSearchWorkflow: WorkflowDefinition = {
   id: 'oracle.search.invoice.expand',
   label: 'Oracle: Expand Search — Invoice',
@@ -24,12 +37,7 @@ export const OracleExpandInvoiceSearchWorkflow: WorkflowDefinition = {
       attributeFilter: ['aria-expanded']
     },
     context: {
-      selector: {
-        selector: BUTTON_SELECTOR,
-        within: { selector: SEARCH_CONTAINER }
-      },
-      attribute: 'aria-expanded',
-      fallback: 'unknown'
+      resolve: () => resolvePanelState()
     }
   },
   profiles: { enabled: false },
@@ -46,8 +54,11 @@ export const OracleExpandInvoiceSearchWorkflow: WorkflowDefinition = {
         }
       },
       {
-        notExists: {
-          selector: `${SEARCH_CONTAINER} > div:nth-of-type(2)`
+        not: {
+          exists: {
+            selector: `${SEARCH_CONTAINER} > div:nth-of-type(2)`,
+            visible: true
+          }
         }
       }
     ]
