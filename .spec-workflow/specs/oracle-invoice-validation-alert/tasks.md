@@ -42,7 +42,7 @@
   - _Leverage: `@cv/core` workflow DSL, detector helper, HUD banner module, design auto-run patterns_
   - _Prompt: Implement the task for spec oracle-invoice-validation-alert, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Workflow Automation Engineer with Oracle expertise | Task: Implement the workflow definition orchestrating detection, banner updates, history logging, and manual verification per requirements 1.1–1.4 and 3.1–3.3 | Restrictions: Follow existing workflow naming/id conventions, avoid duplicating helper logic, ensure retries respect mutation watchers | _Leverage: workflow DSL, detector helper, HUD banner module | _Requirements: 1.1, 1.4, 3.1, 3.2, 3.3 | Success: Workflow auto-runs correctly, handles branching, registers manual verification, and logs diagnostics | Instructions: Mark this task as [-] to begin and [x] once workflow passes integration tests_
 
-- [ ] 7. Create workflow integration tests
+- [x] 7. Create workflow integration tests
   - File: `packages/oracle-userscript/src/workflows/__tests__/oracle-invoice-validation-alert.test.ts`
   - Stub HUD banner module, simulate detector outputs, and assert branching, logging payloads, and auto-run scheduling.
   - _Requirements: 1.4, 3.1, 3.2, 3.3, NFR-Reliability_
