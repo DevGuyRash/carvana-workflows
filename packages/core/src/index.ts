@@ -7,6 +7,7 @@ export * from './clipboard';
 export * from './logger';
 export * from './ui';
 export * from './ui/hud-theme-validation';
+export * from './ui/hud-validation-banner';
 export * from './workflow';
 export * from './templating';
 export * from './data';

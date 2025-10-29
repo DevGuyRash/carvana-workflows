@@ -21,7 +21,7 @@
   - _Leverage: Existing HUD theme modules in `packages/core/src/ui/theme`, requirements color specs, animation guidelines from design.md_
   - _Prompt: Implement the task for spec oracle-invoice-validation-alert, first run spec-workflow-guide to get the workflow guide then implement the task: Role: UI Systems Engineer focusing on design token architecture | Task: Create validation banner token module matching requirements 2.1–2.3 and design guidance, exporting typed accessors | Restrictions: Keep tokens declarative, avoid inlining business logic, ensure WCAG contrast values are documented in tokens | _Leverage: HUD theme utilities, design.md animation tables | _Requirements: 2.1, 2.2, 2.3 | Success: Token module exports typed theme map, satisfies lint/tests, and is consumable by HUD components | Instructions: Mark this task as [-] before editing and switch to [x] once tokens compile and tests pass_
 
-- [ ] 4. Implement HUD validation banner renderer
+- [x] 4. Implement HUD validation banner renderer
   - File: `packages/core/src/ui/hud-validation-banner.ts`
   - Render animated banner states inside HUD shadow DOM with ARIA live updates, dismissal, and token-driven styling.
   - _Requirements: 2.1, 2.2, 2.3, NFR-Usability, NFR-Performance_
