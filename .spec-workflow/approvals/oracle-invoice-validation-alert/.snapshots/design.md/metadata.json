@@ -1,0 +1,14 @@
+{
+  "filePath": ".spec-workflow/specs/oracle-invoice-validation-alert/design.md",
+  "currentVersion": 1,
+  "snapshots": [
+    {
+      "version": 1,
+      "filename": "snapshot-001.json",
+      "timestamp": "2025-10-29T09:45:00.000Z",
+      "trigger": "initial",
+      "approvalId": "approval_1761734700000_design",
+      "approvalTitle": "Oracle invoice validation alert design v1.0"
+    }
+  ]
+}

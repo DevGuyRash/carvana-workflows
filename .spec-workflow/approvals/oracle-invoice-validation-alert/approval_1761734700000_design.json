@@ -1,0 +1,20 @@
+{
+  "id": "approval_1761734700000_design",
+  "title": "Oracle invoice validation alert design v1.0",
+  "filePath": ".spec-workflow/specs/oracle-invoice-validation-alert/design.md",
+  "type": "document",
+  "status": "approved",
+  "createdAt": "2025-10-29T09:44:30.000Z",
+  "category": "spec",
+  "categoryName": "oracle-invoice-validation-alert",
+  "response": "Approved. Detector helper, HUD banner, and workflow responsibilities are clearly isolated with reusable tokens and test strategy.",
+  "respondedAt": "2025-10-29T09:45:10.000Z",
+  "comments": [
+    {
+      "type": "general",
+      "comment": "Design aligns with steering: helper under shared/, HUD module in core/ui, workflow auto-run branch handled via existing DSL.",
+      "timestamp": "2025-10-29T09:45:10.000Z",
+      "id": "comment_1761734710000_3yd1avxrn"
+    }
+  ]
+}

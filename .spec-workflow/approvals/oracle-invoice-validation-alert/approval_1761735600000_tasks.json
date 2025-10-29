@@ -1,0 +1,20 @@
+{
+  "id": "approval_1761735600000_tasks",
+  "title": "Oracle invoice validation alert tasks v1.0",
+  "filePath": ".spec-workflow/specs/oracle-invoice-validation-alert/tasks.md",
+  "type": "document",
+  "status": "approved",
+  "createdAt": "2025-10-29T09:59:30.000Z",
+  "category": "spec",
+  "categoryName": "oracle-invoice-validation-alert",
+  "response": "Approved. Task list sequences helper, HUD UI, workflow wiring, diagnostics, automated tests, and selector confirmation gate.",
+  "respondedAt": "2025-10-29T10:00:05.000Z",
+  "comments": [
+    {
+      "type": "general",
+      "comment": "Noted explicit requirement to review selectors/tests with requestor before implementation handoff.",
+      "timestamp": "2025-10-29T10:00:05.000Z",
+      "id": "comment_1761735605000_m1bn4gc7p"
+    }
+  ]
+}

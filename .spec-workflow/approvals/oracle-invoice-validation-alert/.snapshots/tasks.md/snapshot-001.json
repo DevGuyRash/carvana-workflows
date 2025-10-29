@@ -1,0 +1,22 @@
+{
+  "id": "snapshot_1761735600001_lkz8p3vyd",
+  "approvalId": "approval_1761735600000_tasks",
+  "approvalTitle": "Oracle invoice validation alert tasks v1.0",
+  "version": 1,
+  "timestamp": "2025-10-29T10:00:00.000Z",
+  "trigger": "initial",
+  "status": "approved",
+  "content": "# Tasks Document\n\n- [ ] 1. Implement Oracle invoice status detector helper\n  - File: `packages/oracle-userscript/src/shared/invoice/status-detector.ts`\n  - Create `detectInvoiceValidationStatus` with retry loop, snippet capture, and diagnostics payload per requirements.\n  - Reuse `waitFor`, selector builders, and DOM snippet from requirements; emit structured `DetectionResult`.\n  - _Requirements: 1.1, 1.2, 1.3, 3.1_\n\n- [ ] 2. Add validation banner theme tokens\n  - File: `packages/core/src/ui/hud-theme-validation.ts`\n  - Encode color palette, easing, keyframes, spacing, and typography ranges specified in requirements.\n  - Export token accessor and associated TypeScript types for reuse.\n  - _Requirements: 2.1, 2.2, 2.3, NFR-Architecture_\n\n- [ ] 3. Build HUD validation banner renderer\n  - File: `packages/core/src/ui/hud-validation-banner.ts`\n  - Render banner inside HUD shadow DOM with animations for validated / needs-revalidated / unknown states.\n  - Provide `showValidationBanner`, `syncValidationBannerTheme`, `clearValidationBanner`; ensure ARIA live region updates and dismissal.\n  - _Requirements: 2.1, 2.2, 2.3, NFR-Usability_\n\n- [ ] 4. Wire workflow to detector and banner\n  - File: `packages/oracle-userscript/src/workflows/oracle-invoice-validation-alert.ts`\n  - Define auto-run workflow steps (wait for invoice header, execute detector, branch on status, render banner, log history, schedule rerun).\n  - Register manual “Verify selectors” action triggering detector in verification mode and diff logging.\n  - _Requirements: 1.1–1.4, 3.1–3.3_\n\n- [ ] 5. Register workflow entry point\n  - File: `packages/oracle-userscript/src/index.ts`\n  - Import workflow definition, attach to relevant Oracle page registration, and configure auto-run context tokens / mutation watchers.\n  - Ensure workflow metadata (id, label, auto-run defaults) follows existing naming conventions.\n  - _Requirements: 1.4, NFR-Reliability_\n\n- [ ] 6. Persist diagnostics in workflow history\n  - File: `packages/core/src/workflow.ts` (augmentation) & `packages/core/src/data.ts`\n  - Store matched text, element path summary, banner state, attempts, and verification flag in history entries.\n  - Expose data for export while keeping raw invoice values out of storage (per security requirement).\n  - _Requirements: 3.1, NFR-Security_\n\n- [ ] 7. Add Vitest coverage for detector and tokens\n  - Files: `packages/oracle-userscript/src/shared/invoice/status-detector.test.ts`, `packages/core/src/ui/hud-theme-validation.test.ts`\n  - Create jsdom fixtures mirroring captured DOM snippet; test status classification, retry fallbacks, and token values.\n  - _Requirements: 1.2, 1.3, 2.1, NFR-Performance_\n\n- [ ] 8. Add workflow integration test harness\n  - File: `packages/oracle-userscript/src/workflows/__tests__/oracle-invoice-validation-alert.test.ts`\n  - Stub HUD banner module; assert branching, logging payloads, manual verification flow, and auto-run scheduling.\n  - _Requirements: 1.4, 3.2, NFR-Reliability_\n\n- [ ] 9. Prepare manual QA script and HUD demo assets\n  - Deliverable: QA checklist under `packages/oracle-userscript/src/notes/oracle-invoice-validation-alert-qa.md`\n  - Document steps to simulate each status, trigger manual verification, and confirm banner accessibility/contrast.\n  - _Requirements: 2.1–2.3, NFR-Usability_\n\n- [ ] 10. Confirm selectors and tests with requestor before implementation handoff\n  - Action: Schedule review of detector snippet, selector strategy, and test fixtures; capture sign-off reference in spec history.\n  - Implementation tasks blocked until confirmation recorded.\n  - _Requirements: 3.2, NFR-Usability_\n",
+  "fileStats": {
+    "size": 3091,
+    "lines": 63,
+    "lastModified": "2025-10-29T09:59:00.000Z"
+  },
+  "comments": [
+    {
+      "type": "note",
+      "comment": "Initial task breakdown aligning detector, HUD banner, logging, tests, and requestor confirmation gate.",
+      "timestamp": "2025-10-29T10:00:00.000Z"
+    }
+  ]
+}

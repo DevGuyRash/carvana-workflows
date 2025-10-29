@@ -1,0 +1,21 @@
+{
+  "id": "approval_1761727007483_ln2bxcjpo",
+  "title": "Oracle invoice validation alert requirements",
+  "filePath": ".spec-workflow/specs/oracle-invoice-validation-alert/requirements.md",
+  "type": "document",
+  "status": "needs-revision",
+  "createdAt": "2025-10-29T08:36:47.483Z",
+  "category": "spec",
+  "categoryName": "oracle-invoice-validation-alert",
+  "response": "Feedback Summary (1 comments):\n\nGeneral Comments:\n1. Put some extra work into the final deliverable and UX design, animation, etc. Also, you may want to include the actual element verbatim (unless you plan to include it in design) for future reference\n\n",
+  "annotations": "{\n  \"decision\": \"needs-revision\",\n  \"comments\": [\n    {\n      \"type\": \"general\",\n      \"comment\": \"Put some extra work into the final deliverable and UX design, animation, etc. Also, you may want to include the actual element verbatim (unless you plan to include it in design) for future reference\",\n      \"timestamp\": \"2025-10-29T08:40:00.910Z\",\n      \"id\": \"comment_1761727200910_2ias69lsg\"\n    }\n  ],\n  \"summary\": \"Feedback Summary (1 comments):\\n\\nGeneral Comments:\\n1. Put some extra work into the final deliverable and UX design, animation, etc. Also, you may want to include the actual element verbatim (unless you plan to include it in design) for future reference\\n\\n\",\n  \"timestamp\": \"2025-10-29T08:40:04.661Z\"\n}",
+  "respondedAt": "2025-10-29T08:40:04.826Z",
+  "comments": [
+    {
+      "type": "general",
+      "comment": "Put some extra work into the final deliverable and UX design, animation, etc. Also, you may want to include the actual element verbatim (unless you plan to include it in design) for future reference",
+      "timestamp": "2025-10-29T08:40:00.910Z",
+      "id": "comment_1761727200910_2ias69lsg"
+    }
+  ]
+}

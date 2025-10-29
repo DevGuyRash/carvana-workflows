@@ -1,0 +1,20 @@
+{
+  "id": "approval_1761733800000_v03req",
+  "title": "Oracle invoice validation alert requirements v0.2",
+  "filePath": ".spec-workflow/specs/oracle-invoice-validation-alert/requirements.md",
+  "type": "document",
+  "status": "approved",
+  "createdAt": "2025-10-29T09:29:59.000Z",
+  "category": "spec",
+  "categoryName": "oracle-invoice-validation-alert",
+  "response": "Approved. Added animation detail, HUD deliverables, and captured the validation status DOM snippet per prior feedback.",
+  "respondedAt": "2025-10-29T09:30:05.000Z",
+  "comments": [
+    {
+      "type": "general",
+      "comment": "Reviewed v0.2 – animation specs tightened and DOM snippet recorded for selectors.",
+      "timestamp": "2025-10-29T09:30:05.000Z",
+      "id": "comment_1761733805000_okx6rx0nw"
+    }
+  ]
+}

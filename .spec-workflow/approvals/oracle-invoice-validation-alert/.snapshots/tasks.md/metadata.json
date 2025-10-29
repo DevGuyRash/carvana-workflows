@@ -1,0 +1,14 @@
+{
+  "filePath": ".spec-workflow/specs/oracle-invoice-validation-alert/tasks.md",
+  "currentVersion": 1,
+  "snapshots": [
+    {
+      "version": 1,
+      "filename": "snapshot-001.json",
+      "timestamp": "2025-10-29T10:00:00.000Z",
+      "trigger": "initial",
+      "approvalId": "approval_1761735600000_tasks",
+      "approvalTitle": "Oracle invoice validation alert tasks v1.0"
+    }
+  ]
+}
