@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   test: {
     environment: 'jsdom',
-    include: ['packages/**/test/**/*.test.ts']
+    include: ['packages/**/test/**/*.test.ts', 'packages/**/src/**/*.test.ts']
   },
   resolve: {
     alias: [
