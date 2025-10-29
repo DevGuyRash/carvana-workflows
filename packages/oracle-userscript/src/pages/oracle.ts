@@ -5,6 +5,10 @@ import {
   OracleExpandInvoiceSearchWorkflow
 } from '../workflows/oracle-expand-invoice-search';
 import { OracleInvoiceCreatorWorkflow } from '../workflows/oracle-invoice-creator';
+import {
+  OracleInvoiceValidationAlertWorkflow,
+  OracleInvoiceValidationVerifyWorkflow
+} from '../workflows/oracle-invoice-validation-alert';
 
 export const OracleMainPage: PageDefinition = {
   id: 'oracle.main',
@@ -14,6 +18,8 @@ export const OracleMainPage: PageDefinition = {
     OracleExpandInvoiceSearchWorkflow,
     OracleExpandInvoicePerformWorkflow,
     OracleExpandInvoiceEnsureWorkflow,
+    OracleInvoiceValidationAlertWorkflow,
+    OracleInvoiceValidationVerifyWorkflow,
     OracleInvoiceCreatorWorkflow
   ]
 };

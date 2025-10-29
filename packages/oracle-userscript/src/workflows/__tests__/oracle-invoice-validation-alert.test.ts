@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DetectionResult, InvoiceValidationStatus } from '../../shared/invoice/status-detector';
-import type { WorkflowExecuteContext } from '@cv/core';
+import type { DetectionResult, InvoiceStatusDetectionDiagnostics, InvoiceValidationStatus } from '../../shared/invoice/status-detector';
+import type { WorkflowDefinition, WorkflowExecuteContext, WorkflowLogLevel } from '@cv/core';
 import { Store } from '@cv/core';
 import { OracleInvoiceValidationAlertWorkflow, OracleInvoiceValidationVerifyWorkflow } from '../oracle-invoice-validation-alert';
 
@@ -84,9 +84,9 @@ const VERIFY_HISTORY_KEY = 'wf:history:oracle.invoice.validation.verify';
 const MANUAL_BASELINE_KEY = 'oracle.invoice.validation.alert:manualBaseline';
 const MANUAL_UNKNOWN_STREAK_KEY = 'oracle.invoice.validation.alert:manualUnknownStreak';
 
-type DetectionOverrides = Partial<DetectionResult> & {
+type DetectionOverrides = Partial<Omit<DetectionResult, 'status' | 'diagnostics'>> & {
   status: InvoiceValidationStatus;
-  diagnostics?: Partial<DetectionResult['diagnostics']>;
+  diagnostics?: Partial<InvoiceStatusDetectionDiagnostics>;
 };
 
 const buildDetectionResult = (overrides: DetectionOverrides): DetectionResult => {
@@ -104,7 +104,7 @@ const buildDetectionResult = (overrides: DetectionOverrides): DetectionResult =>
       statusText
     }
   ];
-  const diagnostics = overrides.diagnostics ?? {};
+  const diagnostics: Partial<InvoiceStatusDetectionDiagnostics> = overrides.diagnostics ?? {};
   const attemptLog = diagnostics.attemptLog ?? baseAttemptLog;
   const manualVerification = diagnostics.manualVerification ?? { enabled: false };
 
@@ -156,21 +156,54 @@ const createContext = (overrides: Partial<Omit<WorkflowExecuteContext, 'store'>>
   const namespace = `spec-${Math.random().toString(36).slice(2, 10)}`;
   const store = new Store(namespace);
   const vars: Record<string, any> = {};
-  const logSpy = overrides.log ?? vi.fn();
-  const runWorkflowSpy = overrides.runWorkflow ?? vi.fn().mockResolvedValue(true);
+  const logSpy: LogMock = overrides.log
+    ? (vi.fn(overrides.log) as unknown as LogMock)
+    : (vi.fn<WorkflowExecuteContext['log']>() as unknown as LogMock);
+  const runWorkflowSpy: RunWorkflowMock = overrides.runWorkflow
+    ? (vi.fn(overrides.runWorkflow) as unknown as RunWorkflowMock)
+    : (vi.fn<WorkflowExecuteContext['runWorkflow']>().mockResolvedValue(true) as unknown as RunWorkflowMock);
   const ctx: WorkflowExecuteContext = {
     workflowId: overrides.workflowId ?? 'oracle.invoice.validation.alert',
     vars,
     options: overrides.options ?? {},
     profile: overrides.profile ?? { id: 'default', label: 'Default' },
-    log: logSpy,
-    runWorkflow: runWorkflowSpy,
+    log: logSpy as unknown as WorkflowExecuteContext['log'],
+    runWorkflow: runWorkflowSpy as unknown as WorkflowExecuteContext['runWorkflow'],
     setVar: overrides.setVar ?? ((key, value) => { vars[key] = value; }),
     getVar: overrides.getVar ?? (key => vars[key]),
     store
   };
   return { ctx, store, logSpy, runWorkflowSpy };
 };
+
+const runExecuteStep = async (
+  workflow: WorkflowDefinition,
+  ctx: WorkflowExecuteContext,
+  index = 0
+): Promise<void> => {
+  const step = workflow.steps[index];
+  if (!step || step.kind !== 'execute') {
+    throw new Error(`Expected execute step at index ${index} for workflow ${workflow.id}`);
+  }
+  await step.run(ctx);
+};
+
+type MockWithCalls<TArgs extends any[] = any[], TReturn = any> = ((...args: TArgs) => TReturn) & {
+  mock: { calls: TArgs[] };
+};
+
+type LogMock = MockWithCalls<[string, WorkflowLogLevel?], void>;
+type RunWorkflowMock = MockWithCalls<
+  Parameters<WorkflowExecuteContext['runWorkflow']>,
+  ReturnType<WorkflowExecuteContext['runWorkflow']>
+>;
+
+const collectMessages = (mock: LogMock): string[] => mock.mock.calls.map(([message]) => message);
+
+const collectLogEntries = (
+  mock: LogMock
+): Array<{ message: string; level: WorkflowLogLevel | undefined }> =>
+  mock.mock.calls.map(([message, level]) => ({ message, level }));
 
 describe('Oracle invoice validation workflow integration', () => {
   it('renders validated banner and logs history on happy path', async () => {
@@ -179,8 +212,7 @@ describe('Oracle invoice validation workflow integration', () => {
     const detection = buildDetectionResult({ status: 'validated', statusText: 'Validated' });
     detectMock.mockResolvedValueOnce(detection);
 
-    const step = OracleInvoiceValidationAlertWorkflow.steps[0];
-    await step.run(ctx);
+    await runExecuteStep(OracleInvoiceValidationAlertWorkflow, ctx);
 
     expect(detectMock).toHaveBeenCalledTimes(1);
     expect(detectMock).toHaveBeenCalledWith(expect.objectContaining({ manualVerification: false }));
@@ -195,9 +227,10 @@ describe('Oracle invoice validation workflow integration', () => {
       })
     );
 
-    expect(ctx.getVar('invoiceValidation')).toEqual({ result: detection, manualRun: false });
+    const invoiceValidation = ctx.getVar('invoiceValidation') as { result: DetectionResult; manualRun: boolean };
+    expect(invoiceValidation).toEqual({ result: detection, manualRun: false });
 
-    const history = store.get(ALERT_HISTORY_KEY, []);
+    const history = store.get(ALERT_HISTORY_KEY, [] as any[]);
     expect(history).toHaveLength(1);
     expect(history[0]).toEqual(
       expect.objectContaining({
@@ -225,7 +258,7 @@ describe('Oracle invoice validation workflow integration', () => {
       })
     );
 
-    const messages = logSpy.mock.calls.map(([message]) => message);
+    const messages = collectMessages(logSpy);
     expect(messages).toContain('Starting Oracle invoice validation detection.');
     expect(messages).toContain('Invoice validation status: validated (Validated)');
   });
@@ -262,7 +295,7 @@ describe('Oracle invoice validation workflow integration', () => {
     });
     detectMock.mockResolvedValueOnce(detection);
 
-    await OracleInvoiceValidationAlertWorkflow.steps[0].run(ctx);
+    await runExecuteStep(OracleInvoiceValidationAlertWorkflow, ctx);
 
     expect(showBannerMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -273,7 +306,7 @@ describe('Oracle invoice validation workflow integration', () => {
       })
     );
 
-    const history = store.get(ALERT_HISTORY_KEY, []);
+    const history = store.get(ALERT_HISTORY_KEY, [] as any[]);
     expect(history).toHaveLength(1);
     expect(history[0]).toEqual(
       expect.objectContaining({
@@ -294,7 +327,7 @@ describe('Oracle invoice validation workflow integration', () => {
       })
     );
 
-    const messages = logSpy.mock.calls.map(([message]) => message);
+    const messages = collectMessages(logSpy);
     expect(messages).toContain('Invoice validation status: unknown (no text)');
     expect(clearBannerMock).not.toHaveBeenCalled();
   });
@@ -344,9 +377,7 @@ describe('Oracle invoice validation workflow integration', () => {
       .mockResolvedValueOnce(unknownResult)
       .mockResolvedValueOnce(unknownResult);
 
-    const step = OracleInvoiceValidationVerifyWorkflow.steps[0];
-
-    await step.run(ctx);
+    await runExecuteStep(OracleInvoiceValidationVerifyWorkflow, ctx);
 
     expect(detectMock).toHaveBeenNthCalledWith(1, expect.objectContaining({
       manualVerification: {
@@ -358,24 +389,25 @@ describe('Oracle invoice validation workflow integration', () => {
     const baseline = store.get(MANUAL_BASELINE_KEY, null);
     expect(baseline).toEqual({ expectedStatus: 'validated', expectedSnippet: '<td class="x12">Validated</td>' });
 
-    const firstAlertMessage = (globalThis.alert as any).mock.calls[0]?.[0] ?? '';
+    const alertMock = globalThis.alert as unknown as { mock: { calls: unknown[][] } };
+    const firstAlertMessage = (alertMock.mock.calls[0]?.[0] as string | undefined) ?? '';
     expect(firstAlertMessage).toContain('Manual verification differences detected:');
     expect(firstAlertMessage).toContain('expected status validated, received needs-revalidated');
     expect(store.get(MANUAL_UNKNOWN_STREAK_KEY, 0)).toBe(0);
 
-    await step.run(ctx);
+    await runExecuteStep(OracleInvoiceValidationVerifyWorkflow, ctx);
     expect(store.get(MANUAL_UNKNOWN_STREAK_KEY, 0)).toBe(1);
 
-    await step.run(ctx);
+    await runExecuteStep(OracleInvoiceValidationVerifyWorkflow, ctx);
 
     const streak = store.get(MANUAL_UNKNOWN_STREAK_KEY, 0);
     expect(streak).toBe(2);
 
-    const alertCalls = (globalThis.alert as any).mock.calls.map(([message]: [string]) => message);
-    expect(alertCalls.some(message => message.includes('Manual verification differences detected'))).toBe(true);
+    const alertCalls = alertMock.mock.calls.map(call => call[0] as string);
+    expect(alertCalls.some((message: string) => message.includes('Manual verification differences detected'))).toBe(true);
     expect(alertCalls[alertCalls.length - 1]).toBe('Invoice validation verification returned unknown twice. Confirm selectors before enabling auto-run repeat.');
 
-    const history = store.get(VERIFY_HISTORY_KEY, []);
+    const history = store.get(VERIFY_HISTORY_KEY, [] as any[]);
     expect(history).toHaveLength(3);
     const manualEntries = history.filter(entry => entry.manualRun);
     expect(manualEntries).toHaveLength(3);
@@ -400,7 +432,7 @@ describe('Oracle invoice validation workflow integration', () => {
       })
     );
 
-    const logs = logSpy.mock.calls.map(([message, level]) => ({ message, level }));
+    const logs = collectLogEntries(logSpy);
     expect(logs.some(({ message, level }) => level === 'warn' && message.includes('Manual verification mismatch'))).toBe(true);
     expect(logs.some(({ message, level }) => level === 'warn' && message.includes('Invoice validation verification returned unknown twice'))).toBe(true);
   });

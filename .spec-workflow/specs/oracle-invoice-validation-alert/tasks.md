@@ -56,7 +56,7 @@
   - _Leverage: Existing history schema, data serialization utilities, security guidelines from requirements_
   - _Prompt: Implement the task for spec oracle-invoice-validation-alert, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Core Platform Engineer overseeing workflow persistence | Task: Update history storage to include validation diagnostics while honoring security constraints per requirement 3.1 | Restrictions: Do not store sensitive invoice identifiers, maintain backward compatibility with history schema, add tests for new fields | _Leverage: workflow data utilities, security requirements | _Requirements: 3.1 | Success: History entries include diagnostics fields, schemas/tests updated, and no sensitive data leaked | Instructions: Mark this task as [-] at start and [x] once persistence changes are tested_
 
-- [ ] 9. Register workflow and autorun configuration
+- [x] 9. Register workflow and autorun configuration
   - File: `packages/oracle-userscript/src/index.ts`
   - Register workflow with Oracle invoice page, configure auto-run context tokens, mutation watchers, and default auto-run settings.
   - _Requirements: 1.4, NFR-Reliability_
