@@ -14,7 +14,7 @@
   - _Leverage: `vitest`, existing Oracle fixture utilities under `packages/oracle-userscript/test-utils`, DOM snippet documented in requirements_
   - _Prompt: Implement the task for spec oracle-invoice-validation-alert, first run spec-workflow-guide to get the workflow guide then implement the task: Role: QA Automation Engineer skilled in Vitest and jsdom | Task: Build comprehensive unit tests for the status detector covering success, fallback, and verification scenarios aligned to requirements 1.2, 1.3, and 3.1 | Restrictions: Do not mock unrelated modules, keep fixtures self-contained, assert timing via fake timers rather than real waits | _Leverage: `vitest`, jsdom utilities, requirements DOM snippet | _Requirements: 1.2, 1.3, 3.1 | Success: Tests reproduce all detector outcomes, use fake timers for retry logic, and fail if diagnostics payloads are incomplete | Instructions: Set this task to [-] when you begin and flip to [x] after tests pass_
 
-- [ ] 3. Define validation banner theme tokens
+- [x] 3. Define validation banner theme tokens
   - File: `packages/core/src/ui/hud-theme-validation.ts`
   - Encode colors, easing curves, keyframes, and responsive layout constants for three banner states.
   - _Requirements: 2.1, 2.2, 2.3, NFR-Architecture, NFR-Usability_
