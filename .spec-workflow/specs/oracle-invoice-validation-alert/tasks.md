@@ -28,7 +28,7 @@
   - _Leverage: HUD overlay utilities (`packages/core/src/ui/hud.ts`), new theme tokens, existing icon font resources_
   - _Prompt: Implement the task for spec oracle-invoice-validation-alert, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Frontend Engineer specializing in animated HUD experiences | Task: Build the validation banner module that consumes tokens, animates states, manages ARIA live announcements, and supports dismissal per requirements 2.1–2.3 | Restrictions: Do not mutate Oracle DOM directly, keep animations within HUD shadow root, respect performance budget | _Leverage: HUD UI utilities, token module, icon font | _Requirements: 2.1, 2.2, 2.3 | Success: Module exposes `showValidationBanner`, `syncValidationBannerTheme`, `clearValidationBanner`, passes lint/tests, and animations behave per specs | Instructions: Change this task to [-] when work starts and to [x] after banner renders correctly with tests_
 
-- [ ] 5. Add HUD banner unit tests
+- [x] 5. Add HUD banner unit tests
   - File: `packages/core/src/ui/hud-validation-banner.test.ts`
   - Validate animation state transitions, ARIA messaging, dismissal behavior, and token consumption via jsdom.
   - _Requirements: 2.1, 2.2, 2.3, NFR-Usability, NFR-Performance_
