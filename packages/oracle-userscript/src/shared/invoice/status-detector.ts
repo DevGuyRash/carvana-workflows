@@ -208,11 +208,13 @@ function classifyStatus(text: string): InvoiceValidationStatus {
   const tokens = normalized.split(' ');
   const hasNeeds = tokens.includes('needs');
   const hasValidatedToken = tokens.includes('validated');
-  const hasValidationToken = tokens.includes('validation') || tokens.includes('revalidation');
-  const hasReToken = tokens.includes('re') || tokens.some(token => token.startsWith('revalid'));
+  const hasValidationToken =
+    tokens.includes('validation') || tokens.includes('revalidation') || tokens.includes('reverification');
+  const hasReValidationFamily = tokens.some(token => token.startsWith('revalid') || token.startsWith('reverif'));
+  const hasReToken = tokens.includes('re') || hasReValidationFamily;
   const hasNegation = tokens.includes('not') || tokens.includes('unvalidated');
 
-  if (hasNeeds && (hasValidatedToken || hasValidationToken) && hasReToken) {
+  if (hasNeeds && (hasValidatedToken || hasValidationToken || hasReValidationFamily) && hasReToken) {
     return 'needs-revalidated';
   }
 

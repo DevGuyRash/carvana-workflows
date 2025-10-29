@@ -344,7 +344,7 @@ describe('Oracle invoice validation workflow integration', () => {
 
     const mismatchResult = buildDetectionResult({
       status: 'needs-revalidated',
-      statusText: 'Needs Re-Validated',
+      statusText: 'Needs reverification',
       verified: true,
       diagnostics: {
         manualVerification: {

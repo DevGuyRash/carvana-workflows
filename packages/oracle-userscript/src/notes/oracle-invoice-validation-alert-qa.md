@@ -26,7 +26,7 @@
 - [ ] Confirm banner dismissal via keyboard (Enter/Space) and pointer, with focus returning to prior element.
 
 ## Needs-Revalidated State (Requirement 2.2)
-- [ ] Force status text to `Needs Re-Validated`.
+- [ ] Force status text to `Needs reverification`.
 - [ ] Confirm banner animates from #ffbf00 to #c1121f over 3s using two intermediate keyframes.
 - [ ] Verify warning icon renders alongside text and meets WCAG AA contrast against background.
 - [ ] Ensure ARIA message announces "Invoice needs reverification" exactly once.

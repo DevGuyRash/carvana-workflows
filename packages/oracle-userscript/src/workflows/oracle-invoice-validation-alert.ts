@@ -100,7 +100,14 @@ const normalizeManualStatus = (value: unknown): InvoiceValidationStatus | undefi
   if (!value) return undefined;
   const normalized = String(value).toLowerCase().trim();
   if (normalized === 'validated') return 'validated';
-  if (normalized === 'needs-revalidated' || normalized === 'needs_revalidated' || normalized === 'needs re-validated') {
+  if (
+    normalized === 'needs-revalidated' ||
+    normalized === 'needs_revalidated' ||
+    normalized === 'needs re-validated' ||
+    normalized === 'needs reverification' ||
+    normalized === 'needs-reverification' ||
+    normalized === 'needs_reverification'
+  ) {
     return 'needs-revalidated';
   }
   if (normalized === 'unknown') return 'unknown';
@@ -310,7 +317,7 @@ export const OracleInvoiceValidationVerifyWorkflow: WorkflowDefinition = {
       default: 'validated',
       choices: [
         { value: 'validated', label: 'Validated' },
-        { value: 'needs-revalidated', label: 'Needs Re-Validated' },
+        { value: 'needs-revalidated', label: 'Needs Reverification' },
         { value: 'unknown', label: 'Unknown' }
       ]
     },
