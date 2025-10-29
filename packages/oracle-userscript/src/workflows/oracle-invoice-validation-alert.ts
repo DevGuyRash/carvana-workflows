@@ -8,7 +8,8 @@ import {
   clearValidationBanner,
   getValidationBannerTokens,
   showValidationBanner,
-  syncValidationBannerTheme
+  syncValidationBannerTheme,
+  appendWorkflowHistory
 } from '@cv/core';
 import {
   detectInvoiceValidationStatus,
@@ -24,30 +25,14 @@ interface ManualBaseline {
   expectedSnippet?: string;
 }
 
-interface WorkflowHistoryEntry {
-  workflowId: string;
-  timestamp: string;
-  status: InvoiceValidationStatus;
-  statusText: string;
-  bannerToken: string;
-  elementPath: string;
-  attempts: number;
-  manualRun: boolean;
-  verified: boolean;
-  snippet: string;
-  manualVerification: Pick<ManualVerificationDiagnostics, 'enabled' | 'statusMatches' | 'snippetMatches' | 'mismatchSummary' | 'baselineSnippetPreview'>;
-}
-
 const STATUS_TO_BANNER_STATE: Record<InvoiceValidationStatus, BannerStateKey> = {
   validated: 'validated',
   'needs-revalidated': 'needsRevalidated',
   unknown: 'unknown'
 };
 
-const HISTORY_STORE_KEY = 'oracle.invoice.validation.alert:history';
 const MANUAL_BASELINE_STORE_KEY = 'oracle.invoice.validation.alert:manualBaseline';
 const MANUAL_UNKNOWN_STREAK_KEY = 'oracle.invoice.validation.alert:manualUnknownStreak';
-const MAX_HISTORY_ENTRIES = 40;
 const OPTION_MANUAL_EXPECTED_STATUS = 'manualExpectedStatus';
 const OPTION_MANUAL_EXPECTED_SNIPPET = 'manualExpectedSnippet';
 
@@ -120,39 +105,6 @@ const normalizeManualStatus = (value: unknown): InvoiceValidationStatus | undefi
   }
   if (normalized === 'unknown') return 'unknown';
   return undefined;
-};
-
-const appendHistoryEntry = (
-  ctx: WorkflowExecuteContext,
-  result: DetectionResult,
-  manualRun: boolean
-): void => {
-  const entry: WorkflowHistoryEntry = {
-    workflowId: ctx.workflowId,
-    timestamp: new Date().toISOString(),
-    status: result.status,
-    statusText: result.statusText,
-    bannerToken: result.bannerToken,
-    elementPath: result.elementPath,
-    attempts: result.attempts,
-    manualRun,
-    verified: result.verified,
-    snippet: truncate(result.snippet, 600),
-    manualVerification: {
-      enabled: result.diagnostics.manualVerification.enabled,
-      statusMatches: result.diagnostics.manualVerification.statusMatches,
-      snippetMatches: result.diagnostics.manualVerification.snippetMatches,
-      mismatchSummary: result.diagnostics.manualVerification.mismatchSummary,
-      baselineSnippetPreview: result.diagnostics.manualVerification.baselineSnippetPreview
-    }
-  };
-
-  const history = ctx.store.get<WorkflowHistoryEntry[]>(HISTORY_STORE_KEY, []);
-  history.push(entry);
-  if (history.length > MAX_HISTORY_ENTRIES) {
-    history.splice(0, history.length - MAX_HISTORY_ENTRIES);
-  }
-  ctx.store.set(HISTORY_STORE_KEY, history);
 };
 
 const updateManualUnknownStreak = (ctx: WorkflowExecuteContext, status: InvoiceValidationStatus): void => {
@@ -257,7 +209,18 @@ const runInvoiceValidationDetection = async (
   ctx.log(`Detected element path: ${result.elementPath}`, 'debug');
 
   renderBanner(ctx, result, options.manual);
-  appendHistoryEntry(ctx, result, options.manual);
+  appendWorkflowHistory(ctx.store, ctx.workflowId, {
+    status: result.status,
+    statusText: result.statusText,
+    bannerToken: result.bannerToken,
+    elementPath: result.elementPath,
+    snippet: result.snippet,
+    attempts: result.attempts,
+    manualRun: options.manual,
+    verified: result.verified,
+    manualVerification: result.diagnostics.manualVerification,
+    diagnostics: result.diagnostics
+  });
 
   if (options.manual) {
     updateManualUnknownStreak(ctx, result.status);

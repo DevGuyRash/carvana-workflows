@@ -21,7 +21,13 @@ import { onDocumentReady, waitForElement } from './wait';
 import { sleep } from './utils';
 import { MenuUI } from './ui';
 import { deepRenderTemplates } from './templating';
-import { extractListData, takeFromElement } from './data';
+import {
+  extractListData,
+  takeFromElement,
+  sanitizeHistoryHtml,
+  sanitizeHistoryPath,
+  sanitizeHistoryText
+} from './data';
 import {
   getActiveProfile,
   getProfileValues,
@@ -57,6 +63,253 @@ type RunContext = {
 };
 
 type CaptureDataStep = Extract<Action, { kind: 'captureData' }>;
+
+const WORKFLOW_HISTORY_KEY_PREFIX = 'wf:history:';
+const WORKFLOW_HISTORY_MAX_ENTRIES = 50;
+
+export interface WorkflowHistoryAttempt {
+  attempt: number;
+  timestamp?: string;
+  elapsedMs?: number;
+  foundCandidate?: boolean;
+  classifiedStatus?: string;
+  statusText?: string;
+  delayBeforeNextMs?: number;
+}
+
+export interface WorkflowHistoryManualVerification {
+  enabled: boolean;
+  statusMatches?: boolean;
+  snippetMatches?: boolean;
+  mismatchSummary?: string;
+  baselineSnippetPreview?: string;
+}
+
+export interface WorkflowHistoryDiagnostics {
+  attemptLog?: WorkflowHistoryAttempt[];
+  totalDurationMs?: number;
+  exhaustedRetries?: boolean;
+  statusText?: string;
+  elementPath?: string;
+  snippet?: string;
+  bannerToken?: string;
+}
+
+export interface WorkflowHistoryEntry {
+  workflowId: string;
+  timestamp: string;
+  status?: string;
+  statusText?: string;
+  bannerToken?: string;
+  elementPath?: string;
+  snippet?: string;
+  attempts?: number;
+  manualRun?: boolean;
+  verified?: boolean;
+  manualVerification?: WorkflowHistoryManualVerification;
+  diagnostics?: WorkflowHistoryDiagnostics;
+}
+
+export interface AppendWorkflowHistoryInput {
+  timestamp?: string;
+  status?: string;
+  statusText?: string;
+  bannerToken?: string;
+  elementPath?: string;
+  snippet?: string;
+  attempts?: number;
+  manualRun?: boolean;
+  verified?: boolean;
+  manualVerification?: any;
+  diagnostics?: any;
+}
+
+const historyKey = (workflowId: string) => `${WORKFLOW_HISTORY_KEY_PREFIX}${workflowId}`;
+
+function normalizeTimestamp(value?: string): string {
+  if (value) {
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+  }
+  return new Date().toISOString();
+}
+
+function coercePositiveInt(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.round(value));
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+      return Math.max(0, Math.round(parsed));
+    }
+  }
+  return undefined;
+}
+
+function sanitizeManualVerification(raw: any): WorkflowHistoryManualVerification | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const result: WorkflowHistoryManualVerification = {
+    enabled: raw.enabled === true
+  };
+  if (typeof raw.statusMatches === 'boolean') {
+    result.statusMatches = raw.statusMatches;
+  }
+  if (typeof raw.snippetMatches === 'boolean') {
+    result.snippetMatches = raw.snippetMatches;
+  }
+  if (raw.mismatchSummary != null) {
+    const summary = sanitizeHistoryText(raw.mismatchSummary, { maxLength: 300 });
+    if (summary) result.mismatchSummary = summary;
+  }
+  if (raw.baselineSnippetPreview != null) {
+    const preview = sanitizeHistoryText(raw.baselineSnippetPreview, { maxLength: 300 });
+    if (preview) result.baselineSnippetPreview = preview;
+  }
+  if (!result.enabled && result.statusMatches === undefined && result.snippetMatches === undefined && !result.mismatchSummary && !result.baselineSnippetPreview) {
+    return { enabled: false };
+  }
+  return result;
+}
+
+function sanitizeAttemptLog(raw: any): WorkflowHistoryAttempt[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const attempts: WorkflowHistoryAttempt[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const attemptNumber = coercePositiveInt((item as any).attempt);
+    if (attemptNumber == null) continue;
+    const entry: WorkflowHistoryAttempt = { attempt: attemptNumber };
+    if (typeof item.timestamp === 'string' && item.timestamp.trim().length > 0) {
+      entry.timestamp = item.timestamp;
+    }
+    const elapsed = coercePositiveInt((item as any).elapsedMs);
+    if (elapsed != null) {
+      entry.elapsedMs = elapsed;
+    }
+    if (typeof (item as any).foundCandidate === 'boolean') {
+      entry.foundCandidate = (item as any).foundCandidate;
+    }
+    if ((item as any).classifiedStatus != null) {
+      entry.classifiedStatus = String((item as any).classifiedStatus);
+    }
+    if ((item as any).statusText != null) {
+      const text = sanitizeHistoryText((item as any).statusText);
+      if (text) entry.statusText = text;
+    }
+    const delay = coercePositiveInt((item as any).delayBeforeNextMs);
+    if (delay != null) {
+      entry.delayBeforeNextMs = delay;
+    }
+    attempts.push(entry);
+  }
+  return attempts.length ? attempts : undefined;
+}
+
+function sanitizeDiagnostics(raw: any): WorkflowHistoryDiagnostics | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const diagnostics: WorkflowHistoryDiagnostics = {};
+  const attemptLog = sanitizeAttemptLog((raw as any).attemptLog);
+  if (attemptLog) diagnostics.attemptLog = attemptLog;
+  const totalDuration = coercePositiveInt((raw as any).totalDurationMs);
+  if (totalDuration != null) diagnostics.totalDurationMs = totalDuration;
+  if ((raw as any).exhaustedRetries === true || (raw as any).exhaustedRetries === false) {
+    diagnostics.exhaustedRetries = (raw as any).exhaustedRetries === true;
+  }
+  if ((raw as any).statusText != null) {
+    const text = sanitizeHistoryText((raw as any).statusText);
+    if (text) diagnostics.statusText = text;
+  }
+  if ((raw as any).elementPath != null) {
+    const path = sanitizeHistoryPath((raw as any).elementPath);
+    if (path) diagnostics.elementPath = path;
+  }
+  if ((raw as any).snippet != null) {
+    const snippet = sanitizeHistoryHtml((raw as any).snippet);
+    if (snippet) diagnostics.snippet = snippet;
+  }
+  if (typeof (raw as any).bannerToken === 'string' && (raw as any).bannerToken.trim().length > 0) {
+    diagnostics.bannerToken = (raw as any).bannerToken.trim();
+  }
+  return Object.keys(diagnostics).length ? diagnostics : undefined;
+}
+
+function normalizePersistedHistory(raw: any, workflowId: string): WorkflowHistoryEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const entries: WorkflowHistoryEntry[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const entryWorkflowId = typeof (item as any).workflowId === 'string' && (item as any).workflowId.trim().length > 0
+      ? (item as any).workflowId
+      : workflowId;
+    const timestamp = typeof (item as any).timestamp === 'string' && (item as any).timestamp.trim().length > 0
+      ? (item as any).timestamp
+      : new Date().toISOString();
+    const status = typeof (item as any).status === 'string' ? (item as any).status : undefined;
+    const statusText = (item as any).statusText != null ? sanitizeHistoryText((item as any).statusText) : undefined;
+    const bannerToken = typeof (item as any).bannerToken === 'string' ? (item as any).bannerToken : undefined;
+    const elementPath = (item as any).elementPath != null ? sanitizeHistoryPath((item as any).elementPath) : undefined;
+    const snippet = (item as any).snippet != null ? sanitizeHistoryHtml((item as any).snippet) : undefined;
+    const attempts = coercePositiveInt((item as any).attempts);
+    const manualRun = typeof (item as any).manualRun === 'boolean' ? (item as any).manualRun : undefined;
+    const verified = typeof (item as any).verified === 'boolean' ? (item as any).verified : undefined;
+    const manualVerification = sanitizeManualVerification((item as any).manualVerification);
+    const diagnostics = sanitizeDiagnostics((item as any).diagnostics);
+
+    entries.push({
+      workflowId: entryWorkflowId,
+      timestamp,
+      status,
+      statusText,
+      bannerToken,
+      elementPath,
+      snippet,
+      attempts,
+      manualRun,
+      verified,
+      manualVerification,
+      diagnostics
+    });
+  }
+  return entries;
+}
+
+export function getWorkflowHistory(store: Store, workflowId: string): WorkflowHistoryEntry[] {
+  const key = historyKey(workflowId);
+  const raw = store.get<any>(key, []);
+  return normalizePersistedHistory(raw, workflowId);
+}
+
+export function appendWorkflowHistory(
+  store: Store,
+  workflowId: string,
+  input: AppendWorkflowHistoryInput
+): WorkflowHistoryEntry[] {
+  const key = historyKey(workflowId);
+  const history = getWorkflowHistory(store, workflowId).slice(0, WORKFLOW_HISTORY_MAX_ENTRIES);
+  const entry: WorkflowHistoryEntry = {
+    workflowId,
+    timestamp: normalizeTimestamp(input.timestamp),
+    status: typeof input.status === 'string' ? input.status : undefined,
+    statusText: input.statusText != null ? sanitizeHistoryText(input.statusText) : undefined,
+    bannerToken: typeof input.bannerToken === 'string' ? input.bannerToken : undefined,
+    elementPath: input.elementPath != null ? sanitizeHistoryPath(input.elementPath) : undefined,
+    snippet: input.snippet != null ? sanitizeHistoryHtml(input.snippet) : undefined,
+    attempts: input.attempts != null ? coercePositiveInt(input.attempts) : undefined,
+    manualRun: typeof input.manualRun === 'boolean' ? input.manualRun : undefined,
+    verified: typeof input.verified === 'boolean' ? input.verified : undefined,
+    manualVerification: sanitizeManualVerification(input.manualVerification),
+    diagnostics: sanitizeDiagnostics(input.diagnostics)
+  };
+  history.push(entry);
+  while (history.length > WORKFLOW_HISTORY_MAX_ENTRIES) {
+    history.shift();
+  }
+  store.set(key, history);
+  return history;
+}
 
 export class Engine {
   private store: Store;

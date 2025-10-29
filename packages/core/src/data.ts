@@ -1,5 +1,6 @@
 import type { SelectorSpec, TakeSpec } from './types';
 import { findAll, findOne } from './selector';
+import { normalizeWhitespace } from './utils';
 
 export function takeFromElement(el: Element, take: TakeSpec|undefined): string {
   const t = take ?? 'text';
@@ -32,4 +33,45 @@ export function extractListData(
     out.push(obj);
   }
   return out;
+}
+
+const DEFAULT_HISTORY_TEXT_LIMIT = 600;
+const DEFAULT_HISTORY_PATH_LIMIT = 280;
+const TRUNCATION_SUFFIX = '...';
+
+const digitsRegex = /\d/g;
+
+function maskDigits(input: string): string {
+  return input.replace(digitsRegex, '#');
+}
+
+function truncateHistoryValue(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  if (maxLength <= TRUNCATION_SUFFIX.length) {
+    return value.slice(0, maxLength);
+  }
+  return `${value.slice(0, maxLength - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`;
+}
+
+export function sanitizeHistoryText(value: unknown, options?: { maxLength?: number }): string {
+  if (value == null) return '';
+  const normalized = normalizeWhitespace(String(value));
+  const masked = maskDigits(normalized);
+  const limit = options?.maxLength ?? DEFAULT_HISTORY_TEXT_LIMIT;
+  return truncateHistoryValue(masked, limit);
+}
+
+export function sanitizeHistoryPath(value: unknown): string {
+  if (value == null) return '';
+  const normalized = normalizeWhitespace(String(value));
+  const masked = maskDigits(normalized);
+  return truncateHistoryValue(masked, DEFAULT_HISTORY_PATH_LIMIT);
+}
+
+export function sanitizeHistoryHtml(value: unknown, options?: { maxLength?: number }): string {
+  if (value == null) return '';
+  const trimmed = String(value).replace(/\s+/g, ' ').trim();
+  const masked = maskDigits(trimmed);
+  const limit = options?.maxLength ?? DEFAULT_HISTORY_TEXT_LIMIT;
+  return truncateHistoryValue(masked, limit);
 }

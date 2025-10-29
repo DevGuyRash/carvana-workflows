@@ -49,7 +49,7 @@
   - _Leverage: `vitest`, workflow test harnesses, detector mock utilities_
   - _Prompt: Implement the task for spec oracle-invoice-validation-alert, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Workflow QA Specialist proficient in integration testing | Task: Implement integration tests covering workflow happy paths, unknown fallback, and manual verification per requirements 1.4 and 3.x | Restrictions: Use dependency injection/mocks for detector and HUD modules, avoid hitting real timers, keep logs assertion-focused | _Leverage: workflow test harness, detector mocks | _Requirements: 1.4, 3.1, 3.2, 3.3 | Success: Tests fail if workflow skips logging, misroutes banner states, or misses manual verification | Instructions: Toggle task to [-] when writing tests and to [x] after they pass_
 
-- [ ] 8. Persist diagnostics in workflow history store
+- [x] 8. Persist diagnostics in workflow history store
   - Files: `packages/core/src/workflow.ts`, `packages/core/src/data.ts`
   - Extend history payloads to record snippet text, element path summary, banner state, attempts, and verification flag without storing raw invoice IDs.
   - _Requirements: 3.1, NFR-Security, NFR-Reliability_

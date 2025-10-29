@@ -79,7 +79,8 @@ const mockTokens = {
 
 const gmMemory = new Map<string, string>();
 
-const HISTORY_KEY = 'oracle.invoice.validation.alert:history';
+const ALERT_HISTORY_KEY = 'wf:history:oracle.invoice.validation.alert';
+const VERIFY_HISTORY_KEY = 'wf:history:oracle.invoice.validation.verify';
 const MANUAL_BASELINE_KEY = 'oracle.invoice.validation.alert:manualBaseline';
 const MANUAL_UNKNOWN_STREAK_KEY = 'oracle.invoice.validation.alert:manualUnknownStreak';
 
@@ -196,7 +197,7 @@ describe('Oracle invoice validation workflow integration', () => {
 
     expect(ctx.getVar('invoiceValidation')).toEqual({ result: detection, manualRun: false });
 
-    const history = store.get(HISTORY_KEY, []);
+    const history = store.get(ALERT_HISTORY_KEY, []);
     expect(history).toHaveLength(1);
     expect(history[0]).toEqual(
       expect.objectContaining({
@@ -206,6 +207,21 @@ describe('Oracle invoice validation workflow integration', () => {
         verified: false,
         bannerToken: detection.bannerToken,
         manualVerification: expect.objectContaining({ enabled: false })
+      })
+    );
+
+    expect(history[0].diagnostics).toEqual(
+      expect.objectContaining({
+        totalDurationMs: 1200,
+        exhaustedRetries: false,
+        attemptLog: [
+          expect.objectContaining({
+            attempt: 1,
+            elapsedMs: 120,
+            foundCandidate: true,
+            statusText: 'Validated'
+          })
+        ]
       })
     );
 
@@ -257,7 +273,7 @@ describe('Oracle invoice validation workflow integration', () => {
       })
     );
 
-    const history = store.get(HISTORY_KEY, []);
+    const history = store.get(ALERT_HISTORY_KEY, []);
     expect(history).toHaveLength(1);
     expect(history[0]).toEqual(
       expect.objectContaining({
@@ -265,6 +281,16 @@ describe('Oracle invoice validation workflow integration', () => {
         attempts: detection.attempts,
         manualRun: false,
         manualVerification: expect.objectContaining({ enabled: false })
+      })
+    );
+
+    expect(history[0].diagnostics).toEqual(
+      expect.objectContaining({
+        exhaustedRetries: true,
+        attemptLog: expect.arrayContaining([
+          expect.objectContaining({ attempt: 1 }),
+          expect.objectContaining({ attempt: 2 })
+        ])
       })
     );
 
@@ -293,7 +319,8 @@ describe('Oracle invoice validation workflow integration', () => {
           expectedStatus: 'validated',
           statusMatches: false,
           snippetMatches: false,
-          mismatchSummary: 'expected status validated, received needs-revalidated'
+          mismatchSummary: 'expected status validated, received needs-revalidated',
+          baselineSnippetPreview: '<td class="x12">Validated</td>'
         }
       }
     });
@@ -306,7 +333,8 @@ describe('Oracle invoice validation workflow integration', () => {
         manualVerification: {
           enabled: true,
           expectedStatus: 'validated',
-          statusMatches: false
+          statusMatches: false,
+          baselineSnippetPreview: '<td class="x12">Validated</td>'
         }
       }
     });
@@ -347,7 +375,7 @@ describe('Oracle invoice validation workflow integration', () => {
     expect(alertCalls.some(message => message.includes('Manual verification differences detected'))).toBe(true);
     expect(alertCalls[alertCalls.length - 1]).toBe('Invoice validation verification returned unknown twice. Confirm selectors before enabling auto-run repeat.');
 
-    const history = store.get(HISTORY_KEY, []);
+    const history = store.get(VERIFY_HISTORY_KEY, []);
     expect(history).toHaveLength(3);
     const manualEntries = history.filter(entry => entry.manualRun);
     expect(manualEntries).toHaveLength(3);
@@ -358,6 +386,17 @@ describe('Oracle invoice validation workflow integration', () => {
         manualRun: true,
         verified: true,
         manualVerification: expect.objectContaining({ enabled: true })
+      })
+    );
+
+    const latest = manualEntries[manualEntries.length - 1];
+    expect(latest.manualVerification?.baselineSnippetPreview).toBe('<td class="x##">Validated</td>');
+    expect(latest.diagnostics).toEqual(
+      expect.objectContaining({
+        exhaustedRetries: true,
+        attemptLog: expect.arrayContaining([
+          expect.objectContaining({ attempt: 1 })
+        ])
       })
     );
 
