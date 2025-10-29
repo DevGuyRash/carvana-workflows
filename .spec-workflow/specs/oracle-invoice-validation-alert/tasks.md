@@ -1,6 +1,6 @@
 # Tasks Document
 
-- [ ] 1. Build Oracle invoice status detector helper
+- [x] 1. Build Oracle invoice status detector helper
   - File: `packages/oracle-userscript/src/shared/invoice/status-detector.ts`
   - Implement `detectInvoiceValidationStatus` with retry/backoff, snippet capture, manual verification mode, and diagnostics payload.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 3.1, NFR-Reliability_
