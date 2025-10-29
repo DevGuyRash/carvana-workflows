@@ -19,7 +19,7 @@ Reinforces the automation suite’s promise of proactive guardrails that keep ba
 #### Acceptance Criteria
 
 1. WHEN the page contains “Invoice Header” AND either “Edit Invoice” OR “Create Invoice” within the visible DOM THEN the workflow SHALL auto-run and evaluate the invoice status region.
-2. WHEN the workflow searches within anchor elements under the invoice status tables THEN it SHALL classify the first match of the text tokens “Validated” or “Needs Re-Validated” case-insensitively.
+2. WHEN the workflow searches within anchor elements under the invoice status tables THEN it SHALL classify the first match of the text tokens “validated” or “needs reverification” case-insensitively.
 3. IF no qualifying status element is present after configurable retries up to 12s THEN the workflow SHALL classify the status as `unknown` and record diagnostics for operator review.
 4. WHEN a new invoice header loads (detected via auto-run context tokens combining tab, header, and document title) THEN the workflow SHALL re-run after prior execution completes.
 
@@ -30,12 +30,12 @@ Captured from Oracle Invoice Header (US2 tenant) for invoice `CARV-VALIDATION-DE
 ```
 <td class="xrh" headers="ValidationStatus">
   <a id="pt1:_FOr1:1:_FONSr2:0:MAnt2:1:pm1:r1:0:ap1:r131:0:status1" class="x12" role="link">
-    <span class="p_AFTextOnly">Needs Re-Validated</span>
+    <span class="p_AFTextOnly">needs reverification</span>
   </a>
 </td>
 ```
 
-Selectors MUST anchor on the `ValidationStatus` header text and the `Needs Re-Validated` / `Validated` tokens; avoid brittle id suffixes.
+Selectors MUST anchor on the `ValidationStatus` header text and the `needs reverification` / `validated` tokens; avoid brittle id suffixes.
 
 ### Requirement 2 — High-Visibility Animated Alert Banner
 

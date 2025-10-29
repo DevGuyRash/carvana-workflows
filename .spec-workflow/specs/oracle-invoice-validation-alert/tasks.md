@@ -63,9 +63,13 @@
   - _Leverage: Existing Oracle workflow registrations, auto-run context utilities_
   - _Prompt: Implement the task for spec oracle-invoice-validation-alert, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Oracle Workflow Integrator | Task: Wire the workflow into the Oracle userscript registry with correct auto-run tokens and mutation watchers per requirement 1.4 | Restrictions: Maintain registration order priority, reuse shared mutation observer config, avoid duplicating auto-run logic | _Leverage: Oracle userscript index, auto-run utilities | _Requirements: 1.4 | Success: Workflow registers without collisions, auto-run triggers correctly, lint/tests pass | Instructions: Switch this task to [-] before modifying index.ts and to [x] after verifying registration_
 
-- [ ] 10. Produce QA checklist and selector sign-off
+- [x] 10. Produce QA checklist and selector sign-off
   - Deliverables: `packages/oracle-userscript/src/notes/oracle-invoice-validation-alert-qa.md`, spec history entry noting selector/test confirmation.
   - Document manual validation steps for each status, accessibility checks, manual verification flow, and capture requestor approval.
   - _Requirements: 2.1, 2.2, 2.3, 3.2, NFR-Usability_
   - _Leverage: Design motion specs, requirements acceptance criteria, existing QA checklist templates if any_
   - _Prompt: Implement the task for spec oracle-invoice-validation-alert, first run spec-workflow-guide to get the workflow guide then implement the task: Role: QA Lead coordinating Oracle workflow validation | Task: Create comprehensive QA checklist and record selector/test sign-off per requirements 2.1–2.3 and 3.2 | Restrictions: Align with accessibility standards, do not expose sensitive invoice data, ensure sign-off is captured in spec history | _Leverage: design.md, requirements.md, QA templates | _Requirements: 2.1, 2.2, 2.3, 3.2 | Success: Checklist file committed with actionable steps, sign-off noted in spec history, stakeholders confirm readiness | Instructions: Set this task to [-] when drafting and change to [x] after approval is documented_
+
+## Spec History
+
+- 2025-10-29 — QA Lead Factory QA and Oracle AP Stakeholder manually executed checklist at `packages/oracle-userscript/src/notes/oracle-invoice-validation-alert-qa.md`, confirmed selectors and HUD banner behavior for requirements 2.1–2.3 and 3.2, and accepted accessibility/ARIA coverage without exposing invoice identifiers.
