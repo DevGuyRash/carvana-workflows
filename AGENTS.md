@@ -104,6 +104,15 @@ When automating Oracle panels, the DOM swaps the expand/collapse anchor without 
 2. **Click helper**: In the helper workflow, call `click` with `postWaitFor` targeting the `aria-expanded='true'` selector. The shared `click` action now retries automatically, so you do not need manual polling.
 3. **Fallback helper**: If the button is already expanded, run an `ensure` helper that simply waits for the expanded button and second-row container.
 
+**2025-10 Oracle SPA regression**: Oracle began recycling the search toggle without rebuilding the panel rows, which caused auto-run repeat loops to stall. Mitigation:
+
+- Drive all auto-run conditions off the button’s `aria-expanded` attribute (`exists` for `'false'` when collapsed, `postWaitFor` for `'true'` when expanded). This works for any future toggle-style workflows because the attribute survives DOM swaps.
+- When repeat is enabled, derive an auto-run context token that combines a stable page marker (tab/header/title) plus the expanded/collapsed state so reruns fire after navigation.
+- Configure `watchMutations` with `root: { selector: 'body' }`, `attributeFilter: ['aria-expanded']`, and `forceAutoRun: false`. This waits for Oracle’s attribute flip before rechecking conditions, but still respects cooldowns.
+- Keep a generous `waitForConditionMs` (~12s) and `pollIntervalMs` (~150ms) so the button can transition between states during SPA redraws.
+
+Apply the same recipe for other Oracle workflows (or any app that toggles via `aria-expanded`): identify the stable attribute change, store page context tokens, and scope the mutation watcher to the attribute instead of brittle row containers.
+
 This approach avoids duplicating auto-run logic per workflow and keeps Oracle-specific helpers internal by setting `internal: true` on helper workflows.
 
 ---

@@ -276,6 +276,7 @@ export class Engine {
     config: WorkflowMutationWatchConfig
   ): void {
     const debounce = Math.max(50, config.debounceMs ?? 200);
+    const forceRun = config.forceAutoRun !== false;
     const prev = this.mutationWatchTimers.get(wf.id);
     if (prev != null) {
       window.clearTimeout(prev);
@@ -288,7 +289,7 @@ export class Engine {
           if (!ok) return;
           return this.handleAutoRun(this.currentPage, {
             onlyWorkflowId: wf.id,
-            force: true
+            force: forceRun
           });
         })
         .catch(err => console.error(err));

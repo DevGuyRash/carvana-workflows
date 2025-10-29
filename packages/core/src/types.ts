@@ -127,6 +127,8 @@ export interface WorkflowMutationWatchConfig {
   observeChildList?: boolean;
   /** Optional attribute filter when observeAttributes is true */
   attributeFilter?: string[];
+  /** Defaults to true; set false to respect cooldown/context checks for mutation-triggered retries. */
+  forceAutoRun?: boolean;
 }
 
 export interface WorkflowAutoRunConfig {
