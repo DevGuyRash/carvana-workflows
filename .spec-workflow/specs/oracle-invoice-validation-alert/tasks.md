@@ -35,7 +35,7 @@
   - _Leverage: `vitest`, HUD test harnesses, token module from task 3_
   - _Prompt: Implement the task for spec oracle-invoice-validation-alert, first run spec-workflow-guide to get the workflow guide then implement the task: Role: UI Test Engineer experienced in jsdom animation testing | Task: Write unit tests ensuring the HUD banner renders all states, announces via ARIA, and cleans up per requirements 2.1–2.3 | Restrictions: Use fake timers for animation assertions, avoid coupling tests to implementation details, keep snapshots minimal | _Leverage: HUD testing utilities, token module | _Requirements: 2.1, 2.2, 2.3 | Success: Tests verify each state’s classes/animations, ARIA messages fire, and cleanup removes nodes | Instructions: Set status to [-] before coding and to [x] once tests pass_
 
-- [ ] 6. Author Oracle invoice validation alert workflow
+- [x] 6. Author Oracle invoice validation alert workflow
   - File: `packages/oracle-userscript/src/workflows/oracle-invoice-validation-alert.ts`
   - Compose workflow steps for detection, banner rendering, diagnostics logging, auto-run repeat, and manual verification action.
   - _Requirements: 1.1, 1.4, 2.1, 3.1, 3.2, 3.3, NFR-Reliability_

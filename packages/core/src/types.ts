@@ -1,3 +1,5 @@
+import type { Store } from './storage';
+
 /**
  * Shared types for selector specs, waits, actions, workflows, and settings.
  */
@@ -83,6 +85,22 @@ export type CapturePattern =
   | { type: 'selector'; into: string; selector: string; attribute?: string; take?: TakeSpec; index?: number; all?: boolean; trim?: boolean }
   | { type: 'split'; into: string; delimiter: string; index?: number; trim?: boolean };
 
+export type WorkflowLogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface WorkflowExecuteContext {
+  workflowId: string;
+  vars: Record<string, any>;
+  options: Record<string, any>;
+  profile: { id: string; label: string };
+  log: (message: string, level?: WorkflowLogLevel) => void;
+  runWorkflow: (workflowId: string, options?: { silent?: boolean }) => Promise<boolean>;
+  setVar: (key: string, value: any) => void;
+  getVar: <T = any>(key: string) => T | undefined;
+  store: Store;
+}
+
+export type WorkflowExecuteFn = (context: WorkflowExecuteContext) => any | Promise<any>;
+
 export type Action =
   | { kind: 'waitFor'; target: SelectorSpec; wait?: WaitOptions; comment?: string }
   | { kind: 'delay'; ms: number; comment?: string }
@@ -112,7 +130,8 @@ export type Action =
       comment?: string;
     }
   | { kind: 'branch'; condition: ConditionSpec; thenWorkflow: string; elseWorkflow?: string; comment?: string }
-  | { kind: 'error'; message: string; comment?: string };
+  | { kind: 'error'; message: string; comment?: string }
+  | { kind: 'execute'; run: WorkflowExecuteFn; assign?: string; comment?: string };
 
 export interface WorkflowMutationWatchConfig {
   /** Selector describing the DOM subtree to observe for changes. When omitted we derive from auto-run selectors. */

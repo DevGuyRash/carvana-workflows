@@ -1,6 +1,18 @@
 import type {
-  Action, ActionResult, CapturePattern, ConditionSpec, PageDefinition, Registry,
-  SelectorSpec, Settings, WorkflowDefinition, GlobalSource, SourceSpec, WorkflowMutationWatchConfig
+  Action,
+  ActionResult,
+  CapturePattern,
+  ConditionSpec,
+  PageDefinition,
+  Registry,
+  SelectorSpec,
+  Settings,
+  WorkflowDefinition,
+  GlobalSource,
+  SourceSpec,
+  WorkflowMutationWatchConfig,
+  WorkflowExecuteContext,
+  WorkflowLogLevel
 } from './types';
 import { findOne, findAll } from './selector';
 import { Store } from './storage';
@@ -843,6 +855,58 @@ export class Engine {
           return { ok: true };
         }
         return { ok: true };
+      }
+      case 'execute': {
+        try {
+          const log = (message: string, level: WorkflowLogLevel = 'info') => {
+            const prefix = `[${ctx.workflowId}] ${message}`;
+            if (level === 'debug') {
+              this.ui.appendLog(prefix, 'debug');
+            } else {
+              this.ui.appendLog(prefix, 'info');
+            }
+            if (level === 'warn') {
+              console.warn(prefix);
+            } else if (level === 'error') {
+              console.error(prefix);
+            }
+          };
+
+          const execCtx: WorkflowExecuteContext = {
+            workflowId: ctx.workflowId,
+            vars: ctx.vars,
+            options: ctx.opt,
+            profile: ctx.profile,
+            log,
+            runWorkflow: async (workflowId: string, options?: { silent?: boolean }) => {
+              if (!workflowId) return false;
+              const nested = this.findWorkflow(workflowId);
+              if (!nested) {
+                log(`Nested workflow not found: ${workflowId}`, 'warn');
+                return false;
+              }
+              const nestedOptions = { silent: options?.silent ?? true };
+              return this.runWorkflow(nested, true, nestedOptions);
+            },
+            setVar: (key: string, value: any) => {
+              ctx.vars[key] = value;
+            },
+            getVar: <T = any>(key: string) => ctx.vars[key] as T,
+            store: this.store
+          };
+
+          const result = await step.run(execCtx);
+          if (step.assign) {
+            ctx.vars[step.assign] = result;
+          }
+          return { ok: true, data: result };
+        } catch (err: any) {
+          const message = err?.message ?? String(err ?? 'execute: unknown error');
+          const prefix = `[${ctx.workflowId}] Execute step failed: ${message}`;
+          this.ui.appendLog(prefix, 'info');
+          console.error(prefix);
+          return { ok: false, error: message };
+        }
       }
       case 'error': {
         alert(step.message);
