@@ -7,7 +7,7 @@
   - _Leverage: `packages/oracle-userscript/src/shared/` selector utilities, `@cv/core/workflow` wait helpers, DOM snippet in requirements.md_
   - _Prompt: Implement the task for spec oracle-invoice-validation-alert, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Oracle Selector Specialist and TypeScript Engineer | Task: Create the reusable detection helper with retries, snippet capture, and verification hooks per requirements 1.1–1.4 and 3.1 | Restrictions: Preserve existing Oracle selector conventions, avoid persisting raw invoice data, follow shared helper patterns | _Leverage: `packages/oracle-userscript/src/shared/selector-utils.ts`, `@cv/core/workflow` helpers, requirements DOM snippet | _Requirements: 1.1, 1.2, 1.3, 1.4, 3.1 | Success: Helper returns structured `DetectionResult`, handles unknown state after retries, passes TypeScript checks, and integrates manual verification flag | Instructions: Before starting set this task to [-] in tasks.md, after successful completion update it to [x]_
 
-- [ ] 2. Add detector unit tests
+- [x] 2. Add detector unit tests
   - File: `packages/oracle-userscript/src/shared/invoice/status-detector.test.ts`
   - Cover validated/needs-revalidated/unknown branches, retry timing, and manual verification outputs with jsdom fixtures.
   - _Requirements: 1.2, 1.3, 3.1, NFR-Performance, NFR-Reliability_
