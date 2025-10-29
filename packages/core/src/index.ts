@@ -6,6 +6,7 @@ export * from './storage';
 export * from './clipboard';
 export * from './logger';
 export * from './ui';
+export * from './ui/hud-theme-validation';
 export * from './workflow';
 export * from './templating';
 export * from './data';
