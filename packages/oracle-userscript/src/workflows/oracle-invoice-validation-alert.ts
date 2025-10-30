@@ -7,9 +7,11 @@ import type {
 import {
   clearValidationBanner,
   getValidationBannerTokens,
+  isValidationBannerVisible,
   showValidationBanner,
   syncValidationBannerTheme,
-  appendWorkflowHistory
+  appendWorkflowHistory,
+  type ValidationBannerAnchor
 } from '@cv/core';
 import {
   detectInvoiceValidationStatus,
@@ -24,6 +26,13 @@ interface ManualBaseline {
   expectedStatus?: InvoiceValidationStatus;
   expectedSnippet?: string;
 }
+
+const OPTION_BANNER_ANCHOR = 'bannerAnchor';
+const DEFAULT_BANNER_ANCHOR: ValidationBannerAnchor = 'right';
+const BANNER_ANCHOR_CHOICES = [
+  { value: 'right', label: 'Top right (default)' },
+  { value: 'left', label: 'Top left' }
+] as const;
 
 const STATUS_TO_BANNER_STATE: Record<InvoiceValidationStatus, BannerStateKey> = {
   validated: 'validated',
@@ -114,16 +123,33 @@ const normalizeManualStatus = (value: unknown): InvoiceValidationStatus | undefi
   return undefined;
 };
 
-const updateManualUnknownStreak = (ctx: WorkflowExecuteContext, status: InvoiceValidationStatus): void => {
+const createBannerAnchorOption = () => ({
+  key: OPTION_BANNER_ANCHOR,
+  label: 'Banner position',
+  type: 'select' as const,
+  default: DEFAULT_BANNER_ANCHOR,
+  choices: [...BANNER_ANCHOR_CHOICES]
+});
+
+const resolveBannerAnchor = (ctx: WorkflowExecuteContext): ValidationBannerAnchor => {
+  const value = String(ctx.options[OPTION_BANNER_ANCHOR] ?? '').toLowerCase();
+  return value === 'left' ? 'left' : DEFAULT_BANNER_ANCHOR;
+};
+
+const updateManualUnknownStreak = (
+  ctx: WorkflowExecuteContext,
+  status: InvoiceValidationStatus,
+  assumedFallback: boolean
+): void => {
   let streak = ctx.store.get<number>(MANUAL_UNKNOWN_STREAK_KEY, 0);
-  if (status === 'unknown') {
+  if (status === 'unknown' || assumedFallback) {
     streak += 1;
   } else {
     streak = 0;
   }
   ctx.store.set(MANUAL_UNKNOWN_STREAK_KEY, streak);
   if (streak >= 2) {
-    const message = 'Invoice validation verification returned unknown twice. Confirm selectors before enabling auto-run repeat.';
+    const message = 'Invoice validation verification returned inconclusive results twice. Confirm selectors before enabling auto-run repeat.';
     ctx.log(message, 'warn');
     alert(message);
   }
@@ -155,11 +181,45 @@ const buildBannerDetail = (status: InvoiceValidationStatus): string | undefined 
   }
 };
 
-const renderBanner = (ctx: WorkflowExecuteContext, result: DetectionResult, manualRun: boolean): void => {
+const normalizeDetectionResult = (
+  ctx: WorkflowExecuteContext,
+  result: DetectionResult
+): { normalized: DetectionResult; assumedFallback: boolean } => {
+  if (result.status !== 'unknown') {
+    return { normalized: result, assumedFallback: false };
+  }
+
+  const fallbackStatus: InvoiceValidationStatus = 'needs-revalidated';
+  const fallbackToken = 'hud.validation-banner.needs-revalidated';
+  ctx.log('Invoice validation text missing; defaulting status to needs revalidation.', 'warn');
+
+  const normalized: DetectionResult = {
+    ...result,
+    status: fallbackStatus,
+    bannerToken: fallbackToken,
+    diagnostics: {
+      ...result.diagnostics,
+      bannerToken: fallbackToken,
+      assumedNeedsRevalidation: true
+    }
+  };
+
+  return { normalized, assumedFallback: true };
+};
+
+const renderBanner = (
+  ctx: WorkflowExecuteContext,
+  result: DetectionResult,
+  manualRun: boolean,
+  anchor: ValidationBannerAnchor
+): void => {
   const signature = `${result.status}|${result.statusText}`;
   if (!manualRun && signature === lastBannerSignature) {
-    ctx.log('Skipping banner re-render; status unchanged from previous run.', 'debug');
-    return;
+    if (isValidationBannerVisible()) {
+      ctx.log('Skipping banner re-render; status unchanged from previous run.', 'debug');
+      return;
+    }
+    ctx.log('Validation banner hidden; refreshing existing status.', 'debug');
   }
   lastBannerSignature = signature;
 
@@ -176,7 +236,8 @@ const renderBanner = (ctx: WorkflowExecuteContext, result: DetectionResult, manu
     state,
     message,
     detail,
-    dismissLabel: 'Dismiss validation banner'
+    dismissLabel: 'Dismiss validation banner',
+    anchor
   });
 
   if (!success) {
@@ -186,7 +247,7 @@ const renderBanner = (ctx: WorkflowExecuteContext, result: DetectionResult, manu
 
 const runInvoiceValidationDetection = async (
   ctx: WorkflowExecuteContext,
-  options: { manual: boolean; baseline?: ManualBaseline | null }
+  options: { manual: boolean; anchor: ValidationBannerAnchor; baseline?: ManualBaseline | null }
 ): Promise<DetectionResult> => {
   ctx.log('Starting Oracle invoice validation detection.');
 
@@ -211,50 +272,59 @@ const runInvoiceValidationDetection = async (
     }
   });
 
-  ctx.setVar('invoiceValidation', { result, manualRun: options.manual });
-  ctx.log(`Invoice validation status: ${result.status} (${result.statusText || 'no text'})`);
-  ctx.log(`Detected element path: ${result.elementPath}`, 'debug');
+  const { normalized, assumedFallback } = normalizeDetectionResult(ctx, result);
 
-  renderBanner(ctx, result, options.manual);
-  appendWorkflowHistory(ctx.store, ctx.workflowId, {
-    status: result.status,
-    statusText: result.statusText,
-    bannerToken: result.bannerToken,
-    elementPath: result.elementPath,
-    snippet: result.snippet,
-    attempts: result.attempts,
+  ctx.setVar('invoiceValidation', {
+    result: normalized,
     manualRun: options.manual,
-    verified: result.verified,
-    manualVerification: result.diagnostics.manualVerification,
-    diagnostics: result.diagnostics
+    assumedFallback
+  });
+  ctx.log(`Invoice validation status: ${normalized.status} (${normalized.statusText || 'no text'})`);
+  ctx.log(`Detected element path: ${normalized.elementPath}`, 'debug');
+
+  renderBanner(ctx, normalized, options.manual, options.anchor);
+  appendWorkflowHistory(ctx.store, ctx.workflowId, {
+    status: normalized.status,
+    statusText: normalized.statusText,
+    bannerToken: normalized.bannerToken,
+    elementPath: normalized.elementPath,
+    snippet: normalized.snippet,
+    attempts: normalized.attempts,
+    manualRun: options.manual,
+    verified: normalized.verified,
+    manualVerification: normalized.diagnostics.manualVerification,
+    diagnostics: normalized.diagnostics
   });
 
   if (options.manual) {
-    updateManualUnknownStreak(ctx, result.status);
+    updateManualUnknownStreak(ctx, normalized.status, normalized.diagnostics.assumedNeedsRevalidation === true);
   }
 
-  return result;
+  return normalized;
 };
 
 const autoRunStep = async (ctx: WorkflowExecuteContext): Promise<void> => {
+  const anchor = resolveBannerAnchor(ctx);
   try {
-    await runInvoiceValidationDetection(ctx, { manual: false });
+    await runInvoiceValidationDetection(ctx, { manual: false, anchor });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error ?? 'Unknown error');
     ctx.log(`Invoice validation detection failed: ${message}`, 'error');
     clearValidationBanner();
+    lastBannerSignature = null;
     throw error;
   }
 };
 
 const manualVerificationStep = async (ctx: WorkflowExecuteContext): Promise<void> => {
   const baseline = resolveManualBaseline(ctx, true);
+  const anchor = resolveBannerAnchor(ctx);
   if (!baseline) {
     ctx.log('Manual verification baseline not configured; proceeding without comparisons.', 'warn');
   }
 
   try {
-    const result = await runInvoiceValidationDetection(ctx, { manual: true, baseline });
+    const result = await runInvoiceValidationDetection(ctx, { manual: true, baseline, anchor });
     if (result.diagnostics.manualVerification.enabled) {
       const manual = result.diagnostics.manualVerification;
       if (manual.mismatchSummary) {
@@ -270,6 +340,7 @@ const manualVerificationStep = async (ctx: WorkflowExecuteContext): Promise<void
     const message = error instanceof Error ? error.message : String(error ?? 'Unknown error');
     ctx.log(`Manual verification failed: ${message}`, 'error');
     clearValidationBanner();
+    lastBannerSignature = null;
     throw error;
   }
 };
@@ -281,6 +352,7 @@ export const OracleInvoiceValidationAlertWorkflow: WorkflowDefinition = {
   enabledWhen: {
     all: [INVOICE_HEADER_CONDITION, INVOICE_MODE_CONDITION]
   },
+  options: [createBannerAnchorOption()],
   autoRun: {
     waitForConditionMs: 12000,
     pollIntervalMs: 150,
@@ -293,7 +365,7 @@ export const OracleInvoiceValidationAlertWorkflow: WorkflowDefinition = {
       observeAttributes: true,
       observeCharacterData: true,
       attributeFilter: ['aria-busy', 'aria-hidden', 'aria-expanded'],
-      forceAutoRun: false
+      forceAutoRun: true
     },
     context: { resolve: autoRunContext }
   },
@@ -310,6 +382,7 @@ export const OracleInvoiceValidationVerifyWorkflow: WorkflowDefinition = {
   label: 'Oracle: Verify Invoice Validation Selectors',
   description: 'Manual verification workflow to compare invoice validation selector output against baseline.',
   options: [
+    createBannerAnchorOption(),
     {
       key: OPTION_MANUAL_EXPECTED_STATUS,
       label: 'Expected validation status token',

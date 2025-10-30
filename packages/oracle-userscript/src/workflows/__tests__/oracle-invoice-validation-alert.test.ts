@@ -107,6 +107,7 @@ const buildDetectionResult = (overrides: DetectionOverrides): DetectionResult =>
   const diagnostics: Partial<InvoiceStatusDetectionDiagnostics> = overrides.diagnostics ?? {};
   const attemptLog = diagnostics.attemptLog ?? baseAttemptLog;
   const manualVerification = diagnostics.manualVerification ?? { enabled: false };
+  const assumedNeedsRevalidation = diagnostics.assumedNeedsRevalidation ?? false;
 
   return {
     status,
@@ -124,7 +125,8 @@ const buildDetectionResult = (overrides: DetectionOverrides): DetectionResult =>
       statusText,
       snippet,
       elementPath,
-      exhaustedRetries: diagnostics.exhaustedRetries ?? status === 'unknown'
+      exhaustedRetries: diagnostics.exhaustedRetries ?? status === 'unknown',
+      assumedNeedsRevalidation
     }
   };
 };
@@ -223,12 +225,13 @@ describe('Oracle invoice validation workflow integration', () => {
         state: 'validated',
         message: 'Validated',
         detail: 'Invoice validation completed; no further action required.',
-        dismissLabel: 'Dismiss validation banner'
+        dismissLabel: 'Dismiss validation banner',
+        anchor: 'right'
       })
     );
 
-    const invoiceValidation = ctx.getVar('invoiceValidation') as { result: DetectionResult; manualRun: boolean };
-    expect(invoiceValidation).toEqual({ result: detection, manualRun: false });
+    const invoiceValidation = ctx.getVar('invoiceValidation') as { result: DetectionResult; manualRun: boolean; assumedFallback: boolean };
+    expect(invoiceValidation).toEqual({ result: detection, manualRun: false, assumedFallback: false });
 
     const history = store.get(ALERT_HISTORY_KEY, [] as any[]);
     expect(history).toHaveLength(1);
@@ -263,7 +266,7 @@ describe('Oracle invoice validation workflow integration', () => {
     expect(messages).toContain('Invoice validation status: validated (Validated)');
   });
 
-  it('falls back to unknown banner when detector exhausts retries', async () => {
+  it('treats unknown detection as needs revalidation fallback', async () => {
     const { ctx, store, logSpy } = createContext();
 
     const detection = buildDetectionResult({
@@ -297,12 +300,17 @@ describe('Oracle invoice validation workflow integration', () => {
 
     await runExecuteStep(OracleInvoiceValidationAlertWorkflow, ctx);
 
+    const invoiceValidation = ctx.getVar('invoiceValidation') as { result: DetectionResult; manualRun: boolean; assumedFallback: boolean };
+    expect(invoiceValidation.assumedFallback).toBe(true);
+    expect(invoiceValidation.result.status).toBe('needs-revalidated');
+
     expect(showBannerMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        state: 'unknown',
-        message: mockTokens.states.unknown.label,
-        detail: 'Status not detected. Run "Verify Invoice Validation Selectors" to confirm selectors.',
-        dismissLabel: 'Dismiss validation banner'
+        state: 'needsRevalidated',
+        message: mockTokens.states.needsRevalidated.label,
+        detail: 'Re-run invoice validation before posting to ensure compliance.',
+        dismissLabel: 'Dismiss validation banner',
+        anchor: 'right'
       })
     );
 
@@ -310,7 +318,7 @@ describe('Oracle invoice validation workflow integration', () => {
     expect(history).toHaveLength(1);
     expect(history[0]).toEqual(
       expect.objectContaining({
-        status: 'unknown',
+        status: 'needs-revalidated',
         attempts: detection.attempts,
         manualRun: false,
         manualVerification: expect.objectContaining({ enabled: false })
@@ -320,6 +328,7 @@ describe('Oracle invoice validation workflow integration', () => {
     expect(history[0].diagnostics).toEqual(
       expect.objectContaining({
         exhaustedRetries: true,
+        assumedNeedsRevalidation: true,
         attemptLog: expect.arrayContaining([
           expect.objectContaining({ attempt: 1 }),
           expect.objectContaining({ attempt: 2 })
@@ -328,7 +337,8 @@ describe('Oracle invoice validation workflow integration', () => {
     );
 
     const messages = collectMessages(logSpy);
-    expect(messages).toContain('Invoice validation status: unknown (no text)');
+    expect(messages).toContain('Invoice validation text missing; defaulting status to needs revalidation.');
+    expect(messages).toContain('Invoice validation status: needs-revalidated (no text)');
     expect(clearBannerMock).not.toHaveBeenCalled();
   });
 
@@ -405,7 +415,7 @@ describe('Oracle invoice validation workflow integration', () => {
 
     const alertCalls = alertMock.mock.calls.map(call => call[0] as string);
     expect(alertCalls.some((message: string) => message.includes('Manual verification differences detected'))).toBe(true);
-    expect(alertCalls[alertCalls.length - 1]).toBe('Invoice validation verification returned unknown twice. Confirm selectors before enabling auto-run repeat.');
+    expect(alertCalls[alertCalls.length - 1]).toBe('Invoice validation verification returned inconclusive results twice. Confirm selectors before enabling auto-run repeat.');
 
     const history = store.get(VERIFY_HISTORY_KEY, [] as any[]);
     expect(history).toHaveLength(3);
@@ -414,7 +424,7 @@ describe('Oracle invoice validation workflow integration', () => {
     expect(manualEntries[manualEntries.length - 1]).toEqual(
       expect.objectContaining({
         workflowId: 'oracle.invoice.validation.verify',
-        status: 'unknown',
+        status: 'needs-revalidated',
         manualRun: true,
         verified: true,
         manualVerification: expect.objectContaining({ enabled: true })
@@ -426,6 +436,7 @@ describe('Oracle invoice validation workflow integration', () => {
     expect(latest.diagnostics).toEqual(
       expect.objectContaining({
         exhaustedRetries: true,
+        assumedNeedsRevalidation: true,
         attemptLog: expect.arrayContaining([
           expect.objectContaining({ attempt: 1 })
         ])
@@ -434,6 +445,6 @@ describe('Oracle invoice validation workflow integration', () => {
 
     const logs = collectLogEntries(logSpy);
     expect(logs.some(({ message, level }) => level === 'warn' && message.includes('Manual verification mismatch'))).toBe(true);
-    expect(logs.some(({ message, level }) => level === 'warn' && message.includes('Invoice validation verification returned unknown twice'))).toBe(true);
+    expect(logs.some(({ message, level }) => level === 'warn' && message.includes('Invoice validation verification returned inconclusive results twice'))).toBe(true);
   });
 });

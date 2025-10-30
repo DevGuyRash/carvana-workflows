@@ -36,6 +36,7 @@ export interface InvoiceStatusDetectionDiagnostics {
   snippet: string;
   elementPath: string;
   exhaustedRetries: boolean;
+  assumedNeedsRevalidation?: boolean;
 }
 
 export interface DetectionResult {
@@ -275,7 +276,8 @@ function buildDetectionResult(args: {
     statusText,
     snippet,
     elementPath,
-    exhaustedRetries: exhausted || status === 'unknown'
+    exhaustedRetries: exhausted || status === 'unknown',
+    assumedNeedsRevalidation: false
   };
 
   return {

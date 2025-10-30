@@ -93,6 +93,7 @@ export interface WorkflowHistoryDiagnostics {
   elementPath?: string;
   snippet?: string;
   bannerToken?: string;
+  assumedNeedsRevalidation?: boolean;
 }
 
 export interface WorkflowHistoryEntry {
@@ -232,6 +233,9 @@ function sanitizeDiagnostics(raw: any): WorkflowHistoryDiagnostics | undefined {
   }
   if (typeof (raw as any).bannerToken === 'string' && (raw as any).bannerToken.trim().length > 0) {
     diagnostics.bannerToken = (raw as any).bannerToken.trim();
+  }
+  if ((raw as any).assumedNeedsRevalidation === true) {
+    diagnostics.assumedNeedsRevalidation = true;
   }
   return Object.keys(diagnostics).length ? diagnostics : undefined;
 }

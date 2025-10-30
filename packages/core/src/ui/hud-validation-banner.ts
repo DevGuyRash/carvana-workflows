@@ -1,5 +1,7 @@
 import { getValidationBannerTokens, type ValidationBannerState, type ValidationBannerTokenMap, type ValidationBannerStateTokens } from './hud-theme-validation';
 
+export type ValidationBannerAnchor = 'left' | 'right';
+
 export interface ValidationBannerPayload {
   state: ValidationBannerState;
   /** Primary text rendered inside the banner. */
@@ -10,6 +12,8 @@ export interface ValidationBannerPayload {
   dismissLabel?: string;
   /** Optional override for ARIA politeness when the default token is unsuitable. */
   ariaLiveMode?: 'polite' | 'assertive';
+  /** Preferred fixed position on the viewport. Defaults to top-right. */
+  anchor?: ValidationBannerAnchor;
 }
 
 const HOST_ID = 'cv-menu-host';
@@ -30,6 +34,8 @@ let dismissBtn: HTMLButtonElement | null = null;
 let liveRegionEl: HTMLDivElement | null = null;
 let styleEl: HTMLStyleElement | null = null;
 
+const DEFAULT_ANCHOR: ValidationBannerAnchor = 'right';
+
 const reduceMotionQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
   ? window.matchMedia('(prefers-reduced-motion: reduce)')
   : null;
@@ -46,13 +52,13 @@ export const syncValidationBannerTheme = (tokens?: ValidationBannerTokenMap): bo
 };
 
 export const showValidationBanner = (payload: ValidationBannerPayload): boolean => {
-  currentPayload = { ...payload };
+  currentPayload = { ...payload, anchor: payload.anchor ?? currentPayload?.anchor ?? DEFAULT_ANCHOR };
   const shadow = ensureShadowRoot();
   if (!shadow) return false;
   renderStyle(shadow);
   ensureStructure(shadow);
-  if (!bannerEl || !messageEl || !liveRegionEl) return false;
-  applyPayload(payload);
+  if (!bannerEl || !messageEl || !liveRegionEl || !currentPayload) return false;
+  applyPayload(currentPayload);
   return true;
 };
 
@@ -69,6 +75,12 @@ export const clearValidationBanner = (): boolean => {
     liveRegionEl.textContent = '';
   }
   return true;
+};
+
+export const isValidationBannerVisible = (): boolean => {
+  if (!bannerRoot || !bannerEl) return false;
+  if (bannerRoot.hasAttribute('hidden')) return false;
+  return bannerEl.classList.contains('is-active');
 };
 
 const ensureShadowRoot = (): ShadowRoot | null => {
@@ -114,6 +126,7 @@ const ensureStructure = (shadow: ShadowRoot): void => {
       bannerRoot = document.createElement('div');
       bannerRoot.id = BANNER_ROOT_ID;
       bannerRoot.setAttribute('hidden', 'true');
+      bannerRoot.dataset.anchor = currentPayload?.anchor ?? DEFAULT_ANCHOR;
       shadow.appendChild(bannerRoot);
     }
   }
@@ -172,6 +185,8 @@ const ensureStructure = (shadow: ShadowRoot): void => {
 
 const applyPayload = (payload: ValidationBannerPayload): void => {
   if (!bannerRoot || !bannerEl || !messageEl || !dismissBtn || !liveRegionEl) return;
+  const anchor = payload.anchor ?? currentPayload?.anchor ?? DEFAULT_ANCHOR;
+  bannerRoot.dataset.anchor = anchor;
   const tokens = currentTokens.states[payload.state];
   if (!tokens) return;
 
@@ -284,9 +299,11 @@ const buildStyleSheet = (tokens: ValidationBannerTokenMap): string => {
 
   return `:host{position:relative;}
 #${BANNER_ROOT_ID}{
+#${BANNER_ROOT_ID}{
   position:fixed;
   top:16px;
   right:16px;
+  left:auto;
   z-index:2147483647;
   display:flex;
   flex-direction:column;
@@ -296,6 +313,16 @@ const buildStyleSheet = (tokens: ValidationBannerTokenMap): string => {
   pointer-events:none;
 }
 #${BANNER_ROOT_ID}[hidden]{display:none;}
+#${BANNER_ROOT_ID}[data-anchor="left"]{
+  left:16px;
+  right:auto;
+  align-items:flex-start;
+}
+#${BANNER_ROOT_ID}[data-anchor="right"]{
+  right:16px;
+  left:auto;
+  align-items:flex-end;
+}
 .cv-validation-banner{
   pointer-events:auto;
   display:flex;

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearValidationBanner,
+  isValidationBannerVisible,
   showValidationBanner,
   type ValidationBannerPayload
 } from './hud-validation-banner';
@@ -79,6 +80,7 @@ describe('hud-validation-banner', () => {
     const { root, banner, message, detail, icon, dismiss, live } = mountBanner(payload);
 
     expect(root.hasAttribute('hidden')).toBe(false);
+    expect(root.dataset.anchor).toBe('right');
     expect(banner.dataset.state).toBe(tokens.state);
     expect(banner.dataset.tone).toBe(tokens.aria.tone);
     expect(banner.classList.contains('is-active')).toBe(true);
@@ -112,6 +114,7 @@ describe('hud-validation-banner', () => {
 
     expect(live.getAttribute('aria-live')).toBe(payload.ariaLiveMode ?? tokens.aria.politeness);
     expect(live.textContent).toBe(`${livePrefix}: ${payload.message}`);
+    expect(isValidationBannerVisible()).toBe(true);
   });
 
   it('removes animation styling after animationend and applies resting visuals', () => {
@@ -150,5 +153,18 @@ describe('hud-validation-banner', () => {
     expect(banner.style.getPropertyValue('--cv-validation-duration')).toBe('');
     expect(banner.style.getPropertyValue('--cv-validation-easing')).toBe('');
     expect(live.textContent).toBe('');
+  });
+
+  it('applies left anchor positioning when requested', () => {
+    const tokens = getValidationBannerTokens().states.needsRevalidated;
+    const { root, banner } = mountBanner({
+      state: 'needsRevalidated',
+      message: tokens.label,
+      anchor: 'left'
+    });
+
+    expect(root.dataset.anchor).toBe('left');
+    expect(isValidationBannerVisible()).toBe(true);
+    expect(banner.classList.contains('is-active')).toBe(true);
   });
 });
