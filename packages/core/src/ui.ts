@@ -1189,6 +1189,10 @@ export class MenuUI {
       .cv-tab.active .cv-tab-badge{ background: var(--cv-accent); color: var(--cv-bg); opacity:1; }
       .cv-section{ display: none; padding: 10px; }
       .cv-section.active{ display:block; max-height: calc(70vh - 58px); overflow-y: auto; }
+      #cv-tab-workflows{ display:flex; flex-direction:column; gap:10px; min-height:0; max-height: calc(70vh - 58px); }
+      #cv-tab-workflows #cv-wf-list{ flex:1; min-height:0; display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:6px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.22) transparent; overscroll-behavior: contain; }
+      #cv-tab-workflows #cv-wf-list::-webkit-scrollbar{ width:8px; }
+      #cv-tab-workflows #cv-wf-list::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.24); border-radius:999px; }
       .cv-row{ display:flex; gap:10px; align-items:center; margin: 8px 0; flex-wrap: wrap; }
       .cv-row.gap{ gap:6px; }
       .cv-row.right{ justify-content:flex-end; }
