@@ -1,6 +1,14 @@
 import { getValidationBannerTokens, type ValidationBannerState, type ValidationBannerTokenMap, type ValidationBannerStateTokens } from './hud-theme-validation';
 
-export type ValidationBannerAnchor = 'left' | 'right';
+export type ValidationBannerAnchor =
+  | 'top-left'
+  | 'top-right'
+  | 'middle-left'
+  | 'middle-right'
+  | 'bottom-left'
+  | 'bottom-right';
+
+export type ValidationBannerSize = 'compact' | 'cozy' | 'roomy';
 
 export interface ValidationBannerPayload {
   state: ValidationBannerState;
@@ -14,6 +22,8 @@ export interface ValidationBannerPayload {
   ariaLiveMode?: 'polite' | 'assertive';
   /** Preferred fixed position on the viewport. Defaults to top-right. */
   anchor?: ValidationBannerAnchor;
+  /** Preferred banner density preset. Defaults to compact. */
+  size?: ValidationBannerSize;
 }
 
 const HOST_ID = 'cv-menu-host';
@@ -34,7 +44,33 @@ let dismissBtn: HTMLButtonElement | null = null;
 let liveRegionEl: HTMLDivElement | null = null;
 let styleEl: HTMLStyleElement | null = null;
 
-const DEFAULT_ANCHOR: ValidationBannerAnchor = 'right';
+const DEFAULT_ANCHOR: ValidationBannerAnchor = 'top-right';
+const DEFAULT_SIZE: ValidationBannerSize = 'compact';
+
+const resolveAnchor = (anchor?: ValidationBannerAnchor): ValidationBannerAnchor => {
+  switch (anchor) {
+    case 'top-left':
+    case 'top-right':
+    case 'middle-left':
+    case 'middle-right':
+    case 'bottom-left':
+    case 'bottom-right':
+      return anchor;
+    default:
+      return DEFAULT_ANCHOR;
+  }
+};
+
+const resolveSize = (size?: ValidationBannerSize): ValidationBannerSize => {
+  switch (size) {
+    case 'compact':
+    case 'cozy':
+    case 'roomy':
+      return size;
+    default:
+      return DEFAULT_SIZE;
+  }
+};
 
 const reduceMotionQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
   ? window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -52,7 +88,9 @@ export const syncValidationBannerTheme = (tokens?: ValidationBannerTokenMap): bo
 };
 
 export const showValidationBanner = (payload: ValidationBannerPayload): boolean => {
-  currentPayload = { ...payload, anchor: payload.anchor ?? currentPayload?.anchor ?? DEFAULT_ANCHOR };
+  const anchor = resolveAnchor(payload.anchor ?? currentPayload?.anchor);
+  const size = resolveSize(payload.size ?? currentPayload?.size);
+  currentPayload = { ...payload, anchor, size };
   const shadow = ensureShadowRoot();
   if (!shadow) return false;
   renderStyle(shadow);
@@ -126,7 +164,8 @@ const ensureStructure = (shadow: ShadowRoot): void => {
       bannerRoot = document.createElement('div');
       bannerRoot.id = BANNER_ROOT_ID;
       bannerRoot.setAttribute('hidden', 'true');
-      bannerRoot.dataset.anchor = currentPayload?.anchor ?? DEFAULT_ANCHOR;
+      bannerRoot.dataset.anchor = resolveAnchor(currentPayload?.anchor);
+      bannerRoot.dataset.size = resolveSize(currentPayload?.size);
       shadow.appendChild(bannerRoot);
     }
   }
@@ -185,8 +224,10 @@ const ensureStructure = (shadow: ShadowRoot): void => {
 
 const applyPayload = (payload: ValidationBannerPayload): void => {
   if (!bannerRoot || !bannerEl || !messageEl || !dismissBtn || !liveRegionEl) return;
-  const anchor = payload.anchor ?? currentPayload?.anchor ?? DEFAULT_ANCHOR;
+  const anchor = resolveAnchor(payload.anchor ?? currentPayload?.anchor);
+  const size = resolveSize(payload.size ?? currentPayload?.size);
   bannerRoot.dataset.anchor = anchor;
+  bannerRoot.dataset.size = size;
   const tokens = currentTokens.states[payload.state];
   if (!tokens) return;
 
@@ -299,43 +340,82 @@ const buildStyleSheet = (tokens: ValidationBannerTokenMap): string => {
 
   return `:host{position:relative;}
 #${BANNER_ROOT_ID}{
-#${BANNER_ROOT_ID}{
   position:fixed;
   top:16px;
   right:16px;
-  left:auto;
   z-index:2147483647;
-  display:flex;
+  display:inline-flex;
   flex-direction:column;
   align-items:flex-end;
   gap:12px;
-  max-width:min(480px, calc(100vw - 32px));
+  inline-size:max-content;
+  max-inline-size:min(420px, calc(100vw - 32px));
   pointer-events:none;
+  transform:translateY(0);
+  --cv-validation-padding-y: 10px;
+  --cv-validation-padding-x: 14px;
+  --cv-validation-font-min: 16px;
+  --cv-validation-font-max: 20px;
+  --cv-validation-max-inline: min(360px, calc(100vw - 40px));
+  --cv-validation-gap: 10px;
 }
 #${BANNER_ROOT_ID}[hidden]{display:none;}
-#${BANNER_ROOT_ID}[data-anchor="left"]{
+#${BANNER_ROOT_ID}[data-anchor$="left"]{
   left:16px;
   right:auto;
   align-items:flex-start;
 }
-#${BANNER_ROOT_ID}[data-anchor="right"]{
+#${BANNER_ROOT_ID}[data-anchor$="right"]{
   right:16px;
   left:auto;
   align-items:flex-end;
+}
+#${BANNER_ROOT_ID}[data-anchor^="top"]{
+  top:16px;
+  bottom:auto;
+  transform:translateY(0);
+}
+#${BANNER_ROOT_ID}[data-anchor^="bottom"]{
+  bottom:16px;
+  top:auto;
+  transform:translateY(0);
+}
+#${BANNER_ROOT_ID}[data-anchor^="middle"]{
+  top:50%;
+  bottom:auto;
+  transform:translateY(-50%);
+}
+#${BANNER_ROOT_ID}[data-size="cozy"]{
+  --cv-validation-padding-y: ${tokens.layout.verticalPaddingPx}px;
+  --cv-validation-padding-x: ${tokens.layout.horizontalPaddingPx}px;
+  --cv-validation-font-min: ${tokens.layout.fontSizeRangePx.min}px;
+  --cv-validation-font-max: ${tokens.layout.fontSizeRangePx.max}px;
+  --cv-validation-max-inline: min(420px, calc(100vw - 40px));
+  --cv-validation-gap: 12px;
+}
+#${BANNER_ROOT_ID}[data-size="roomy"]{
+  --cv-validation-padding-y: ${tokens.layout.verticalPaddingPx + 4}px;
+  --cv-validation-padding-x: ${tokens.layout.horizontalPaddingPx + 6}px;
+  --cv-validation-font-min: ${tokens.layout.fontSizeRangePx.min + 2}px;
+  --cv-validation-font-max: ${tokens.layout.fontSizeRangePx.max + 4}px;
+  --cv-validation-max-inline: min(460px, calc(100vw - 32px));
+  --cv-validation-gap: 14px;
 }
 .cv-validation-banner{
   pointer-events:auto;
   display:flex;
   align-items:center;
-  gap:12px;
-  padding:${tokens.layout.verticalPaddingPx}px ${tokens.layout.horizontalPaddingPx}px;
+  gap:var(--cv-validation-gap);
+  padding:var(--cv-validation-padding-y) var(--cv-validation-padding-x);
   border-radius:${tokens.layout.borderRadiusPx}px;
   font-family:ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
   font-weight:600;
   line-height:1.2;
   letter-spacing:0.2px;
-  font-size:clamp(${tokens.layout.fontSizeRangePx.min}px, 2.4vw, ${tokens.layout.fontSizeRangePx.max}px);
+  font-size:clamp(var(--cv-validation-font-min), 2.2vw, var(--cv-validation-font-max));
   max-height:${tokens.layout.maxViewportHeightPct}vh;
+  max-inline-size:var(--cv-validation-max-inline);
+  inline-size:max-content;
   color:var(--cv-validation-text-base, ${tokens.states.validated.baseTextColor});
   background:var(--cv-validation-bg-base, ${tokens.states.validated.baseBackground});
   box-shadow:var(--cv-validation-shadow, ${tokens.states.validated.dropShadow});

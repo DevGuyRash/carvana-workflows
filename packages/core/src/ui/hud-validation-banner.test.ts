@@ -80,7 +80,8 @@ describe('hud-validation-banner', () => {
     const { root, banner, message, detail, icon, dismiss, live } = mountBanner(payload);
 
     expect(root.hasAttribute('hidden')).toBe(false);
-    expect(root.dataset.anchor).toBe('right');
+    expect(root.dataset.anchor).toBe('top-right');
+    expect(root.dataset.size).toBe('compact');
     expect(banner.dataset.state).toBe(tokens.state);
     expect(banner.dataset.tone).toBe(tokens.aria.tone);
     expect(banner.classList.contains('is-active')).toBe(true);
@@ -155,16 +156,28 @@ describe('hud-validation-banner', () => {
     expect(live.textContent).toBe('');
   });
 
-  it('applies left anchor positioning when requested', () => {
+  it('applies alternate anchor positioning when requested', () => {
     const tokens = getValidationBannerTokens().states.needsRevalidated;
     const { root, banner } = mountBanner({
       state: 'needsRevalidated',
       message: tokens.label,
-      anchor: 'left'
+      anchor: 'bottom-left'
     });
 
-    expect(root.dataset.anchor).toBe('left');
+    expect(root.dataset.anchor).toBe('bottom-left');
+    expect(root.dataset.size).toBe('compact');
     expect(isValidationBannerVisible()).toBe(true);
     expect(banner.classList.contains('is-active')).toBe(true);
+
+    const { root: midRoot } = mountBanner({
+      state: 'needsRevalidated',
+      message: tokens.label,
+      anchor: 'middle-right',
+      size: 'roomy'
+    });
+
+    expect(midRoot.dataset.anchor).toBe('middle-right');
+    expect(midRoot.dataset.size).toBe('roomy');
+    expect(isValidationBannerVisible()).toBe(true);
   });
 });

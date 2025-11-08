@@ -11,7 +11,8 @@ import {
   showValidationBanner,
   syncValidationBannerTheme,
   appendWorkflowHistory,
-  type ValidationBannerAnchor
+  type ValidationBannerAnchor,
+  type ValidationBannerSize
 } from '@cv/core';
 import {
   detectInvoiceValidationStatus,
@@ -28,10 +29,21 @@ interface ManualBaseline {
 }
 
 const OPTION_BANNER_ANCHOR = 'bannerAnchor';
-const DEFAULT_BANNER_ANCHOR: ValidationBannerAnchor = 'right';
+const OPTION_BANNER_SIZE = 'bannerSize';
+const DEFAULT_BANNER_ANCHOR: ValidationBannerAnchor = 'top-right';
+const DEFAULT_BANNER_SIZE: ValidationBannerSize = 'compact';
 const BANNER_ANCHOR_CHOICES = [
-  { value: 'right', label: 'Top right (default)' },
-  { value: 'left', label: 'Top left' }
+  { value: 'top-right', label: 'Top right (default)' },
+  { value: 'top-left', label: 'Top left' },
+  { value: 'middle-right', label: 'Middle right' },
+  { value: 'middle-left', label: 'Middle left' },
+  { value: 'bottom-right', label: 'Bottom right' },
+  { value: 'bottom-left', label: 'Bottom left' }
+] as const;
+const BANNER_SIZE_CHOICES = [
+  { value: 'compact', label: 'Compact (default)' },
+  { value: 'cozy', label: 'Cozy' },
+  { value: 'roomy', label: 'Roomy' }
 ] as const;
 
 const STATUS_TO_BANNER_STATE: Record<InvoiceValidationStatus, BannerStateKey> = {
@@ -131,9 +143,39 @@ const createBannerAnchorOption = () => ({
   choices: [...BANNER_ANCHOR_CHOICES]
 });
 
+const createBannerSizeOption = () => ({
+  key: OPTION_BANNER_SIZE,
+  label: 'Banner size',
+  type: 'select' as const,
+  default: DEFAULT_BANNER_SIZE,
+  choices: [...BANNER_SIZE_CHOICES]
+});
+
 const resolveBannerAnchor = (ctx: WorkflowExecuteContext): ValidationBannerAnchor => {
   const value = String(ctx.options[OPTION_BANNER_ANCHOR] ?? '').toLowerCase();
-  return value === 'left' ? 'left' : DEFAULT_BANNER_ANCHOR;
+  switch (value) {
+    case 'top-left':
+    case 'top-right':
+    case 'middle-left':
+    case 'middle-right':
+    case 'bottom-left':
+    case 'bottom-right':
+      return value;
+    default:
+      return DEFAULT_BANNER_ANCHOR;
+  }
+};
+
+const resolveBannerSize = (ctx: WorkflowExecuteContext): ValidationBannerSize => {
+  const value = String(ctx.options[OPTION_BANNER_SIZE] ?? '').toLowerCase();
+  switch (value) {
+    case 'compact':
+    case 'cozy':
+    case 'roomy':
+      return value;
+    default:
+      return DEFAULT_BANNER_SIZE;
+  }
 };
 
 const updateManualUnknownStreak = (
@@ -211,7 +253,8 @@ const renderBanner = (
   ctx: WorkflowExecuteContext,
   result: DetectionResult,
   manualRun: boolean,
-  anchor: ValidationBannerAnchor
+  anchor: ValidationBannerAnchor,
+  size: ValidationBannerSize
 ): void => {
   const signature = `${result.status}|${result.statusText}`;
   if (!manualRun && signature === lastBannerSignature) {
@@ -237,7 +280,8 @@ const renderBanner = (
     message,
     detail,
     dismissLabel: 'Dismiss validation banner',
-    anchor
+    anchor,
+    size
   });
 
   if (!success) {
@@ -247,7 +291,12 @@ const renderBanner = (
 
 const runInvoiceValidationDetection = async (
   ctx: WorkflowExecuteContext,
-  options: { manual: boolean; anchor: ValidationBannerAnchor; baseline?: ManualBaseline | null }
+  options: {
+    manual: boolean;
+    anchor: ValidationBannerAnchor;
+    size: ValidationBannerSize;
+    baseline?: ManualBaseline | null;
+  }
 ): Promise<DetectionResult> => {
   ctx.log('Starting Oracle invoice validation detection.');
 
@@ -277,12 +326,14 @@ const runInvoiceValidationDetection = async (
   ctx.setVar('invoiceValidation', {
     result: normalized,
     manualRun: options.manual,
-    assumedFallback
+    assumedFallback,
+    size: options.size,
+    anchor: options.anchor
   });
   ctx.log(`Invoice validation status: ${normalized.status} (${normalized.statusText || 'no text'})`);
   ctx.log(`Detected element path: ${normalized.elementPath}`, 'debug');
 
-  renderBanner(ctx, normalized, options.manual, options.anchor);
+  renderBanner(ctx, normalized, options.manual, options.anchor, options.size);
   appendWorkflowHistory(ctx.store, ctx.workflowId, {
     status: normalized.status,
     statusText: normalized.statusText,
@@ -305,8 +356,9 @@ const runInvoiceValidationDetection = async (
 
 const autoRunStep = async (ctx: WorkflowExecuteContext): Promise<void> => {
   const anchor = resolveBannerAnchor(ctx);
+  const size = resolveBannerSize(ctx);
   try {
-    await runInvoiceValidationDetection(ctx, { manual: false, anchor });
+    await runInvoiceValidationDetection(ctx, { manual: false, anchor, size });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error ?? 'Unknown error');
     ctx.log(`Invoice validation detection failed: ${message}`, 'error');
@@ -319,12 +371,13 @@ const autoRunStep = async (ctx: WorkflowExecuteContext): Promise<void> => {
 const manualVerificationStep = async (ctx: WorkflowExecuteContext): Promise<void> => {
   const baseline = resolveManualBaseline(ctx, true);
   const anchor = resolveBannerAnchor(ctx);
+  const size = resolveBannerSize(ctx);
   if (!baseline) {
     ctx.log('Manual verification baseline not configured; proceeding without comparisons.', 'warn');
   }
 
   try {
-    const result = await runInvoiceValidationDetection(ctx, { manual: true, baseline, anchor });
+    const result = await runInvoiceValidationDetection(ctx, { manual: true, baseline, anchor, size });
     if (result.diagnostics.manualVerification.enabled) {
       const manual = result.diagnostics.manualVerification;
       if (manual.mismatchSummary) {
@@ -352,7 +405,7 @@ export const OracleInvoiceValidationAlertWorkflow: WorkflowDefinition = {
   enabledWhen: {
     all: [INVOICE_HEADER_CONDITION, INVOICE_MODE_CONDITION]
   },
-  options: [createBannerAnchorOption()],
+  options: [createBannerAnchorOption(), createBannerSizeOption()],
   autoRun: {
     waitForConditionMs: 12000,
     pollIntervalMs: 150,
@@ -383,6 +436,7 @@ export const OracleInvoiceValidationVerifyWorkflow: WorkflowDefinition = {
   description: 'Manual verification workflow to compare invoice validation selector output against baseline.',
   options: [
     createBannerAnchorOption(),
+    createBannerSizeOption(),
     {
       key: OPTION_MANUAL_EXPECTED_STATUS,
       label: 'Expected validation status token',

@@ -226,12 +226,25 @@ describe('Oracle invoice validation workflow integration', () => {
         message: 'Validated',
         detail: 'Invoice validation completed; no further action required.',
         dismissLabel: 'Dismiss validation banner',
-        anchor: 'right'
+        anchor: 'top-right',
+        size: 'compact'
       })
     );
 
-    const invoiceValidation = ctx.getVar('invoiceValidation') as { result: DetectionResult; manualRun: boolean; assumedFallback: boolean };
-    expect(invoiceValidation).toEqual({ result: detection, manualRun: false, assumedFallback: false });
+    const invoiceValidation = ctx.getVar('invoiceValidation') as {
+      result: DetectionResult;
+      manualRun: boolean;
+      assumedFallback: boolean;
+      size: string;
+      anchor: string;
+    };
+    expect(invoiceValidation).toEqual({
+      result: detection,
+      manualRun: false,
+      assumedFallback: false,
+      size: 'compact',
+      anchor: 'top-right'
+    });
 
     const history = store.get(ALERT_HISTORY_KEY, [] as any[]);
     expect(history).toHaveLength(1);
@@ -300,9 +313,17 @@ describe('Oracle invoice validation workflow integration', () => {
 
     await runExecuteStep(OracleInvoiceValidationAlertWorkflow, ctx);
 
-    const invoiceValidation = ctx.getVar('invoiceValidation') as { result: DetectionResult; manualRun: boolean; assumedFallback: boolean };
+    const invoiceValidation = ctx.getVar('invoiceValidation') as {
+      result: DetectionResult;
+      manualRun: boolean;
+      assumedFallback: boolean;
+      size: string;
+      anchor: string;
+    };
     expect(invoiceValidation.assumedFallback).toBe(true);
     expect(invoiceValidation.result.status).toBe('needs-revalidated');
+    expect(invoiceValidation.size).toBe('compact');
+    expect(invoiceValidation.anchor).toBe('top-right');
 
     expect(showBannerMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -310,7 +331,8 @@ describe('Oracle invoice validation workflow integration', () => {
         message: mockTokens.states.needsRevalidated.label,
         detail: 'Re-run invoice validation before posting to ensure compliance.',
         dismissLabel: 'Dismiss validation banner',
-        anchor: 'right'
+        anchor: 'top-right',
+        size: 'compact'
       })
     );
 
