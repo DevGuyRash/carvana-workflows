@@ -2,8 +2,9 @@
 
 Production-ready skeleton for DRY, SOLID, KISS, YAGNI Tampermonkey automation targeting:
 
-- **Jira** — `https://jira.carvana.com/*`
-- **Oracle (Carvana)** — `https://edsk.fa.us2.oraclecloud.com/*`
+- **Jira** - `https://jira.carvana.com/*`
+- **Oracle (Carvana)** - `https://edsk.fa.us2.oraclecloud.com/*`
+- **Carma** - `https://carma.cvnacorp.com/*`
 
 Shared TypeScript core:
 - Non‑brittle selectors (`css/id/role/tag/type/attributes/text`, `and/or/not/within/nth`, `visible`)
@@ -24,10 +25,11 @@ npm i
 npm run build
 ```
 
-This outputs two files in `dist/`:
+This outputs userscripts in `dist/` (one per `packages/*-userscript`):
 
 * `jira.user.js`
 * `oracle.user.js`
+* `carma-bulk-search-scraper.user.js`
 
 Install each in Tampermonkey (drag into the browser or paste into a new script).
 
