@@ -1,0 +1,6 @@
+{
+  "name": "@cv/carma-bulk-search-scraper-userscript",
+  "version": "0.6.1",
+  "private": true,
+  "type": "module"
+}
