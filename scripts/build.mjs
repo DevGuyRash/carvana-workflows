@@ -68,7 +68,11 @@ async function buildOne(pkgName){
   console.log(`Built ${pkgName}`);
 }
 
-const pkgs = ['jira-userscript', 'oracle-userscript'];
+const packagesDir = path.join(root, 'packages');
+const pkgs = fs.readdirSync(packagesDir, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && entry.name.endsWith('-userscript'))
+  .map((entry) => entry.name)
+  .sort();
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
 for (const p of pkgs) await buildOne(p);
