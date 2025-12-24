@@ -1,5 +1,8 @@
 export type ColumnMode = 'all' | 'none' | 'key';
 
+export type RowValue = string | number;
+export type ScrapedRow = Record<string, RowValue>;
+
 export interface Options {
   paginateAllPages: boolean;
   setShowTo100: boolean;
@@ -25,7 +28,7 @@ export interface BlockInfo {
 export interface AppState {
   running: boolean;
   abort: boolean;
-  rows: Record<string, string>[];
+  rows: ScrapedRow[];
   lastCsv: string;
   lastJson: string;
 }

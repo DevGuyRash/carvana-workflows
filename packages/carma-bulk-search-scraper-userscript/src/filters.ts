@@ -1,12 +1,12 @@
 import { PURCHASE_ID_BLANK_MATCHERS, STOCK_NUMBER_BLANK_MATCHERS, VIN_BLANK_MATCHERS } from './constants';
 import { cleanText } from './utils';
 
-export function getRowValueByHeaderLike(row: Record<string, string>, patterns: Array<string | RegExp>): string {
+export function getRowValueByHeaderLike(row: Record<string, unknown>, patterns: Array<string | RegExp>): string {
   const keys = Object.keys(row);
   for (const pattern of patterns) {
     const re = typeof pattern === 'string' ? new RegExp(`^${pattern}$`, 'i') : pattern;
     const key = keys.find((k) => re.test(cleanText(k)));
-    if (key) return row[key];
+    if (key) return String(row[key] ?? '');
   }
   return '';
 }
@@ -29,7 +29,7 @@ function isNonEmpty(value: string, blankMatchers: Array<string | RegExp> = []): 
   return true;
 }
 
-export function shouldKeepRow(row: Record<string, string>, filters: {
+export function shouldKeepRow(row: Record<string, unknown>, filters: {
   requirePurchaseId: boolean;
   requireVin: boolean;
   requireStockNumber: boolean;

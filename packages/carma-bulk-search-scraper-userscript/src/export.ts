@@ -30,7 +30,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-export function rowsToCsv(rows: Record<string, string>[]): string {
+export function rowsToCsv(rows: Array<Record<string, unknown>>): string {
   if (!rows.length) return '';
 
   const preferred = ['searchTerm', 'searchUrl', 'table', 'page'];

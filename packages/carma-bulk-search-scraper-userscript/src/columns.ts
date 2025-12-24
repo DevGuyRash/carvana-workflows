@@ -16,15 +16,21 @@ export function findButtonByText(root: ParentNode, text: string): HTMLButtonElem
 }
 
 export function findDropdownButtonMatching(root: ParentNode, regex: RegExp): HTMLButtonElement | null {
-  const buttons = Array.from(root.querySelectorAll('button')) as HTMLButtonElement[];
-  for (const button of buttons) {
-    const text = cleanText(button.textContent);
-    if (regex.test(text)) {
-      const dd = button.closest('.dropdown');
-      const menu = dd?.querySelector('.dropdown-menu');
-      if (dd && menu) return button;
-    }
+  const candidates = Array.from(
+    root.querySelectorAll('button, [role="button"], .dropdown-toggle, [data-bs-toggle="dropdown"]'),
+  ) as HTMLElement[];
+
+  for (const candidate of candidates) {
+    const text = cleanText(candidate.textContent);
+    if (!regex.test(text)) continue;
+
+    const dd = candidate.closest('.dropdown');
+    const menu = dd?.querySelector('.dropdown-menu');
+    if (!dd || !menu) continue;
+
+    return candidate as HTMLButtonElement;
   }
+
   return null;
 }
 
@@ -146,27 +152,35 @@ export async function applyColumns(blockRoot: ParentNode, mode: ColumnMode): Pro
 }
 
 export async function setPageSize(blockRoot: ParentNode, size: number): Promise<{ changed: boolean; reason: string }> {
-  const showBtn = findDropdownButtonMatching(blockRoot, /^show\s+\d+/i);
+  const showBtn = findDropdownButtonMatching(blockRoot, /^show\b.*\d+/i);
   if (!showBtn) {
     return { changed: false, reason: 'no_show_button' };
   }
 
   const current = cleanText(showBtn.textContent);
-  if (new RegExp(`^show\\s+${size}$`, 'i').test(current)) {
-    return { changed: false, reason: 'already' };
-  }
+  const currentNum = Number.parseInt((current.match(/\b(\d+)\b/) || [])[1] || '', 10);
+  if (Number.isFinite(currentNum) && currentNum === size) return { changed: false, reason: 'already' };
 
   const { menu } = await openDropdown(showBtn);
 
   try {
     const items = Array.from(menu.querySelectorAll('a,button')) as HTMLElement[];
-    const target = items.find((item) => new RegExp(`^show\\s+${size}$`, 'i').test(cleanText(item.textContent)));
+    const target = items.find((item) => {
+      const text = cleanText(item.textContent);
+      if (new RegExp(`^show\\b.*\\b${size}\\b`, 'i').test(text)) return true;
+      if (new RegExp(`^${size}$`).test(text)) return true;
+      return false;
+    });
     if (!target) {
       return { changed: false, reason: 'no_target_item' };
     }
     target.click();
 
-    await waitFor(() => new RegExp(`^show\\s+${size}$`, 'i').test(cleanText(showBtn.textContent)), {
+    await waitFor(() => {
+      const updated = cleanText(showBtn.textContent);
+      const updatedNum = Number.parseInt((updated.match(/\b(\d+)\b/) || [])[1] || '', 10);
+      return Number.isFinite(updatedNum) && updatedNum === size;
+    }, {
       timeoutMs: 8000,
       intervalMs: 50,
       debugLabel: 'page size apply',
