@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 function run(command, args, name) {
   const child = spawn(command, args, {
     stdio: 'inherit',
-    shell: true,
+    shell: false,
     env: process.env,
   });
 
@@ -18,8 +18,13 @@ function run(command, args, name) {
   return child;
 }
 
-const server = run('npm', ['run', 'serve:userscripts'], 'serve');
-const watcher = run('npm', ['run', 'build:watch'], 'build');
+const isWindows = process.platform === 'win32';
+const npmCommand = isWindows ? (process.env.ComSpec || 'cmd.exe') : 'npm';
+const npmArgs = (args) =>
+  isWindows ? ['/d', '/s', '/c', 'npm', ...args] : args;
+
+const server = run(npmCommand, npmArgs(['run', 'serve:userscripts']), 'serve');
+const watcher = run(npmCommand, npmArgs(['run', 'build:watch']), 'build');
 
 const shutdown = (signal) => {
   if (server) server.kill(signal);
