@@ -1,4 +1,4 @@
-import { build } from 'esbuild';
+import { build, context } from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -33,7 +33,7 @@ function normalizeBaseUrl(raw){
   return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
 }
 
-async function buildOne(pkgName){
+async function buildOne(pkgName, watch){
   const pkgDir = path.join(root, 'packages', pkgName);
   const outDir = path.join(root, 'dist');
   const entry = path.join(pkgDir, 'src', 'index.ts');
@@ -49,7 +49,7 @@ async function buildOne(pkgName){
 
   const banner = toMetaBlock(meta) + '\n';
 
-  await build({
+  const options = {
     entryPoints: [entry],
     outfile: path.join(outDir, `${pkgName.replace('-userscript','')}.user.js`),
     bundle: true,
@@ -64,7 +64,16 @@ async function buildOne(pkgName){
       __US_NAMESPACE__: JSON.stringify(meta.namespace || 'cv-userscripts'),
       __US_VERSION__: JSON.stringify(meta.version || '0.1.0')
     }
-  });
+  };
+
+  if (watch) {
+    const ctx = await context(options);
+    await ctx.watch();
+    console.log(`Watching ${pkgName}`);
+    return ctx;
+  }
+
+  await build(options);
   console.log(`Built ${pkgName}`);
 }
 
@@ -75,6 +84,11 @@ const pkgs = fs.readdirSync(packagesDir, { withFileTypes: true })
   .sort();
 
 fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
-for (const p of pkgs) await buildOne(p);
-
-console.log('\nAll done. Find userscripts in ./dist/*.user.js');
+const watch = process.argv.includes('--watch') || process.env.US_WATCH === '1';
+if (watch) {
+  for (const p of pkgs) await buildOne(p, true);
+  console.log('\nWatching userscripts...');
+} else {
+  for (const p of pkgs) await buildOne(p, false);
+  console.log('\nAll done. Find userscripts in ./dist/*.user.js');
+}

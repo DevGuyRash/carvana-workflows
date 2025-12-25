@@ -35,6 +35,43 @@ Install each in Tampermonkey (drag into the browser or paste into a new script).
 
 ---
 
+## Development (Auto-Update)
+
+To enable Tampermonkey auto-update during development, run the local userscript server
+and build with a local `US_BASE_URL` so `@downloadURL` / `@updateURL` point to localhost.
+
+Recommended (one command):
+
+```bash
+npm run dev
+```
+
+This runs the userscript server and a build watcher in parallel.
+If you prefer separate terminals:
+
+Terminal 1:
+```bash
+npm run serve:userscripts
+```
+
+Terminal 2:
+```bash
+npm run build:watch
+```
+
+Then install the script from `http://localhost:4873/<script>.user.js` (e.g. open the
+root `http://localhost:4873/` and click the file). After rebuilds, Tampermonkey
+will auto-update from the local server.
+
+Optional overrides:
+
+```bash
+US_HOST=localhost US_PORT=4873 npm run serve:userscripts
+US_BASE_URL=http://localhost:4873 npm run build
+```
+
+---
+
 ## First Run / Demo Workflows
 
 The default registry is **demo‑only**. On a matching site, click the **gear**:
