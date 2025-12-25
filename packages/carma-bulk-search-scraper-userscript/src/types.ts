@@ -11,6 +11,7 @@ export interface Options {
   requireVin: boolean;
   requireStockNumber: boolean;
   debug: boolean;
+  maxConcurrency: number;
 }
 
 export interface TermInfo {
@@ -39,6 +40,7 @@ export interface AppUi {
   paginate: HTMLInputElement;
   show100: HTMLInputElement;
   columns: HTMLSelectElement;
+  maxConcurrency: HTMLInputElement;
   requirePurchaseId: HTMLInputElement;
   requireVin: HTMLInputElement;
   requireStockNumber: HTMLInputElement;
@@ -46,7 +48,7 @@ export interface AppUi {
   start: HTMLButtonElement;
   cancel: HTMLButtonElement;
   status: HTMLPreElement;
-  iframe: HTMLIFrameElement;
+  iframeHost: HTMLDivElement;
 }
 
 export interface PaginationInfo {

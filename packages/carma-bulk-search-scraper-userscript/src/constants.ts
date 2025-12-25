@@ -11,6 +11,7 @@ export const DEFAULTS: Options = {
   requireVin: false,
   requireStockNumber: false,
   debug: false,
+  maxConcurrency: 1,
 };
 
 export const PURCHASE_ID_BLANK_MATCHERS: Array<string | RegExp> = [
@@ -33,17 +34,18 @@ export const STYLE_TEXT = `
   .cbss-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e6e8ef;}
   .cbss-title{font-size:18px;font-weight:700;color:#183558;}
   .cbss-close{border:0;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:#183558;padding:4px 8px;}
-  .cbss-body{display:flex;gap:16px;padding:16px;overflow:auto;}
-  .cbss-left{flex:1 1 65%;min-width:420px;}
-  .cbss-right{flex:0 0 360px;}
+  .cbss-body{display:flex;gap:16px;padding:16px;overflow:hidden;flex:1 1 auto;min-height:0;}
+  .cbss-left{flex:1 1 65%;min-width:420px;min-height:0;}
+  .cbss-right{flex:0 0 360px;min-height:0;overflow:auto;}
   .cbss-label{font-weight:700;color:#183558;margin-bottom:6px;display:block;}
-  .cbss-textarea{width:100%;min-height:190px;border:1px solid #cfd6e4;border-radius:8px;padding:10px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size:12px;resize:vertical;}
+  .cbss-textarea{width:100%;height:clamp(160px,28vh,320px);min-height:160px;border:1px solid #cfd6e4;border-radius:8px;padding:10px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size:12px;resize:vertical;}
   .cbss-hint{margin-top:8px;color:#5a6b85;font-size:12px;line-height:1.35;}
   .cbss-card{border:1px solid #dbe2ef;border-radius:10px;padding:14px;}
   .cbss-card h4{margin:0 0 10px 0;font-size:14px;color:#183558;}
   .cbss-row{display:flex;align-items:center;gap:8px;margin:6px 0;}
   .cbss-row label{display:flex;align-items:center;gap:8px;color:#183558;font-size:13px;}
   .cbss-row input[type="checkbox"]{transform:translateY(1px);}
+  .cbss-number{width:88px;border:1px solid #cfd6e4;border-radius:8px;padding:4px 8px;font-size:13px;}
   .cbss-select{width:100%;border:1px solid #cfd6e4;border-radius:8px;padding:6px 10px;font-size:13px;background:#fff;}
   .cbss-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
   .cbss-btn{border:1px solid #cfd6e4;border-radius:10px;background:#fff;padding:8px 12px;font-weight:700;cursor:pointer;}
@@ -52,7 +54,15 @@ export const STYLE_TEXT = `
   .cbss-btn-secondary{background:#f3f4f6;color:#111827;border-color:#d1d5db;}
   .cbss-status-wrap{padding:0 16px 16px 16px;}
   .cbss-status-title{font-weight:700;color:#183558;margin:10px 0 6px 0;}
-  .cbss-status{background:#0b1220;color:#e5e7eb;border-radius:10px;padding:12px;min-height:190px;max-height:340px;overflow:auto;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size:12px;white-space:pre-wrap;}
+  .cbss-status{background:#0b1220;color:#e5e7eb;border-radius:10px;padding:12px;height:clamp(160px,24vh,360px);overflow:auto;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size:12px;white-space:pre-wrap;}
   .cbss-fab{position:fixed;right:16px;bottom:16px;z-index:999998;border-radius:999px;background:#183558;color:#fff;border:0;padding:10px 14px;font-weight:800;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.25);} 
   .cbss-small{font-size:12px;color:#5a6b85;}
+  .cbss-iframe-host{position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;}
+  .cbss-iframe{width:1px;height:1px;border:0;visibility:hidden;}
+  @media (max-width: 980px){
+    .cbss-overlay{padding:12px;}
+    .cbss-body{flex-direction:column;}
+    .cbss-left{min-width:0;flex:0 0 auto;}
+    .cbss-right{flex:1 1 auto;width:100%;max-height:45vh;}
+  }
 `;

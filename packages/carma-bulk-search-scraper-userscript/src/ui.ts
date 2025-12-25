@@ -24,11 +24,13 @@ function readOptionsFromUi(inputs: {
   paginate: HTMLInputElement;
   show100: HTMLInputElement;
   columns: HTMLSelectElement;
+  maxConcurrency: HTMLInputElement;
   requirePurchaseId: HTMLInputElement;
   requireVin: HTMLInputElement;
   requireStockNumber: HTMLInputElement;
   debug: HTMLInputElement;
 }): Options {
+  const parsedConcurrency = Number.parseInt(inputs.maxConcurrency.value, 10);
   return {
     paginateAllPages: !!inputs.paginate.checked,
     setShowTo100: !!inputs.show100.checked,
@@ -37,6 +39,7 @@ function readOptionsFromUi(inputs: {
     requireVin: !!inputs.requireVin.checked,
     requireStockNumber: !!inputs.requireStockNumber.checked,
     debug: !!inputs.debug.checked,
+    maxConcurrency: Number.isFinite(parsedConcurrency) && parsedConcurrency > 0 ? parsedConcurrency : 1,
   };
 }
 
@@ -79,6 +82,14 @@ export function createUi(options: Options, handlers: UiHandlers): AppUi {
 
   const paginate = el('input', { type: 'checkbox', id: 'cbss-paginate' }) as HTMLInputElement;
   const show100 = el('input', { type: 'checkbox', id: 'cbss-show100' }) as HTMLInputElement;
+  const maxConcurrency = el('input', {
+    type: 'number',
+    id: 'cbss-maxConcurrency',
+    class: 'cbss-number',
+    min: '1',
+    max: '8',
+    step: '1',
+  }) as HTMLInputElement;
   const debug = el('input', { type: 'checkbox', id: 'cbss-debug' }) as HTMLInputElement;
 
   const columns = el('select', { class: 'cbss-select', id: 'cbss-columns' }, [
@@ -116,6 +127,9 @@ export function createUi(options: Options, handlers: UiHandlers): AppUi {
     el('label', {}, [show100, ' Set page size to ', el('strong', {}, 'Show 100')]),
   ]));
   card.appendChild(el('div', { class: 'cbss-row' }, [
+    el('label', {}, [' Parallel workers ', maxConcurrency]),
+  ]));
+  card.appendChild(el('div', { class: 'cbss-row' }, [
     el('label', {}, [debug, ' Debug mode (verbose)']),
   ]));
 
@@ -145,26 +159,36 @@ export function createUi(options: Options, handlers: UiHandlers): AppUi {
   statusWrap.appendChild(statusTitle);
   statusWrap.appendChild(status);
 
-  const iframe = el('iframe', { style: 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:0;visibility:hidden;' }) as HTMLIFrameElement;
+  const iframeHost = el('div', { class: 'cbss-iframe-host' }) as HTMLDivElement;
 
   modal.appendChild(header);
   modal.appendChild(body);
   modal.appendChild(statusWrap);
-  modal.appendChild(iframe);
+  modal.appendChild(iframeHost);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
   paginate.checked = !!options.paginateAllPages;
   show100.checked = !!options.setShowTo100;
   columns.value = options.columnMode || 'all';
+  maxConcurrency.value = String(options.maxConcurrency || 1);
   requirePurchaseId.checked = !!options.requirePurchaseId;
   requireVin.checked = !!options.requireVin;
   requireStockNumber.checked = !!options.requireStockNumber;
   debug.checked = !!options.debug;
 
-  const inputs = { paginate, show100, columns, requirePurchaseId, requireVin, requireStockNumber, debug };
+  const inputs = {
+    paginate,
+    show100,
+    columns,
+    maxConcurrency,
+    requirePurchaseId,
+    requireVin,
+    requireStockNumber,
+    debug,
+  };
   const notifyOptions = () => handlers.onOptionsChange(readOptionsFromUi(inputs));
-  [paginate, show100, columns, requirePurchaseId, requireVin, requireStockNumber, debug].forEach((input) => {
+  [paginate, show100, columns, maxConcurrency, requirePurchaseId, requireVin, requireStockNumber, debug].forEach((input) => {
     input.addEventListener('change', notifyOptions);
   });
 
@@ -174,6 +198,7 @@ export function createUi(options: Options, handlers: UiHandlers): AppUi {
     paginate,
     show100,
     columns,
+    maxConcurrency,
     requirePurchaseId,
     requireVin,
     requireStockNumber,
@@ -181,7 +206,7 @@ export function createUi(options: Options, handlers: UiHandlers): AppUi {
     start,
     cancel,
     status,
-    iframe,
+    iframeHost,
   };
 }
 

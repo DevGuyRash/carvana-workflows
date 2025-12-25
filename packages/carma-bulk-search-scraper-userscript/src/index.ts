@@ -24,7 +24,7 @@ declare global {
   const onOpen = () => openModal(ui);
   const onClose = () => {
     if (state.running) {
-      logger.log('??  Close disabled while running. Use Cancel first.');
+      logger.log('[WARN] Close disabled while running. Use Cancel first.');
       return;
     }
     closeModal(ui);
@@ -36,7 +36,7 @@ declare global {
 
   const onCancel = () => {
     state.abort = true;
-    logger.log('? Cancel requested.');
+    logger.log('[WARN] Cancel requested.');
   };
 
   const onDownloadCsv = () => {
@@ -46,7 +46,7 @@ declare global {
   const onCopyCsv = async () => {
     const csv = exportCsv(state);
     const ok = await copyToClipboard(csv);
-    logger.log(ok ? '? Copied CSV to clipboard.' : '??  Failed to copy CSV.');
+    logger.log(ok ? '[OK] Copied CSV to clipboard.' : '[ERROR] Failed to copy CSV.');
   };
 
   const onDownloadJson = () => {
@@ -56,7 +56,7 @@ declare global {
   const onCopyJson = async () => {
     const json = exportJson(state);
     const ok = await copyToClipboard(json);
-    logger.log(ok ? '? Copied JSON to clipboard.' : '??  Failed to copy JSON.');
+    logger.log(ok ? '[OK] Copied JSON to clipboard.' : '[ERROR] Failed to copy JSON.');
   };
 
   const options = loadOptions();

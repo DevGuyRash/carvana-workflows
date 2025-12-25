@@ -25,8 +25,7 @@ export function findDropdownButtonMatching(root: ParentNode, regex: RegExp): HTM
     if (!regex.test(text)) continue;
 
     const dd = candidate.closest('.dropdown');
-    const menu = dd?.querySelector('.dropdown-menu');
-    if (!dd || !menu) continue;
+    if (!dd) continue;
 
     return candidate as HTMLButtonElement;
   }
@@ -152,9 +151,31 @@ export async function applyColumns(blockRoot: ParentNode, mode: ColumnMode): Pro
 }
 
 export async function setPageSize(blockRoot: ParentNode, size: number): Promise<{ changed: boolean; reason: string }> {
-  const showBtn = findDropdownButtonMatching(blockRoot, /^show\b.*\d+/i);
+  const matcher = /^show\b.*\d+/i;
+  const findShowButton = (root: ParentNode): HTMLButtonElement | null => findDropdownButtonMatching(root, matcher);
+  let showBtn = findShowButton(blockRoot);
   if (!showBtn) {
-    return { changed: false, reason: 'no_show_button' };
+    const table = (blockRoot as Element).querySelector?.('table[data-testid="data-table"]') as HTMLTableElement | null;
+    let cursor = table?.parentElement || (blockRoot as Element).parentElement;
+    for (let i = 0; i < 6 && cursor && !showBtn; i++) {
+      showBtn = findShowButton(cursor);
+      cursor = cursor.parentElement;
+    }
+  }
+  if (!showBtn) {
+    const doc = (blockRoot as Element).ownerDocument;
+    if (doc) showBtn = findShowButton(doc);
+  }
+  if (!showBtn) {
+    try {
+      showBtn = await waitFor(() => findShowButton(blockRoot), {
+        timeoutMs: 5000,
+        intervalMs: 100,
+        debugLabel: 'page size button',
+      });
+    } catch {
+      return { changed: false, reason: 'no_show_button' };
+    }
   }
 
   const current = cleanText(showBtn.textContent);

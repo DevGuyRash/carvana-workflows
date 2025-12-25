@@ -25,6 +25,7 @@ function readOptions(ui: AppUi): Options {
     requireVin: !!ui.requireVin.checked,
     requireStockNumber: !!ui.requireStockNumber.checked,
     debug: !!ui.debug.checked,
+    maxConcurrency: Math.max(1, Number.parseInt(ui.maxConcurrency.value || '1', 10) || 1),
   };
 }
 
@@ -36,18 +37,33 @@ async function scrapeBlockPages(params: {
 }): Promise<{ name: string; expectedCount: number | null; totalSeen: number; totalKept: number }> {
   const { termInfo, blockInfo, opts, ctx } = params;
   const { state, logger } = ctx;
-  const { block, table, rawTitle } = blockInfo;
+  const { block, rawTitle } = blockInfo;
   const expectedCount = parseCountFromTitle(rawTitle);
   const name = baseTitle(rawTitle) || 'Table';
+  const resolveBlock = (): HTMLElement => {
+    const doc = block.ownerDocument;
+    if (block.isConnected) return block as HTMLElement;
+    if (!doc) return block as HTMLElement;
+    const blocks = Array.from(doc.querySelectorAll('.cpl__block')) as HTMLElement[];
+    if (!blocks.length) return block as HTMLElement;
+    if (rawTitle) {
+      const match = blocks.find((b) => cleanText(b.querySelector('.cpl__block__header-title')?.textContent || '') === rawTitle);
+      if (match) return match;
+    }
+    return blocks[0];
+  };
+  const resolveTable = (root: ParentNode): HTMLTableElement | null => (
+    root.querySelector('table[data-testid=\"data-table\"]') as HTMLTableElement | null
+  );
 
   if (opts.columnMode !== 'none') {
-    logger.log(`?? [${rawTitle || name}] Applying columns: ${opts.columnMode}...`);
+    logger.log(`[INFO] [${rawTitle || name}] Applying columns: ${opts.columnMode}...`);
     try {
-      const result = await applyColumns(block, opts.columnMode);
+      const result = await applyColumns(resolveBlock(), opts.columnMode);
       if (result.reason === 'already_all' || result.reason === 'already_key') {
-        logger.log(`   ??  Columns already satisfied (${opts.columnMode}).`);
+        logger.log(`[INFO] Columns already satisfied (${opts.columnMode}).`);
       } else if (result.applied) {
-        logger.log(`   ? Columns updated (${result.reason}).`);
+        logger.log(`[OK] Columns updated (${result.reason}).`);
       } else {
         if (result.reason === 'no_button') {
           logger.logDebug('Edit Columns button not found; skipping.');
@@ -56,31 +72,33 @@ async function scrapeBlockPages(params: {
         }
       }
     } catch (error) {
-      logger.log(`   ??  Failed to apply columns: ${(error as Error).message}`);
+      logger.log(`[WARN] Failed to apply columns: ${(error as Error).message}`);
     }
   }
 
   if (opts.setShowTo100) {
-    logger.log(`?? [${rawTitle || name}] Setting page size: Show 100...`);
+    logger.log(`[INFO] [${rawTitle || name}] Setting page size: Show 100...`);
     try {
-      const result = await setPageSize(block, 100);
+      const result = await setPageSize(resolveBlock(), 100);
       if (result.changed) {
-        logger.log('   ? Set page size to Show 100.');
+        logger.log('[OK] Set page size to Show 100.');
       } else {
         if (result.reason === 'already') {
-          logger.log('   ??  Already Show 100.');
+          logger.log('[INFO] Already Show 100.');
         } else if (result.reason === 'no_show_button') {
-          logger.logDebug('Show <N> button not found; skipping page-size.');
+          logger.log('[WARN] Page size dropdown not found; leaving current size.');
+        } else if (result.reason === 'no_target_item') {
+          logger.log('[WARN] Show 100 option not found; leaving current size.');
         } else {
           logger.logDebug(`Page size unchanged (${result.reason}).`);
         }
       }
     } catch (error) {
-      logger.log(`   ??  Failed to set page size: ${(error as Error).message}`);
+      logger.log(`[WARN] Failed to set page size: ${(error as Error).message}`);
     }
   }
 
-  const pi0 = getPaginationInfo(block);
+  const pi0 = getPaginationInfo(resolveBlock());
   logger.logDebug(`Pagination detected: current=${pi0.current} total=${pi0.total}`);
 
   let totalSeen = 0;
@@ -88,41 +106,46 @@ async function scrapeBlockPages(params: {
 
   if (opts.paginateAllPages && pi0.total > 1) {
     try {
-      await goToFirstPageIfNeeded(block);
+      await goToFirstPageIfNeeded(resolveBlock());
     } catch (error) {
       logger.logDebug(`Could not force page 1: ${(error as Error).message}`);
     }
   }
 
-  const pi = getPaginationInfo(block);
+  const pi = getPaginationInfo(resolveBlock());
   const pagesToScrape = opts.paginateAllPages ? pi.total : 1;
 
   if (!opts.paginateAllPages || pi.total <= 1) {
-    logger.log(`?? [${rawTitle || name}] Scraping current page only.`);
+    logger.log(`[INFO] [${rawTitle || name}] Scraping current page only.`);
   } else {
-    logger.log(`?? [${rawTitle || name}] Scraping all pages (${pi.total}).`);
+    logger.log(`[INFO] [${rawTitle || name}] Scraping all pages (${pi.total}).`);
   }
 
   for (let page = 1; page <= pagesToScrape; page++) {
     if (state.abort) {
-      logger.log('? Aborted by user.');
+      logger.log('[WARN] Aborted by user.');
       break;
     }
 
     try {
       await waitFor(() => {
-        const t = block.querySelector('table[data-testid="data-table"]') as HTMLTableElement | null;
+        const t = resolveTable(resolveBlock());
         if (!t) return null;
         const body = t.querySelector('tbody');
         if (!body) return null;
         return t;
       }, { timeoutMs: 15000, intervalMs: 100, debugLabel: 'table render' });
     } catch (error) {
-      logger.log(`   ??  Table not ready on page ${page}: ${(error as Error).message}`);
+      logger.log(`[WARN] Table not ready on page ${page}: ${(error as Error).message}`);
       continue;
     }
 
-    const { rows } = scrapeCurrentPageRows(table);
+    const liveTable = resolveTable(resolveBlock());
+    if (!liveTable) {
+      logger.log(`[WARN] Table not found on page ${page}.`);
+      continue;
+    }
+    const { rows } = scrapeCurrentPageRows(liveTable);
     totalSeen += rows.length;
 
     const filters = {
@@ -150,9 +173,9 @@ async function scrapeBlockPages(params: {
 
     if (page < pagesToScrape) {
       try {
-        await clickNextPage(block, page + 1);
+        await clickNextPage(resolveBlock(), page + 1);
       } catch (error) {
-        logger.log(`   ??  Failed to go to next page (${page + 1}): ${(error as Error).message}`);
+        logger.log(`[WARN] Failed to go to next page (${page + 1}): ${(error as Error).message}`);
         break;
       }
     }
@@ -182,7 +205,7 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
   state.abort = false;
 
   if (!terms.length) {
-    logger.log('No search terms provided.');
+    logger.log('[WARN] No search terms provided.');
     return;
   }
 
@@ -190,8 +213,8 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
   ui.start.disabled = true;
   ui.cancel.disabled = false;
 
-  logger.log(`Starting. Terms: ${terms.length}`);
-  logger.log(`Options: ${JSON.stringify({
+  logger.log(`[INFO] Starting. Terms: ${terms.length}`);
+  logger.log(`[INFO] Options: ${JSON.stringify({
     paginateAllPages: opts.paginateAllPages,
     setShowTo100: opts.setShowTo100,
     columnMode: opts.columnMode,
@@ -199,60 +222,98 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
     requireVin: opts.requireVin,
     requireStockNumber: opts.requireStockNumber,
     debug: opts.debug,
+    maxConcurrency: opts.maxConcurrency,
   })}`);
 
-  const iframe = ui.iframe;
-
-  for (let i = 0; i < terms.length; i++) {
-    const termInfo = terms[i];
-    if (state.abort) break;
-
-    logger.log(`\n(${i + 1}/${terms.length}) ${termInfo.term}`);
-
-    try {
-      await loadIntoIframe(iframe, termInfo.url);
-      logger.log(`?? Loaded iframe: ${termInfo.url}`);
-    } catch (error) {
-      logger.log(`??  Failed to load ${termInfo.url}: ${(error as Error).message}`);
-      continue;
-    }
-
-    const doc = iframe.contentDocument;
-    if (!doc) {
-      logger.log('??  No iframe document; skipping.');
-      continue;
-    }
-
-    try {
-      await waitFor(() => {
-        const hasTable = doc.querySelector('table[data-testid="data-table"]');
-        if (hasTable) return true;
-        const text = cleanText(doc.body?.innerText || '');
-        if (text && /no\s+results/i.test(text)) return true;
-        return false;
-      }, { timeoutMs: 20000, intervalMs: 200, debugLabel: 'results render' });
-    } catch (error) {
-      logger.log(`??  Results did not render in time: ${(error as Error).message}`);
-      continue;
-    }
-
-    const blocks = getBlocksWithTables(doc);
-    if (!blocks.length) {
-      logger.log('??  No tables found on this page.');
-      continue;
-    }
-
-    for (const blockInfo of blocks) {
-      if (state.abort) break;
-      try {
-        await scrapeBlockPages({ termInfo, blockInfo, opts, ctx });
-      } catch (error) {
-        logger.log(`??  Error scraping block: ${(error as Error).message}`);
-      }
-    }
-
-    logger.log(`   Total exported rows: ${state.rows.length}`);
+  const normalizedConcurrency = Math.max(1, Math.floor(opts.maxConcurrency || 1));
+  const workerCount = Math.min(normalizedConcurrency, terms.length);
+  if (workerCount > 1) {
+    logger.log(`[INFO] Parallel workers: ${workerCount}`);
   }
+
+  ui.iframeHost.textContent = '';
+  const iframes = Array.from({ length: workerCount }, () => {
+    const iframe = document.createElement('iframe');
+    iframe.className = 'cbss-iframe';
+    ui.iframeHost.appendChild(iframe);
+    return iframe;
+  });
+
+  let nextIndex = 0;
+  const getNext = () => {
+    if (nextIndex >= terms.length) return null;
+    const idx = nextIndex;
+    nextIndex += 1;
+    return { idx, termInfo: terms[idx] };
+  };
+
+  const makeWorkerLogger = (prefix: string): Logger => ({
+    log: (line) => logger.log(`${prefix}${line}`),
+    logDebug: (line) => logger.logDebug(`${prefix}${line}`),
+    clear: logger.clear,
+  });
+
+  const workerLoop = async (workerId: number, iframe: HTMLIFrameElement): Promise<void> => {
+    const prefix = workerCount > 1 ? `[W${workerId}] ` : '';
+    const workerLogger = prefix ? makeWorkerLogger(prefix) : logger;
+    const workerCtx = { ...ctx, logger: workerLogger };
+
+    while (true) {
+      if (state.abort) break;
+      const next = getNext();
+      if (!next) break;
+      const { idx, termInfo } = next;
+
+      workerLogger.log(`\n[INFO] (${idx + 1}/${terms.length}) ${termInfo.term}`);
+
+      try {
+        await loadIntoIframe(iframe, termInfo.url);
+        workerLogger.log(`[INFO] Loaded iframe: ${termInfo.url}`);
+      } catch (error) {
+        workerLogger.log(`[WARN] Failed to load ${termInfo.url}: ${(error as Error).message}`);
+        continue;
+      }
+
+      const doc = iframe.contentDocument;
+      if (!doc) {
+        workerLogger.log('[WARN] No iframe document; skipping.');
+        continue;
+      }
+
+      try {
+        await waitFor(() => {
+          const hasTable = doc.querySelector('table[data-testid="data-table"]');
+          if (hasTable) return true;
+          const text = cleanText(doc.body?.innerText || '');
+          if (text && /no\s+results/i.test(text)) return true;
+          return false;
+        }, { timeoutMs: 20000, intervalMs: 200, debugLabel: 'results render' });
+      } catch (error) {
+        workerLogger.log(`[WARN] Results did not render in time: ${(error as Error).message}`);
+        continue;
+      }
+
+      const blocks = getBlocksWithTables(doc);
+      if (!blocks.length) {
+        workerLogger.log('[WARN] No tables found on this page.');
+        continue;
+      }
+
+      for (const blockInfo of blocks) {
+        if (state.abort) break;
+        try {
+          await scrapeBlockPages({ termInfo, blockInfo, opts, ctx: workerCtx });
+        } catch (error) {
+          workerLogger.log(`[WARN] Error scraping block: ${(error as Error).message}`);
+        }
+      }
+
+      workerLogger.log(`[INFO] Total exported rows: ${state.rows.length}`);
+    }
+  };
+
+  await Promise.all(iframes.map((iframe, idx) => workerLoop(idx + 1, iframe)));
+  ui.iframeHost.textContent = '';
 
   state.running = false;
   ui.start.disabled = false;
@@ -261,7 +322,7 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
   state.lastJson = JSON.stringify(state.rows, null, 2);
   state.lastCsv = rowsToCsv(state.rows);
 
-  logger.log(`\nDone. Total exported rows: ${state.rows.length}`);
+  logger.log(`\n[OK] Done. Total exported rows: ${state.rows.length}`);
 }
 
 export function exportCsv(state: AppState): string {

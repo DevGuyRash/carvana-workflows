@@ -9,9 +9,9 @@ export interface Logger {
 export function createLogger(ui: AppUi): Logger {
   const setStatus = (line: string) => {
     const pre = ui.status;
+    const wasNearBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 30;
     pre.textContent += (pre.textContent ? '\n' : '') + line;
-    const nearBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 30;
-    if (nearBottom) pre.scrollTop = pre.scrollHeight;
+    if (wasNearBottom) pre.scrollTop = pre.scrollHeight;
   };
 
   return {
@@ -20,7 +20,7 @@ export function createLogger(ui: AppUi): Logger {
     },
     logDebug: (line: string) => {
       if (!ui.debug?.checked) return;
-      setStatus(`   ?? ${line}`);
+      setStatus(`[DEBUG] ${line}`);
     },
     clear: () => {
       ui.status.textContent = '';
