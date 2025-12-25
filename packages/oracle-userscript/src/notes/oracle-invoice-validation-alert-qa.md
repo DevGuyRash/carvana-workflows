@@ -10,7 +10,7 @@
 - [ ] Sign in to the Oracle AP sandbox with non-production credentials.
 - [ ] Load an invoice header that exposes validation state without altering live data.
 - [ ] Enable the Oracle userscript build containing the validation alert workflow.
-- [ ] Open the HUD menu and confirm the workflow auto-run toggle is enabled for the invoice page.
+- [ ] Open the HUD menu → Automations and confirm the task is enabled for the invoice page.
 
 ## Baseline Selector Verification
 - [ ] Open DevTools Elements panel and locate the `ValidationStatus` header cell.

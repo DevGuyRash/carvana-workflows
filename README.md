@@ -10,7 +10,7 @@ Shared TypeScript core:
 - Non‑brittle selectors (`css/id/role/tag/type/attributes/text`, `and/or/not/within/nth`, `visible`)
 - Wait utilities with MutationObserver + polling + stability time
 - Declarative workflows (click/type/wait/extract/branch/error) with persistence/resume
-- Dynamic menu (Shadow DOM): **Workflows**, **Selectors** (JSON editor + Test), **Theme**, **Storage**, **Logs**
+- Dynamic menu (Shadow DOM): **Actions**, **Automations**, **Settings** (Theme/Storage/Logs) + **Developer mode** for selectors/JSON
 
 > Looking to build your own pages/workflows? See **[AGENTS.md](./AGENTS.md)**.
 

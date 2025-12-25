@@ -390,6 +390,7 @@ export class Engine {
     const prev = this.autoRunStatuses.get(wf.id);
     if (prev === status && level === 'info') return;
     this.autoRunStatuses.set(wf.id, status);
+    this.ui.setAutoRunStatus(wf.id, { status, message });
     this.ui.appendLog(message, level);
   }
 
@@ -934,6 +935,7 @@ export class Engine {
     };
 
     let success = false;
+    let errorMessage: string | null = null;
 
     if (!nested && !options.silent) {
       this.ui.appendLog(`Running ${wf.label} (${displayLabel})`);
@@ -959,9 +961,18 @@ export class Engine {
       console.error(e);
       success = false;
       const message = e?.message ?? String(e ?? 'unknown error');
+      errorMessage = message;
       this.ui.appendLog(`Workflow "${wf.label}" failed: ${message}`, options.silent ? 'debug' : 'info');
     } finally {
       if (!nested) this.running = wasRunning;
+    }
+    if (!nested) {
+      this.ui.recordWorkflowOutcome(wf.id, {
+        status: success ? 'ok' : 'error',
+        at: Date.now(),
+        message: errorMessage ?? undefined,
+        manual: !options.silent
+      });
     }
     return success;
   }

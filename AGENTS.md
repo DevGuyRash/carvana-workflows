@@ -10,7 +10,7 @@ This document is the hands-on guide for building and evolving automations (pages
 - **Workflow**: A sequence of **actions** (click/type/wait/extract/branch/error). You can persist and resume.
 - **Selectors**: Robust, composable definitions (`SelectorSpec`) that locate elements without brittleness.
 - **Engine**: Runs workflows, stores last step/workflow, and integrates with the menu.
-- **Menu**: A Shadow‑DOM panel with tabs (Workflows, Selectors, Options, Theme, Storage, Logs). You can edit selectors at runtime and control workflow auto-run behavior directly from the Workflows tab.
+- **Menu**: A Shadow-DOM panel with **Actions**, **Automations**, and **Settings** (Theme/Storage/Logs). Developer mode reveals selector JSON editing inside task details and advanced diagnostics.
 
 ---
 
@@ -87,12 +87,12 @@ Register the page in your `src/index.ts` (order matters: first match wins) and r
 
 ## Authoring a Workflow
 
-* Start with a rough flow using generic selectors (or just text), then open **Menu → Selectors** to refine.
+* Start with a rough flow using generic selectors (or just text), then open **Menu → Developer mode → Task detail → Selectors** to refine.
 * Use `postWaitFor` on `click` when the click opens a panel/list/etc.
 * Use `waitFor` when you need to wait for contents to appear.
 * Use `branch` to handle missing elements or alternate paths.
 * Use `extract` + `present` for quick UI feedback, and `copyToClipboard` to move data to your clipboard.
-* Toggle **Auto run** in the Workflows tab to launch a workflow automatically when its page detector matches; enable **Repeat** to allow re-running on subsequent detections (with guardrails that prevent rapid loops).
+* Toggle **Auto** in **Automations** (or the task detail view) to launch a workflow automatically when its page detector matches; enable **Repeat** to allow re-running on subsequent detections (with guardrails that prevent rapid loops).
 * Store each workflow definition in its own file (e.g., `src/workflows/<workflow-id>.ts`) and import it into the page module; avoid defining multiple workflows inside a single page file.
 * For long-running single clicks that must succeed (e.g., Oracle’s “Expand Search — Invoice”), use the shared `click` action’s `postWaitFor` + optional `postWaitTimeoutMs`/`postWaitPollMs` so the engine keeps retrying until the expected state appears, instead of building ad-hoc loops inside workflows.
 
@@ -155,7 +155,7 @@ Engine stores:
 
 * `lastWorkflow` (id + timestamp)
 * `lastStep` (index)
-* Config and selectors via `Store` (GM_*), export/import in **Storage** tab.
+* Config and selectors via `Store` (GM_*), export/import in **Settings → Storage**.
 * Auto-run preferences per workflow (`auto`, `repeat`, `lastRun` metadata) so automations remember whether to launch themselves.
 
 You can store arbitrary KV per workflow if you need it (extend in your actions).
@@ -188,7 +188,7 @@ Rebuild and reinstall.
 ## Testing & Debugging
 
 * Use the **Demo** workflows first to verify plumbing (copy title/info).
-* Use **Selectors → Test Match** to highlight current selector matches.
+* Use **Developer mode → Task detail → Selectors → Test Match** to highlight current selector matches.
 * If the menu isn’t visible, ensure your userscript is enabled and the URL matches your `@match`.
 * If a page doesn’t show expected workflows, your **detector** likely didn’t match. Temporarily switch to a fallback demo page or relax your detector.
 * Use browser devtools + Console for logs.

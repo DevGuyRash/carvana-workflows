@@ -204,6 +204,12 @@ export interface WorkflowDefinition {
   id: string;
   label: string;
   description?: string;
+  /** Optional tags used for UI search/filtering */
+  tags?: string[];
+  /** Optional intent hint for UI grouping */
+  intent?: 'action' | 'automation' | 'both';
+  /** Optional risk level for auto-run confirmation */
+  riskLevel?: 'safe' | 'caution' | 'danger';
   enabledWhen?: ConditionSpec;
   steps: Action[];
   /** Persisted options available as {{opt.KEY}} */
