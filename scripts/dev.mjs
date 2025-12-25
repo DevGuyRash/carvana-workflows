@@ -19,9 +19,16 @@ function run(command, args, name) {
 }
 
 const isWindows = process.platform === 'win32';
-const npmCommand = isWindows ? (process.env.ComSpec || 'cmd.exe') : 'npm';
-const npmArgs = (args) =>
-  isWindows ? ['/d', '/s', '/c', 'npm', ...args] : args;
+const npmExecPath = process.env.npm_execpath;
+const npmCommand = npmExecPath
+  ? process.execPath
+  : isWindows
+    ? (process.env.ComSpec || 'cmd.exe')
+    : 'npm';
+const npmArgs = (args) => {
+  if (npmExecPath) return [npmExecPath, ...args];
+  return isWindows ? ['/d', '/s', '/c', 'npm', ...args] : args;
+};
 
 const server = run(npmCommand, npmArgs(['run', 'serve:userscripts']), 'serve');
 const watcher = run(npmCommand, npmArgs(['run', 'build:watch']), 'build');
