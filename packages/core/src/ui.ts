@@ -169,6 +169,15 @@ export class MenuUI {
     this.renderLogs();
     this.syncMenuStateUI();
     this.renderAll();
+
+    // Close detail pane on Escape key
+    this.shadow.addEventListener('keydown', (ev: Event) => {
+      const keyEvent = ev as KeyboardEvent;
+      if (keyEvent.key === 'Escape' && this.container.classList.contains('cv-detail-open')) {
+        keyEvent.preventDefault();
+        this.closeDetail();
+      }
+    });
   }
 
   setPage(page?: PageDefinition){
@@ -935,12 +944,15 @@ export class MenuUI {
 
     const actionIntent = this.isActionIntent(wf);
 
+    const isSplit = this.container.classList.contains('cv-layout-split');
     detail.innerHTML = `
       <div class="cv-detail-header">
-        ${this.container.classList.contains('cv-layout-split') ? '' : '<button class="cv-btn secondary cv-back" data-detail-back>Back</button>'}
-        <div class="cv-detail-title">${wf.label}</div>
-        <div class="cv-detail-desc">${wf.description ?? ''}</div>
-        ${badges ? `<div class="cv-badges">${badges}</div>` : ''}
+        <button class="cv-btn secondary cv-detail-close" data-detail-back title="Close details (Esc)">${isSplit ? '&times;' : '&larr; Back'}</button>
+        <div class="cv-detail-header-content">
+          <div class="cv-detail-title">${wf.label}</div>
+          <div class="cv-detail-desc">${wf.description ?? ''}</div>
+          ${badges ? `<div class="cv-badges">${badges}</div>` : ''}
+        </div>
       </div>
       <div class="cv-detail-actions">
         <button class="cv-btn" data-detail-run="${wf.id}" ${manualAvailable ? '' : 'disabled'}>Run now${profilesEnabled ? ` (${profileLabel(activeProfile)})` : ''}</button>
@@ -1746,11 +1758,13 @@ export class MenuUI {
         break;
       case 'number':
         input = document.createElement('input');
+        input.className = 'cv-input';
         (input as HTMLInputElement).type = 'number';
         (input as HTMLInputElement).value = String(value ?? '');
         break;
       case 'select':
         input = document.createElement('select');
+        input.className = 'cv-input cv-select';
         (opt.choices || []).forEach(c => {
           const o = document.createElement('option');
           o.value = c.value; o.textContent = c.label;
@@ -1771,6 +1785,7 @@ export class MenuUI {
         break;
       default: // string
         input = document.createElement('input');
+        input.className = 'cv-input';
         (input as HTMLInputElement).type = 'text';
         (input as HTMLInputElement).value = String(value ?? '');
     }
@@ -1987,6 +2002,7 @@ export class MenuUI {
       .cv-panel{
         position: fixed; bottom: 84px; right: 20px;
         width: min(94vw, 680px); max-height: 75vh; overflow: hidden;
+        display: flex; flex-direction: column;
         background: var(--cv-panel-bg, var(--cv-bg));
         color: var(--cv-text);
         border: 1px solid rgba(255,255,255,.06);
@@ -2004,6 +2020,7 @@ export class MenuUI {
 
       /* Header - Clean minimal design */
       .cv-header{
+        flex-shrink: 0;
         display: flex; flex-direction: column; gap: 14px;
         padding: 18px 20px 16px;
         background: linear-gradient(180deg, rgba(255,255,255,.04) 0%, transparent 100%);
@@ -2065,10 +2082,11 @@ export class MenuUI {
         box-shadow: 0 2px 12px rgba(0,0,0,.12);
       }
 
-      /* Body content */
-      .cv-body{ padding: 16px 20px 20px; overflow-y: auto; max-height: calc(75vh - 160px); }
+      /* Body content - fills remaining space, children scroll */
+      .cv-body{ flex: 1 1 auto; min-height: 0; padding: 16px 20px 20px; overflow: hidden; display: flex; flex-direction: column; }
       .cv-section{ display:none; }
-      .cv-section.active{ display:block; animation: cv-fade-in .25s ease; }
+      .cv-section.active{ display:flex; flex-direction: column; flex: 1 1 auto; animation: cv-fade-in .25s ease; min-height: 0; overflow: hidden; }
+      .cv-section-toolbar{ flex-shrink: 0; }
       @keyframes cv-fade-in{ from{ opacity: 0; transform: translateY(6px); } to{ opacity: 1; transform: translateY(0); } }
 
       /* Section Toolbar */
@@ -2080,9 +2098,11 @@ export class MenuUI {
 
       /* Filter Chips - Segmented control style */
       .cv-filters{
-        display: flex; gap: 2px;
+        display: flex; gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
         background: rgba(255,255,255,.04);
-        border-radius: 10px; padding: 3px;
+        border-radius: 10px; padding: 4px;
         flex: 1 1 0;
         width: 100%;
         min-width: 0;
@@ -2090,7 +2110,7 @@ export class MenuUI {
       .cv-chip{
         background: transparent; color: var(--cv-text);
         border: none;
-        border-radius: 8px; padding: 8px 6px;
+        border-radius: 8px; padding: 6px 10px;
         font-size: 12px; font-weight: 500;
         cursor: pointer;
         transition: all .18s ease;
@@ -2098,12 +2118,12 @@ export class MenuUI {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        flex: 1 1 0;
+        flex: 0 1 auto;
         display: flex;
         align-items: center;
         justify-content: center;
         text-align: center;
-        min-width: 0;
+        min-width: max-content;
       }
       .cv-chip:hover{ opacity: .85; background: rgba(255,255,255,.06); }
       .cv-chip.active{
@@ -2117,27 +2137,49 @@ export class MenuUI {
         display: flex; align-items: center;
       }
 
-      /* Layout Grid */
-      .cv-layout{ display:grid; grid-template-columns: 1fr; gap:16px; }
-      .cv-panel.cv-layout-split .cv-layout{ grid-template-columns: 1fr 1fr; }
-      .cv-list-pane{ min-height:0; display:flex; flex-direction:column; gap:10px; }
+      /* Layout Grid - flex-based for proper height distribution */
+      .cv-layout{ display:flex; gap:16px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+      .cv-list-pane{ flex: 1 1 50%; min-width: 0; min-height: 0; display:flex; flex-direction:column; gap:10px; overflow-y: auto; padding-bottom: 16px; }
+      .cv-panel.cv-layout-split.cv-detail-open .cv-list-pane{ flex: 0 0 50%; }
+      #cv-actions-list, #cv-automations-list{ display:flex; flex-direction:column; gap:10px; }
 
-      /* Detail Pane - Card style */
+      /* Detail Pane - Card style with internal scroll */
       .cv-detail-pane{
         display:none;
+        flex: 1 1 50%;
+        min-width: 0;
+        min-height: 0;
         border: 1px solid rgba(255,255,255,.08);
         border-radius: 16px; padding: 18px;
+        padding-bottom: 32px;
         background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
-        overflow-y:auto; max-height: calc(70vh - 160px);
         box-shadow: 0 4px 20px rgba(0,0,0,.1) inset;
+        overflow-y: auto;
       }
-      .cv-panel.cv-layout-split .cv-detail-pane{ display:block; }
+      .cv-panel.cv-layout-split.cv-detail-open .cv-detail-pane{ display:block; }
       .cv-panel.cv-detail-open .cv-detail-pane{ display:block; }
-      .cv-panel.cv-detail-open:not(.cv-layout-split) .cv-section.active .cv-list-pane{ display:none; }
+      .cv-panel.cv-detail-open:not(.cv-layout-split) .cv-list-pane{ display:none; }
       .cv-panel:not(.cv-detail-open) .cv-detail-pane{ display:none; }
 
       /* Detail Header */
-      .cv-detail-header{ display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+      .cv-detail-header{ display:flex; flex-direction:column; gap:8px; margin-bottom:16px; flex-shrink: 0; }
+      .cv-detail-close{
+        align-self: flex-start;
+        padding: 6px 12px; font-size: 13px;
+        min-width: 0; margin-bottom: 4px;
+      }
+      .cv-panel.cv-layout-split .cv-detail-header{
+        flex-direction: row; align-items: flex-start; gap: 12px;
+      }
+      .cv-panel.cv-layout-split .cv-detail-header-content{
+        flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;
+      }
+      .cv-panel.cv-layout-split .cv-detail-close{
+        flex-shrink: 0; order: 2;
+        padding: 4px 12px; font-size: 16px; font-weight: 400;
+        line-height: 1; border-radius: 8px;
+      }
+      .cv-detail-pane{ position: relative; }
       .cv-detail-title{ font-weight: 700; font-size: 17px; letter-spacing: -.2px; }
       .cv-detail-desc{ font-size: 13px; opacity: .7; line-height: 1.5; }
       .cv-detail-actions{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
@@ -2361,6 +2403,47 @@ export class MenuUI {
       .cv-input:focus{ border-color: var(--cv-accent); background: rgba(0,0,0,.3); outline: none; }
       .cv-input::placeholder{ color: rgba(255,255,255,.35); }
 
+      /* Select dropdowns - Modern custom styling */
+      select.cv-select,
+      .cv-select{
+        appearance: none !important;
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        background-color: rgba(0,0,0,.2);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23f5f7fb' fill-opacity='0.6' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 36px;
+        cursor: pointer;
+        min-width: 90px;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 10px;
+        padding: 9px 36px 9px 14px;
+        color: var(--cv-text);
+        font-size: 13px;
+      }
+      select.cv-select:hover,
+      .cv-select:hover{
+        border-color: rgba(255,255,255,.2);
+        background-color: rgba(0,0,0,.25);
+      }
+      select.cv-select:focus,
+      .cv-select:focus{
+        border-color: var(--cv-accent);
+        background-color: rgba(0,0,0,.3);
+        outline: none;
+      }
+      select.cv-select option,
+      .cv-select option{
+        background: #1a1b1f;
+        color: var(--cv-text);
+        padding: 10px 14px;
+      }
+      select.cv-select option:checked,
+      .cv-select option:checked{
+        background: linear-gradient(135deg, var(--cv-primary), color-mix(in srgb, var(--cv-primary) 70%, #000));
+      }
+
       /* Empty state */
       .cv-empty{ opacity: .5; padding: 20px 12px; text-align: center; font-size: 13px; }
 
@@ -2394,13 +2477,75 @@ export class MenuUI {
       .cv-theme-grid input[type="color"]{
         width:100%; min-width: 100px; height: 42px;
         border: 1px solid rgba(255,255,255,.15); border-radius: 10px;
-        background: transparent; padding: 3px; cursor: pointer;
+        background: transparent; padding: 4px; cursor: pointer;
+        transition: border-color .18s ease, box-shadow .18s ease;
+      }
+      .cv-theme-grid input[type="color"]:hover{
+        border-color: rgba(255,255,255,.25);
+      }
+      .cv-theme-grid input[type="color"]:focus{
+        border-color: var(--cv-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--cv-accent) 20%, transparent);
+        outline: none;
+      }
+      .cv-theme-grid input[type="color"]::-webkit-color-swatch-wrapper{ padding: 0; }
+      .cv-theme-grid input[type="color"]::-webkit-color-swatch{
+        border: none; border-radius: 6px;
+      }
+      .cv-theme-grid input[type="color"]::-moz-color-swatch{
+        border: none; border-radius: 6px;
       }
       .cv-opacity{ display:flex; align-items:center; gap:12px; color: var(--cv-text); font-size: 13px; grid-column: span 2; }
-      .cv-opacity input[type="range"]{ flex:1; min-width: 120px; accent-color: var(--cv-accent); }
+      .cv-opacity input[type="range"]{ flex:1; min-width: 120px; }
       .cv-opacity span:first-child{ font-weight: 500; }
       .cv-opacity span:last-child{ min-width: 44px; text-align: right; opacity: .7; font-weight: 500; }
       .cv-theme-actions{ display:flex; gap:12px; align-items:center; grid-column: span 2; margin-top: 8px; }
+
+      /* Range slider - Modern custom styling */
+      input[type="range"]{
+        -webkit-appearance: none; appearance: none;
+        background: transparent; cursor: pointer;
+        height: 20px;
+      }
+      input[type="range"]::-webkit-slider-runnable-track{
+        height: 6px; border-radius: 3px;
+        background: rgba(255,255,255,.12);
+      }
+      input[type="range"]::-webkit-slider-thumb{
+        -webkit-appearance: none; appearance: none;
+        width: 18px; height: 18px; border-radius: 50%;
+        background: var(--cv-accent);
+        border: 2px solid rgba(255,255,255,.9);
+        margin-top: -6px;
+        box-shadow: 0 2px 6px rgba(0,0,0,.3);
+        transition: transform .15s ease, box-shadow .15s ease;
+      }
+      input[type="range"]::-webkit-slider-thumb:hover{
+        transform: scale(1.1);
+        box-shadow: 0 3px 10px rgba(0,0,0,.4);
+      }
+      input[type="range"]::-moz-range-track{
+        height: 6px; border-radius: 3px;
+        background: rgba(255,255,255,.12);
+      }
+      input[type="range"]::-moz-range-thumb{
+        width: 18px; height: 18px; border-radius: 50%;
+        background: var(--cv-accent);
+        border: 2px solid rgba(255,255,255,.9);
+        box-shadow: 0 2px 6px rgba(0,0,0,.3);
+        transition: transform .15s ease, box-shadow .15s ease;
+      }
+      input[type="range"]::-moz-range-thumb:hover{
+        transform: scale(1.1);
+        box-shadow: 0 3px 10px rgba(0,0,0,.4);
+      }
+      input[type="range"]:focus{ outline: none; }
+      input[type="range"]:focus::-webkit-slider-thumb{
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--cv-accent) 30%, transparent), 0 2px 6px rgba(0,0,0,.3);
+      }
+      input[type="range"]:focus::-moz-range-thumb{
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--cv-accent) 30%, transparent), 0 2px 6px rgba(0,0,0,.3);
+      }
 
       /* Screen reader only */
       .cv-visually-hidden{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
@@ -2411,6 +2556,30 @@ export class MenuUI {
           transition-duration: 0ms !important;
           animation-duration: 0ms !important;
         }
+      }
+
+      /* Custom Scrollbars - Modern thin style */
+      .cv-list-pane::-webkit-scrollbar,
+      .cv-detail-pane::-webkit-scrollbar{
+        width: 6px;
+      }
+      .cv-list-pane::-webkit-scrollbar-track,
+      .cv-detail-pane::-webkit-scrollbar-track{
+        background: transparent;
+      }
+      .cv-list-pane::-webkit-scrollbar-thumb,
+      .cv-detail-pane::-webkit-scrollbar-thumb{
+        background: rgba(255,255,255,.15);
+        border-radius: 3px;
+      }
+      .cv-list-pane::-webkit-scrollbar-thumb:hover,
+      .cv-detail-pane::-webkit-scrollbar-thumb:hover{
+        background: rgba(255,255,255,.25);
+      }
+      .cv-list-pane,
+      .cv-detail-pane{
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,.15) transparent;
       }
 
       /* CSS Variables */
