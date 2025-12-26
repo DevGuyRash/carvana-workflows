@@ -200,6 +200,20 @@ export interface WorkflowProfilesConfig {
   enabled?: boolean;
 }
 
+export interface WorkflowTriggerConfig {
+  /** Explicitly enable/disable a trigger */
+  enabled?: boolean;
+}
+
+export interface WorkflowTriggersConfig {
+  /** Manual trigger configuration */
+  manual?: WorkflowTriggerConfig;
+  /** Auto trigger configuration; when provided, config supersedes autoRun */
+  auto?: WorkflowTriggerConfig & { config?: WorkflowAutoRunConfig };
+  /** Repeat trigger configuration */
+  repeat?: WorkflowTriggerConfig;
+}
+
 export interface WorkflowDefinition {
   id: string;
   label: string;
@@ -214,7 +228,9 @@ export interface WorkflowDefinition {
   steps: Action[];
   /** Persisted options available as {{opt.KEY}} */
   options?: WorkflowOption[];
-  /** Controls auto-run behaviour (e.g., wait for conditions) */
+  /** Optional trigger configuration (preferred) */
+  triggers?: WorkflowTriggersConfig;
+  /** Controls auto-run behaviour (e.g., wait for conditions); legacy alias for triggers.auto.config */
   autoRun?: WorkflowAutoRunConfig;
   /** Controls profile selector behaviour */
   profiles?: WorkflowProfilesConfig;
