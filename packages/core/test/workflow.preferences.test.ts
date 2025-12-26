@@ -4,7 +4,7 @@ import { Store } from '../src/storage';
 import { WorkflowPreferencesService } from '../src/menu/workflow-preferences';
 
 type GmKey = string;
-type MenuPrefPayload = { version: number; order: string[]; hidden: string[] };
+type MenuPrefPayload = { version: number; order: string[]; hiddenInActions: string[] };
 
 const makeWorkflows = (ids: string[]): WorkflowDefinition[] => ids.map(id => ({
   id,
@@ -47,7 +47,7 @@ describe('workflow preferences service', () => {
     const persisted = store.get<MenuPrefPayload | null>('wf:menu:prefs:page', null);
     expect(persisted).not.toBeNull();
     expect(persisted?.order).toEqual(['wf.two', 'wf.one', 'wf.three']);
-    expect(persisted?.hidden).toEqual(['wf.one']);
+    expect(persisted?.hiddenInActions).toEqual(['wf.one']);
   });
 
   it('toggles hidden state deterministically and exposes visibility helpers', () => {
@@ -66,11 +66,11 @@ describe('workflow preferences service', () => {
     expect(service.isHidden('wf.two')).toBe(false);
 
     const persisted = store.get<MenuPrefPayload | null>('wf:menu:prefs:page', null);
-    expect(persisted?.hidden).toEqual([]);
+    expect(persisted?.hiddenInActions).toEqual([]);
     expect(persisted?.order).toEqual(['wf.one', 'wf.two', 'wf.three']);
   });
 
-  it('falls back to defaults when stored version mismatches', () => {
+  it('migrates legacy payloads when stored version mismatches', () => {
     mem.set('spec:wf:menu:prefs:page', JSON.stringify({
       version: 0,
       order: ['wf.legacy'],
@@ -78,17 +78,17 @@ describe('workflow preferences service', () => {
     }));
 
     const service = new WorkflowPreferencesService(store, 'page');
-    const workflows = makeWorkflows(['wf.one', 'wf.two']);
+    const workflows = makeWorkflows(['wf.legacy', 'wf.one', 'wf.two']);
     const lists = service.partition(workflows);
 
     expect(lists.ordered.map(w => w.id)).toEqual(['wf.one', 'wf.two']);
-    expect(lists.hidden).toHaveLength(0);
+    expect(lists.hidden.map(w => w.id)).toEqual(['wf.legacy']);
 
     const persisted = store.get<MenuPrefPayload | null>('wf:menu:prefs:page', null);
     expect(persisted).not.toBeNull();
-    expect(persisted?.version).toBe(1);
-    expect(persisted?.order).toEqual(['wf.one', 'wf.two']);
-    expect(persisted?.hidden).toEqual([]);
+    expect(persisted?.version).toBe(2);
+    expect(persisted?.order).toEqual(['wf.legacy', 'wf.one', 'wf.two']);
+    expect(persisted?.hiddenInActions).toEqual(['wf.legacy']);
   });
 
   it('warns and retains in-memory state when persistence fails', () => {
@@ -123,7 +123,7 @@ describe('workflow preferences service', () => {
 
     const persisted = store.get<MenuPrefPayload | null>('wf:menu:prefs:page', null);
     expect(persisted?.order).toEqual(['wf.two', 'wf.one', 'wf.three']);
-    expect(persisted?.hidden).toEqual(['wf.three']);
+    expect(persisted?.hiddenInActions).toEqual(['wf.three']);
 
     const unchanged = service.applyMove(workflows, 'wf.three', 0);
     expect(unchanged.ordered.map(w => w.id)).toEqual(['wf.two', 'wf.one']);
@@ -147,6 +147,6 @@ describe('workflow preferences service', () => {
 
     const persisted = store.get<MenuPrefPayload | null>('wf:menu:prefs:page', null);
     expect(persisted?.order).toEqual(['wf.one', 'wf.two', 'wf.three']);
-    expect(persisted?.hidden).toEqual([]);
+    expect(persisted?.hiddenInActions).toEqual([]);
   });
 });

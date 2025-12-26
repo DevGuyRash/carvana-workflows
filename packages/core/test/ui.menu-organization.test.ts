@@ -117,7 +117,7 @@ afterEach(() => {
 describe('MenuUI menu organization', () => {
   it('reorders workflows via pointer drag and persists order', () => {
     const { shadow } = setupMenu();
-    const list = shadow.getElementById('cv-wf-list') as HTMLElement;
+    const list = shadow.getElementById('cv-actions-list') as HTMLElement;
     expect(list).toBeTruthy();
     mockBoundingRects(list);
 
@@ -130,63 +130,64 @@ describe('MenuUI menu organization', () => {
 
     vi.runAllTimers();
 
-    const titles = Array.from(list.querySelectorAll('.cv-wf-title')).map((el) => el.textContent?.trim());
+    const titles = Array.from(list.querySelectorAll('.cv-item-title')).map((el) => el.textContent?.trim());
     expect(titles).toEqual(['Workflow Beta', 'Workflow Gamma', 'Workflow Alpha']);
 
     const persistedRaw = mem.get('spec:wf:menu:prefs:demo.page');
     expect(persistedRaw).toBeTruthy();
     const persisted = JSON.parse(persistedRaw!);
     expect(persisted.order.slice(0, 3)).toEqual(['wf-beta', 'wf-gamma', 'wf-alpha']);
-    expect(persisted.hidden).toEqual([]);
+    expect(persisted.hiddenInActions).toEqual([]);
   });
 
   it('moves workflows between visible and hidden lists', () => {
     const { shadow } = setupMenu();
-    const list = shadow.getElementById('cv-wf-list') as HTMLElement;
+    const list = shadow.getElementById('cv-actions-list') as HTMLElement;
     mockBoundingRects(list);
 
-    const hideButton = shadow.querySelector<HTMLButtonElement>('[data-wf-hide="wf-beta"]');
-    expect(hideButton).toBeTruthy();
-    hideButton!.click();
+    const betaRow = list.querySelector<HTMLElement>('[data-action-row="wf-beta"]');
+    expect(betaRow).toBeTruthy();
+    betaRow!.click();
 
-    vi.advanceTimersByTime(250);
+    const detail = shadow.getElementById('cv-actions-detail') as HTMLElement;
+    const visibilityToggle = detail.querySelector<HTMLInputElement>('[data-detail-visible="wf-beta"]');
+    expect(visibilityToggle).toBeTruthy();
+    visibilityToggle!.click();
 
-    const hiddenBadge = shadow.getElementById('cv-hidden-count');
-    expect(hiddenBadge?.textContent).toBe('1');
+    const archivedToggle = shadow.getElementById('cv-archived-toggle') as HTMLButtonElement;
+    expect(archivedToggle).toBeTruthy();
+    expect(archivedToggle.textContent).toBe('Archived (1)');
 
-    const hiddenList = shadow.getElementById('cv-hidden-list') as HTMLElement;
-    const hiddenTitles = Array.from(hiddenList.querySelectorAll('.cv-hidden-title')).map((el) => el.textContent?.trim());
-    expect(hiddenTitles).toContain('Workflow Beta');
+    archivedToggle.click();
+
+    const archivedList = shadow.getElementById('cv-actions-archived-list') as HTMLElement;
+    const archivedTitles = Array.from(archivedList.querySelectorAll('.cv-item-title')).map((el) => el.textContent?.trim());
+    expect(archivedTitles).toContain('Workflow Beta');
 
     const hiddenPrefsRaw = mem.get('spec:wf:menu:prefs:demo.page');
     expect(hiddenPrefsRaw).toBeTruthy();
     const hiddenPrefs = JSON.parse(hiddenPrefsRaw!);
-    expect(hiddenPrefs.hidden).toContain('wf-beta');
+    expect(hiddenPrefs.hiddenInActions).toContain('wf-beta');
 
-    const searchInput = shadow.getElementById('cv-hidden-search') as HTMLInputElement;
-    expect(searchInput.disabled).toBe(false);
-
-    const unhideButton = hiddenList.querySelector<HTMLButtonElement>('[data-hidden-unhide="wf-beta"]');
+    const unhideButton = archivedList.querySelector<HTMLButtonElement>('[data-archived-unhide="wf-beta"]');
     expect(unhideButton).toBeTruthy();
     unhideButton!.click();
 
-    vi.runAllTimers();
-
-    const postHiddenTitles = Array.from(hiddenList.querySelectorAll('.cv-hidden-title'));
-    expect(postHiddenTitles).toHaveLength(0);
-    expect(hiddenBadge?.textContent).toBe('0');
-    expect(searchInput.disabled).toBe(true);
+    const archivedWrap = shadow.getElementById('cv-actions-archived') as HTMLElement;
+    expect(archivedWrap.hidden).toBe(true);
+    expect(archivedToggle.textContent).toBe('Archived (0)');
 
     const focusTarget = shadow.activeElement as HTMLElement | null;
-    expect(focusTarget?.getAttribute('data-wf-hide')).toBe('wf-beta');
+    const focusId = focusTarget?.getAttribute('data-action-run') ?? focusTarget?.getAttribute('data-action-row');
+    expect(focusId).toBe('wf-beta');
 
     const prefsAfter = JSON.parse(mem.get('spec:wf:menu:prefs:demo.page')!);
-    expect(prefsAfter.hidden).not.toContain('wf-beta');
+    expect(prefsAfter.hiddenInActions).not.toContain('wf-beta');
   });
 
   it('supports keyboard drag with accessible announcements', () => {
     const { shadow } = setupMenu();
-    const list = shadow.getElementById('cv-wf-list') as HTMLElement;
+    const list = shadow.getElementById('cv-actions-list') as HTMLElement;
     mockBoundingRects(list);
 
     const handles = Array.from(list.querySelectorAll<HTMLButtonElement>('[data-drag-handle]'));
@@ -199,12 +200,12 @@ describe('MenuUI menu organization', () => {
     betaHandle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
     betaHandle.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
 
-    const announcer = shadow.getElementById('cv-wf-announcer');
+    const announcer = shadow.getElementById('cv-list-announcer');
     expect(announcer?.textContent).toBe('Workflow Beta dropped at position 1 of 3.');
 
     vi.runAllTimers();
 
-    const titles = Array.from(list.querySelectorAll('.cv-wf-title')).map((el) => el.textContent?.trim());
+    const titles = Array.from(list.querySelectorAll('.cv-item-title')).map((el) => el.textContent?.trim());
     expect(titles).toEqual(['Workflow Beta', 'Workflow Alpha', 'Workflow Gamma']);
 
     const persistedRaw = mem.get('spec:wf:menu:prefs:demo.page');

@@ -1,13 +1,13 @@
 import type { WorkflowDefinition } from '../types';
 import { Store } from '../storage';
 
-const PREFS_VERSION = 1 as const;
+const PREFS_VERSION = 2 as const;
 const STORAGE_PREFIX = 'wf:menu:prefs:';
 
 export type WorkflowPreferencesState = {
   version: typeof PREFS_VERSION;
   order: string[];
-  hidden: string[];
+  hiddenInActions: string[];
 };
 
 export type WorkflowVisibilityLists = {
@@ -18,7 +18,7 @@ export type WorkflowVisibilityLists = {
 const DEFAULT_STATE: WorkflowPreferencesState = {
   version: PREFS_VERSION,
   order: [],
-  hidden: []
+  hiddenInActions: []
 };
 
 function sanitizeIds(value: unknown): string[] {
@@ -38,17 +38,17 @@ function cloneState(state: WorkflowPreferencesState): WorkflowPreferencesState {
   return {
     version: PREFS_VERSION,
     order: [...state.order],
-    hidden: [...state.hidden]
+    hiddenInActions: [...state.hiddenInActions]
   };
 }
 
 function statesEqual(a: WorkflowPreferencesState, b: WorkflowPreferencesState): boolean {
-  if (a.order.length !== b.order.length || a.hidden.length !== b.hidden.length) return false;
+  if (a.order.length !== b.order.length || a.hiddenInActions.length !== b.hiddenInActions.length) return false;
   for (let i = 0; i < a.order.length; i += 1) {
     if (a.order[i] !== b.order[i]) return false;
   }
-  for (let i = 0; i < a.hidden.length; i += 1) {
-    if (a.hidden[i] !== b.hidden[i]) return false;
+  for (let i = 0; i < a.hiddenInActions.length; i += 1) {
+    if (a.hiddenInActions[i] !== b.hiddenInActions[i]) return false;
   }
   return true;
 }
@@ -69,17 +69,17 @@ export class WorkflowPreferencesService {
   }
 
   getHiddenIds(): readonly string[] {
-    return this.state.hidden;
+    return this.state.hiddenInActions;
   }
 
   isHidden(workflowId: string): boolean {
-    return this.state.hidden.includes(workflowId);
+    return this.state.hiddenInActions.includes(workflowId);
   }
 
   partition(workflows: readonly WorkflowDefinition[]): WorkflowVisibilityLists {
     const runtimeIds = workflows.map(w => w.id);
     const reconciled = this.reconcile(runtimeIds);
-    const hiddenSet = new Set(reconciled.hidden);
+    const hiddenSet = new Set(reconciled.hiddenInActions);
     const byId = new Map(workflows.map(w => [w.id, w] as const));
 
     const ordered: WorkflowDefinition[] = [];
@@ -98,7 +98,7 @@ export class WorkflowPreferencesService {
   applyMove(workflows: readonly WorkflowDefinition[], workflowId: string, targetIndex: number): WorkflowVisibilityLists {
     const runtimeIds = workflows.map(w => w.id);
     const reconciled = this.reconcile(runtimeIds);
-    const hiddenSet = new Set(reconciled.hidden);
+    const hiddenSet = new Set(reconciled.hiddenInActions);
     if (hiddenSet.has(workflowId)) {
       return this.partition(workflows);
     }
@@ -134,7 +134,7 @@ export class WorkflowPreferencesService {
     const nextState: WorkflowPreferencesState = {
       version: PREFS_VERSION,
       order: nextOrder,
-      hidden: reconciled.hidden
+      hiddenInActions: reconciled.hiddenInActions
     };
 
     this.persist(nextState);
@@ -144,7 +144,7 @@ export class WorkflowPreferencesService {
   toggleHidden(workflows: readonly WorkflowDefinition[], workflowId: string, nextHidden?: boolean): WorkflowVisibilityLists {
     const runtimeIds = workflows.map(w => w.id);
     const reconciled = this.reconcile(runtimeIds);
-    const hiddenSet = new Set(reconciled.hidden);
+    const hiddenSet = new Set(reconciled.hiddenInActions);
     const shouldHide = typeof nextHidden === 'boolean' ? nextHidden : !hiddenSet.has(workflowId);
 
     let changed = false;
@@ -166,7 +166,7 @@ export class WorkflowPreferencesService {
     const nextState: WorkflowPreferencesState = {
       version: PREFS_VERSION,
       order: reconciled.order,
-      hidden: Array.from(hiddenSet)
+      hiddenInActions: Array.from(hiddenSet)
     };
 
     this.persist(nextState);
@@ -178,25 +178,51 @@ export class WorkflowPreferencesService {
     const nextState: WorkflowPreferencesState = {
       version: PREFS_VERSION,
       order: [...runtimeIds],
-      hidden: []
+      hiddenInActions: []
     };
     this.persist(nextState);
     return this.partition(workflows);
   }
 
+  private migrateLegacy(raw: Record<string, unknown>): WorkflowPreferencesState | null {
+    const order = sanitizeIds(raw.order);
+    let hidden = sanitizeIds(raw.hiddenInActions);
+    if (!hidden.length) hidden = sanitizeIds(raw.hidden);
+    if (!hidden.length) hidden = sanitizeIds(raw.hiddenWorkflows);
+    if (!hidden.length) hidden = sanitizeIds(raw.hiddenIds);
+    if (!hidden.length && raw.showInActions && typeof raw.showInActions === 'object') {
+      const map = raw.showInActions as Record<string, unknown>;
+      hidden = Object.entries(map)
+        .filter(([, value]) => value === false)
+        .map(([id]) => id);
+    }
+    if (!order.length && !hidden.length) return null;
+    return {
+      version: PREFS_VERSION,
+      order,
+      hiddenInActions: hidden
+    };
+  }
+
   private load(): WorkflowPreferencesState {
-    const raw = this.store.get<WorkflowPreferencesState | null>(this.key, null);
+    const raw = this.store.get<Record<string, unknown> | null>(this.key, null);
     if (!raw || typeof raw !== 'object') {
       return cloneState(DEFAULT_STATE);
     }
-    if (raw.version !== PREFS_VERSION) {
-      return cloneState(DEFAULT_STATE);
+    if ((raw as WorkflowPreferencesState).version === PREFS_VERSION) {
+      return {
+        version: PREFS_VERSION,
+        order: sanitizeIds((raw as WorkflowPreferencesState).order),
+        hiddenInActions: sanitizeIds((raw as WorkflowPreferencesState).hiddenInActions)
+      };
     }
-    return {
-      version: PREFS_VERSION,
-      order: sanitizeIds(raw.order),
-      hidden: sanitizeIds(raw.hidden)
-    };
+
+    const migrated = this.migrateLegacy(raw);
+    if (migrated) {
+      this.persist(migrated);
+      return migrated;
+    }
+    return cloneState(DEFAULT_STATE);
   }
 
   private reconcile(workflowIds: readonly string[]): WorkflowPreferencesState {
@@ -218,11 +244,11 @@ export class WorkflowPreferencesService {
       nextOrder.push(id);
     }
 
-    const nextHidden = this.state.hidden.filter(id => runtimeSet.has(id));
+    const nextHidden = this.state.hiddenInActions.filter(id => runtimeSet.has(id));
     const nextState: WorkflowPreferencesState = {
       version: PREFS_VERSION,
       order: nextOrder,
-      hidden: nextHidden
+      hiddenInActions: nextHidden
     };
 
     if (!statesEqual(this.state, nextState)) {
