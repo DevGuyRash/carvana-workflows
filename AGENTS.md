@@ -6,11 +6,12 @@ This document is the hands-on guide for building and evolving automations (pages
 
 ## Core Concepts
 
-- **Page**: A detectable surface (e.g., “Jira – Issue View”). Pages have a `detector` (conditions) and a list of **workflows**.
-- **Workflow**: A sequence of **actions** (click/type/wait/extract/branch/error). You can persist and resume.
+- **Page**: A detectable surface (e.g., "Jira - Issue View"). Pages have a `detector` (conditions) and a list of **workflows**.
+- **Workflow**: A sequence of **actions** plus metadata (`enabledWhen`, `options`, `triggers`/`autoRun`, `intent`, `riskLevel`, `profiles`, `internal`).
 - **Selectors**: Robust, composable definitions (`SelectorSpec`) that locate elements without brittleness.
-- **Engine**: Runs workflows, stores last step/workflow, and integrates with the menu.
-- **Menu**: A Shadow-DOM panel with **Actions**, **Automations**, and **Settings** (Theme/Storage/Logs). Developer mode reveals selector JSON editing inside task details and advanced diagnostics.
+- **Engine**: Runs workflows, manages auto-run, persists options/profiles, and refreshes detection on SPA navigation.
+- **Menu**: Shadow-DOM panel with **Actions**, **Automations**, and **Settings** (Theme/Storage/Logs/Advanced). Search/filter/sort + archive/reorder actions; Automations show auto-run status. Operator vs Developer modes; Developer mode unlocks selector JSON editing and Task JSON tools.
+- **Profiles + Options**: Per-workflow saved settings (P1/P2/P3) that feed templates and actions.
 
 ---
 
@@ -20,7 +21,7 @@ Available fields (you can combine them):
 
 - `selector` (CSS), `id`, `tag`, `type`, `role`
 - `text` { `equals` | `includes` | `regex` } with `caseInsensitive`, `trim`
-- `attribute`: object of attribute matchers with `equals/includes/regex`
+- `attribute`: object of matchers (string literal or `{ equals|includes|regex, flags }`)
 - `visible`: require visibility
 - `within`: scope to an ancestor that matches another `SelectorSpec`
 - Logical: `and`, `or`, `not`
@@ -32,16 +33,27 @@ Available fields (you can combine them):
 
 ## Actions DSL
 
-- `waitFor` — wait for element by selector; supports `timeoutMs`, `visibleOnly`, `minStabilityMs`.
+- `waitFor` — wait for element by selector; supports `timeoutMs`, `pollIntervalMs`, `visibleOnly`, `minStabilityMs`.
 - `delay` — sleep for ms.
 - `click` — optional `preWait`, `postWaitFor` (e.g., wait for a listbox that opens).
 - `type` — `clearFirst`, per‑key delay, optional `postEnter`.
 - `selectFromList` — pick an item in a popup/list using list spec + item spec.
-- `extract` — harvest `text/html/value/href/attribute` into a JSON object; `present` to show; `copyToClipboard` to copy.
+- `extract` — harvest `text/html/value/href/attribute/raw` into a JSON object; supports globals (`document.title`, `location.*`, `navigator.userAgent`, `timestamp`).
+- `extractList` — harvest rows using a `list` selector and `fields` (each with `key`, `take`, optional `from`); `limit` can be templated.
+- `captureData` — prompt for pasted text, parse via regex/selector/split patterns, store in `vars`, and optionally `present`/`copyToClipboard`.
 - `branch` — conditional routing (`exists/notExists/textPresent/any/all/not`) to another workflow ID.
+- `execute` — run custom code with context (`vars`, `options`, `profile`, `log`, `runWorkflow`, `setVar`, `getVar`, `store`); optional `assign`.
 - `error` — display a message (can be used in error workflows).
 
 You can add new actions; see **“Adding a new Action”** below.
+
+### Templating (options + vars)
+
+All string fields inside steps are templated at runtime. Use:
+
+- `{{opt.KEY}}` for workflow options (saved per profile).
+- `{{vars.KEY}}` for values captured at runtime (e.g., `captureData` output).
+- `{{profile.id}}` / `{{profile.label}}` when needed.
 
 ---
 
@@ -95,6 +107,30 @@ Register the page in your `src/index.ts` (order matters: first match wins) and r
 * Toggle **Auto** in **Automations** (or the task detail view) to launch a workflow automatically when its page detector matches; enable **Repeat** to allow re-running on subsequent detections (with guardrails that prevent rapid loops).
 * Store each workflow definition in its own file (e.g., `src/workflows/<workflow-id>.ts`) and import it into the page module; avoid defining multiple workflows inside a single page file.
 * For long-running single clicks that must succeed (e.g., Oracle’s “Expand Search — Invoice”), use the shared `click` action’s `postWaitFor` + optional `postWaitTimeoutMs`/`postWaitPollMs` so the engine keeps retrying until the expected state appears, instead of building ad-hoc loops inside workflows.
+* Prefer `options` + templates (`{{opt.*}}`) instead of hard-coded values; use `captureData` when operators paste data.
+* Use `enabledWhen` to gate auto-run and relevance (manual runs still work).
+* Set `intent: 'automation'` for auto-only tasks or `internal: true` for helper workflows.
+* Use `riskLevel: 'caution' | 'danger'` to require confirmation before enabling auto-run.
+* Disable profiles per workflow via `profiles: { enabled: false }` when you do not need multiple option sets.
+
+### Triggers and auto-run config
+
+Preferred: use `triggers` (manual/auto/repeat) and `triggers.auto.config` for settings. `autoRun` still works as a legacy alias.
+
+Auto-run config fields:
+
+- `waitForConditionMs` / `waitForReadyMs` (or `waitForMs`) and `pollIntervalMs`
+- `waitForSelector`, `waitForHiddenSelector`, `waitForInteractableSelector`
+- `respectLoadingIndicator` (default true), `skipReadiness`
+- `retryDelayMs` (for repeat-enabled auto retries)
+- `watchMutations` (boolean or config with `root`, `debounceMs`, `observeAttributes`, `observeChildList`, `observeCharacterData`, `attributeFilter`, `forceAutoRun`)
+- `context` (string/function/object) to decide when repeat runs are allowed even if the URL is unchanged
+
+Trigger knobs:
+
+- `triggers.manual.enabled=false` to disable manual runs (and hide from Actions).
+- `triggers.auto.enabled=false` to disable auto-run even if `autoRun` is set.
+- `triggers.repeat.enabled=false` to disable repeat for that workflow.
 
 ### Oracle auto-run reliability notes
 
@@ -156,7 +192,8 @@ Engine stores:
 * `lastWorkflow` (id + timestamp)
 * `lastStep` (index)
 * Config and selectors via `Store` (GM_*), export/import in **Settings → Storage**.
-* Auto-run preferences per workflow (`auto`, `repeat`, `lastRun` metadata) so automations remember whether to launch themselves.
+* Auto-run preferences per workflow (`auto`, `repeat`, `lastRun` metadata + optional context).
+* Options + profiles per workflow (P1/P2/P3) and per-page menu ordering/archiving.
 
 You can store arbitrary KV per workflow if you need it (extend in your actions).
 
@@ -183,12 +220,16 @@ case 'focus': {
 
 Rebuild and reinstall.
 
+If the new action introduces new selector fields, update `packages/core/src/ui.ts` (`workflowHasSelectors`) so the selector editor and Dev badges stay accurate.
+
 ---
 
 ## Testing & Debugging
 
 * Use the **Demo** workflows first to verify plumbing (copy title/info).
 * Use **Developer mode → Task detail → Selectors → Test Match** to highlight current selector matches.
+* **Settings → Logs** includes a filter + "Show debug logs".
+* **Settings → Advanced** (Developer mode only) lets you load/copy/apply Task JSON in-memory.
 * If the menu isn’t visible, ensure your userscript is enabled and the URL matches your `@match`.
 * If a page doesn’t show expected workflows, your **detector** likely didn’t match. Temporarily switch to a fallback demo page or relax your detector.
 * Use browser devtools + Console for logs.
