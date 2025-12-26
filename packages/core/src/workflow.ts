@@ -38,6 +38,7 @@ import {
   type ProfileId
 } from './profiles';
 import { getRunPrefs, shouldAutoRun, markAutoRun } from './autorun';
+import { resolveAutoRunConfig, resolveTriggerState } from './triggers';
 
 function isGlobalSource(s: SourceSpec): s is GlobalSource {
   return (s as any)?.global != null;
@@ -569,7 +570,7 @@ export class Engine {
 
   private resolveMutationWatchConfig(wf: WorkflowDefinition): WorkflowMutationWatchConfig | null {
     if (wf.internal) return null;
-    const watch = wf.autoRun?.watchMutations;
+    const watch = resolveAutoRunConfig(wf)?.watchMutations;
     if (!watch) return null;
     const base: WorkflowMutationWatchConfig = watch === true ? {} : watch;
     const root = base.root ?? this.deriveMutationRoot(wf);
@@ -578,7 +579,7 @@ export class Engine {
   }
 
   private deriveMutationRoot(wf: WorkflowDefinition): SelectorSpec | undefined {
-    const auto = wf.autoRun;
+    const auto = resolveAutoRunConfig(wf);
     if (!auto) return undefined;
     const candidates: (SelectorSpec | undefined)[] = [
       auto.waitForSelector?.within,
@@ -595,7 +596,7 @@ export class Engine {
   }
 
   private resolveAutoRunContext(wf: WorkflowDefinition): string | undefined {
-    const ctx = wf.autoRun?.context;
+    const ctx = resolveAutoRunConfig(wf)?.context;
     if (!ctx) return undefined;
     try {
       if (typeof ctx === 'string') {
@@ -693,16 +694,23 @@ export class Engine {
       if (wf.internal) continue;
       if (onlyId && wf.id !== onlyId) continue;
       const prefs = getRunPrefs(this.store, wf.id);
-      if (!prefs.auto) {
+      const triggers = resolveTriggerState(wf, prefs);
+      if (!triggers.auto.available) {
+        this.updateAutoRunStatus(wf, 'disabled', `Auto-run disabled for ${wf.label} (trigger disabled).`, 'debug');
+        this.clearAutoRunRetry(wf.id);
+        continue;
+      }
+      if (!triggers.auto.enabled) {
         this.updateAutoRunStatus(wf, 'disabled', `Auto-run disabled for ${wf.label}.`, 'debug');
         this.clearAutoRunRetry(wf.id);
         continue;
       }
       const hrefBefore = typeof globalThis.location?.href === 'string' ? globalThis.location.href : '';
       const contextBefore = this.resolveAutoRunContext(wf);
-      const pollInterval = wf.autoRun?.pollIntervalMs;
-      const conditionTimeout = wf.autoRun?.waitForConditionMs ?? wf.autoRun?.waitForMs;
-      const retryDelay = wf.autoRun?.retryDelayMs ?? 1500;
+      const autoConfig = resolveAutoRunConfig(wf);
+      const pollInterval = autoConfig?.pollIntervalMs;
+      const conditionTimeout = autoConfig?.waitForConditionMs ?? autoConfig?.waitForMs;
+      const retryDelay = autoConfig?.retryDelayMs ?? 1500;
       const shouldRun = shouldAutoRun(prefs, hrefBefore, {
         now: Date.now(),
         force: opts?.force === true && (!onlyId || onlyId === wf.id),
@@ -726,8 +734,8 @@ export class Engine {
         this.scheduleAutoRunRetry(wf, retryDelay);
         continue;
       }
-      const readyTimeout = wf.autoRun?.waitForReadyMs ?? wf.autoRun?.waitForMs;
-      const skipReadiness = wf.autoRun?.skipReadiness === true;
+      const readyTimeout = autoConfig?.waitForReadyMs ?? autoConfig?.waitForMs;
+      const skipReadiness = autoConfig?.skipReadiness === true;
       if (!skipReadiness) {
         this.updateAutoRunStatus(wf, 'waiting-ready', `Auto-run waiting for ${wf.label} to become interactive...`, 'debug');
         const interactive = await this.waitForAutoRunReadiness(wf, {
@@ -839,13 +847,14 @@ export class Engine {
     wf: WorkflowDefinition,
     opts?: { timeoutMs?: number; intervalMs?: number }
   ): Promise<boolean> {
+    const autoConfig = resolveAutoRunConfig(wf);
     const timeoutMs = Math.max(0, opts?.timeoutMs ?? 0);
-    const intervalMs = Math.max(25, opts?.intervalMs ?? wf.autoRun?.pollIntervalMs ?? 150);
+    const intervalMs = Math.max(25, opts?.intervalMs ?? autoConfig?.pollIntervalMs ?? 150);
     const deadline = timeoutMs > 0 ? Date.now() + timeoutMs : 0;
-    const respectLoading = wf.autoRun?.respectLoadingIndicator !== false;
-    const waitFor = wf.autoRun?.waitForSelector;
-    const waitForHidden = wf.autoRun?.waitForHiddenSelector;
-    const waitForInteractable = wf.autoRun?.waitForInteractableSelector;
+    const respectLoading = autoConfig?.respectLoadingIndicator !== false;
+    const waitFor = autoConfig?.waitForSelector;
+    const waitForHidden = autoConfig?.waitForHiddenSelector;
+    const waitForInteractable = autoConfig?.waitForInteractableSelector;
 
     while (true) {
       if (respectLoading && this.isLoadingActive()) {

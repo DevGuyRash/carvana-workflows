@@ -12,6 +12,7 @@ import {
   setProfilesEnabled
 } from './profiles';
 import { getRunPrefs, updateRunPrefs, type WorkflowRunPrefs } from './autorun';
+import { resolveAutoRunConfig, resolveTriggerState, isManualTriggerAvailable } from './triggers';
 import { WorkflowPreferencesService, type WorkflowVisibilityLists } from './menu/workflow-preferences';
 import { DragController, type DragAnnouncement, type DragReorderDetail } from './menu/drag-controller';
 
@@ -539,6 +540,16 @@ export class MenuUI {
       });
     }
 
+    this.shadow.getElementById('cv-advanced-load')?.addEventListener('click', () => {
+      this.loadAdvancedJson();
+    });
+    this.shadow.getElementById('cv-advanced-copy')?.addEventListener('click', () => {
+      this.copyAdvancedJson();
+    });
+    this.shadow.getElementById('cv-advanced-apply')?.addEventListener('click', () => {
+      this.applyAdvancedJson();
+    });
+
   }
 
   private renderAll(){
@@ -630,6 +641,8 @@ export class MenuUI {
   private renderActionRows(list: HTMLElement, workflows: WorkflowDefinition[], options: { allowDrag: boolean }){
     for (const wf of workflows){
       const prefs = getRunPrefs(this.store, wf.id);
+      const triggers = resolveTriggerState(wf, prefs);
+      const manualAvailable = triggers.manual.available;
       const profilesEnabled = this.profilesEnabled(wf);
       const activeProfile = profilesEnabled ? getActiveProfile(this.store, wf.id) : 'p1';
       const profileSelect = profilesEnabled ? this.renderProfileSelect(wf.id, activeProfile) : '';
@@ -655,7 +668,7 @@ export class MenuUI {
         </div>
         <div class="cv-item-actions">
           ${profileSelect}
-          <button class="cv-btn cv-run" data-action-run="${wf.id}">Run</button>
+          <button class="cv-btn cv-run" data-action-run="${wf.id}" ${manualAvailable ? '' : 'disabled'}>Run</button>
         </div>
       `;
 
@@ -698,6 +711,9 @@ export class MenuUI {
   private renderAutomationRows(list: HTMLElement, workflows: WorkflowDefinition[]){
     for (const wf of workflows){
       const prefs = getRunPrefs(this.store, wf.id);
+      const triggers = resolveTriggerState(wf, prefs);
+      const autoAvailable = triggers.auto.available;
+      const autoEnabled = triggers.auto.enabled;
       const autoStatus = this.autoRunStatuses.get(wf.id);
       const outcome = this.workflowOutcomes.get(wf.id);
       const lastRunAt = outcome?.at ?? prefs.lastRun?.at;
@@ -705,7 +721,9 @@ export class MenuUI {
       const outcomeLabel = outcome ? outcome.status.toUpperCase() : (autoStatus?.status == 'error' ? 'ERROR' : autoStatus?.status == 'ran' ? 'OK' : '');
       const outcomeClass = outcome?.status ?? (autoStatus?.status == 'error' ? 'error' : autoStatus?.status == 'ran' ? 'ok' : '');
       const reason = this.formatAutoReason(autoStatus);
-      const repeatBadge = prefs.repeat ? '<span class="cv-badge cv-badge-repeat">Repeat</span>' : '';
+      const repeatBadge = triggers.repeat.enabled ? '<span class="cv-badge cv-badge-repeat">Repeat</span>' : '';
+      const statusLabel = autoAvailable ? (autoEnabled ? 'Enabled' : 'Disabled') : 'Unavailable';
+      const statusClass = autoAvailable && autoEnabled ? 'on' : 'off';
 
       const item = document.createElement('div');
       item.className = 'cv-item cv-item-automation';
@@ -717,7 +735,7 @@ export class MenuUI {
           <div class="cv-item-title">${wf.label}</div>
           <div class="cv-item-desc">${wf.description ?? ''}</div>
           <div class="cv-status-line">
-            <span class="cv-status-pill ${prefs.auto ? 'on' : 'off'}">${prefs.auto ? 'Enabled' : 'Disabled'}</span>
+            <span class="cv-status-pill ${statusClass}">${statusLabel}</span>
             <span class="cv-status-meta">Last run: ${lastRunText}</span>
             ${outcomeLabel ? `<span class="cv-status-outcome ${outcomeClass}">${outcomeLabel}</span>` : ''}
             ${repeatBadge}
@@ -726,7 +744,7 @@ export class MenuUI {
         </div>
         <div class="cv-item-actions">
           <label class="cv-switch cv-switch-compact" title="Enable automation">
-            <input type="checkbox" data-auto-toggle="${wf.id}" ${prefs.auto ? 'checked' : ''}>
+            <input type="checkbox" data-auto-toggle="${wf.id}" ${autoEnabled ? 'checked' : ''} ${autoAvailable ? '' : 'disabled'}>
             <span class="cv-visually-hidden">Enable automation</span>
           </label>
         </div>
@@ -893,6 +911,10 @@ export class MenuUI {
     const profilesEnabled = this.profilesEnabled(wf);
     const activeProfile = profilesEnabled ? getActiveProfile(this.store, wf.id) : 'p1';
     const runPrefs = getRunPrefs(this.store, wf.id);
+    const triggers = resolveTriggerState(wf, runPrefs);
+    const manualAvailable = triggers.manual.available;
+    const autoAvailable = triggers.auto.available;
+    const repeatAvailable = triggers.repeat.available;
     const outcome = this.workflowOutcomes.get(wf.id);
     const autoStatus = this.autoRunStatuses.get(wf.id);
     const lastRunAt = outcome?.at ?? runPrefs.lastRun?.at;
@@ -921,27 +943,29 @@ export class MenuUI {
         ${badges ? `<div class="cv-badges">${badges}</div>` : ''}
       </div>
       <div class="cv-detail-actions">
-        <button class="cv-btn" data-detail-run="${wf.id}">Run now${profilesEnabled ? ` (${profileLabel(activeProfile)})` : ''}</button>
+        <button class="cv-btn" data-detail-run="${wf.id}" ${manualAvailable ? '' : 'disabled'}>Run now${profilesEnabled ? ` (${profileLabel(activeProfile)})` : ''}</button>
         ${profilesEnabled ? `<div class="cv-detail-profiles">${profilePills}</div>` : ''}
       </div>
       <div class="cv-detail-status">
-        <span class="cv-status-pill ${runPrefs.auto ? 'on' : 'off'}">${runPrefs.auto ? 'Automation enabled' : 'Automation disabled'}</span>
+        <span class="cv-status-pill ${autoAvailable && triggers.auto.enabled ? 'on' : 'off'}">${autoAvailable ? (triggers.auto.enabled ? 'Automation enabled' : 'Automation disabled') : 'Automation unavailable'}</span>
         <span class="cv-status-meta">Last run: ${lastRunText}</span>
         ${outcomeLabel ? `<span class="cv-status-outcome ${outcomeClass}">${outcomeLabel}</span>` : ''}
         ${reason ? `<span class="cv-status-reason">${reason}</span>` : ''}
       </div>
       <div class="cv-detail-section">
         <h4>Triggers</h4>
-        <div class="cv-trigger-row">Manual: Available</div>
+        <div class="cv-trigger-row">Manual: ${manualAvailable ? 'Available' : 'Disabled'}</div>
         <label class="cv-switch">
-          <input type="checkbox" data-detail-auto="${wf.id}" ${runPrefs.auto ? 'checked' : ''}>
+          <input type="checkbox" data-detail-auto="${wf.id}" ${triggers.auto.enabled ? 'checked' : ''} ${autoAvailable ? '' : 'disabled'}>
           <span>Auto</span>
         </label>
         <label class="cv-switch">
-          <input type="checkbox" data-detail-repeat="${wf.id}" ${runPrefs.repeat ? 'checked' : ''} ${runPrefs.auto ? '' : 'disabled'}>
+          <input type="checkbox" data-detail-repeat="${wf.id}" ${triggers.repeat.enabled ? 'checked' : ''} ${triggers.auto.enabled && repeatAvailable ? '' : 'disabled'}>
           <span>Repeat</span>
         </label>
         <div class="cv-hint">Risk: ${risk}</div>
+        ${autoAvailable ? '' : '<div class="cv-hint">Auto trigger disabled in task definition.</div>'}
+        ${manualAvailable ? '' : '<div class="cv-hint">Manual trigger disabled in task definition.</div>'}
       </div>
       <div class="cv-detail-section">
         <h4>Profiles</h4>
@@ -1000,6 +1024,7 @@ export class MenuUI {
     const autoToggle = detail.querySelector(`[data-detail-auto="${wf.id}"]`) as HTMLInputElement | null;
     const repeatToggle = detail.querySelector(`[data-detail-repeat="${wf.id}"]`) as HTMLInputElement | null;
     if (autoToggle) {
+      autoToggle.disabled = !autoAvailable;
       autoToggle.addEventListener('change', () => {
         const wantsEnable = autoToggle.checked;
         if (wantsEnable && !this.confirmAutoEnable(wf)) {
@@ -1008,7 +1033,7 @@ export class MenuUI {
         }
         const prev = runPrefs;
         const next = updateRunPrefs(this.store, wf.id, { auto: wantsEnable, repeat: wantsEnable ? runPrefs.repeat : false });
-        if (!next.auto && repeatToggle) {
+        if ((!next.auto || !repeatAvailable) && repeatToggle) {
           repeatToggle.checked = false;
           repeatToggle.disabled = true;
         }
@@ -1019,7 +1044,7 @@ export class MenuUI {
       });
     }
     if (repeatToggle) {
-      repeatToggle.disabled = !runPrefs.auto;
+      repeatToggle.disabled = !triggers.auto.enabled || !repeatAvailable;
       repeatToggle.addEventListener('change', () => {
         const prev = runPrefs;
         const next = updateRunPrefs(this.store, wf.id, { repeat: repeatToggle.checked });
@@ -1060,6 +1085,59 @@ export class MenuUI {
     if (pageEl) pageEl.textContent = pageLabel;
     const countEl = this.shadow.getElementById('cv-advanced-count');
     if (countEl) countEl.textContent = String(pageCount);
+    const urlEl = this.shadow.getElementById('cv-advanced-url');
+    if (urlEl) {
+      const href = typeof globalThis.location?.href === 'string' ? globalThis.location.href : 'Unknown';
+      urlEl.textContent = href;
+    }
+  }
+
+  private loadAdvancedJson(){
+    const textarea = this.shadow.getElementById('cv-advanced-json') as HTMLTextAreaElement | null;
+    if (!textarea) return;
+    if (!this.currentPage) {
+      textarea.value = '';
+      alert('No page detected yet.');
+      return;
+    }
+    textarea.value = JSON.stringify(this.currentPage.workflows, null, 2);
+  }
+
+  private copyAdvancedJson(){
+    const textarea = this.shadow.getElementById('cv-advanced-json') as HTMLTextAreaElement | null;
+    if (!textarea) return;
+    navigator.clipboard.writeText(textarea.value).catch(err => console.error('copy JSON failed', err));
+  }
+
+  private applyAdvancedJson(){
+    const textarea = this.shadow.getElementById('cv-advanced-json') as HTMLTextAreaElement | null;
+    if (!textarea) return;
+    if (!this.currentPage) {
+      alert('No page detected yet.');
+      return;
+    }
+    const raw = textarea.value.trim();
+    if (!raw) {
+      alert('Paste workflow JSON first.');
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      let workflows: WorkflowDefinition[] | null = null;
+      if (Array.isArray(parsed)) {
+        workflows = parsed as WorkflowDefinition[];
+      } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).workflows)) {
+        workflows = (parsed as any).workflows as WorkflowDefinition[];
+      }
+      if (!workflows) {
+        throw new Error('Expected an array of workflows or an object with a workflows array.');
+      }
+      this.currentPage.workflows = workflows;
+      this.appendLog(`Updated workflows for ${this.currentPage.label} from JSON (in-memory).`);
+      this.renderAll();
+    } catch (err: any) {
+      alert(`Invalid workflow JSON: ${err?.message ?? 'Unknown error'}`);
+    }
   }
 
   private openDetail(wf: WorkflowDefinition){
@@ -1146,7 +1224,7 @@ export class MenuUI {
     if (wf.enabledWhen) {
       return this.matchesCondition(wf.enabledWhen);
     }
-    const auto = wf.autoRun;
+    const auto = resolveAutoRunConfig(wf);
     const selector = auto?.waitForSelector || auto?.waitForHiddenSelector || auto?.waitForInteractableSelector;
     if (selector) {
       return this.selectorMatches(selector);
@@ -1199,11 +1277,12 @@ export class MenuUI {
   private automationIntent(wf: WorkflowDefinition): boolean {
     const intent = (wf as any).intent;
     if (intent === 'automation' || intent === 'both') return true;
-    return !!wf.autoRun;
+    return !!resolveAutoRunConfig(wf);
   }
 
   private isActionIntent(wf: WorkflowDefinition): boolean {
     const intent = (wf as any).intent;
+    if (!isManualTriggerAvailable(wf)) return false;
     return intent !== 'automation';
   }
 
@@ -1223,9 +1302,10 @@ export class MenuUI {
   }
 
   private renderBadges(wf: WorkflowDefinition, prefs: WorkflowRunPrefs): string {
+    const triggers = resolveTriggerState(wf, prefs);
     const badges: string[] = [];
-    if (prefs.auto) badges.push('<span class="cv-badge cv-badge-auto">Auto</span>');
-    if (prefs.repeat) badges.push('<span class="cv-badge cv-badge-repeat">Repeat</span>');
+    if (triggers.auto.enabled) badges.push('<span class="cv-badge cv-badge-auto">Auto</span>');
+    if (triggers.repeat.enabled) badges.push('<span class="cv-badge cv-badge-repeat">Repeat</span>');
     if ((wf.options?.length ?? 0) > 0) badges.push('<span class="cv-badge cv-badge-options">Options</span>');
     if (this.menuState.mode === 'developer' && this.workflowHasSelectors(wf)) badges.push('<span class="cv-badge cv-badge-dev">Dev</span>');
     if (this.hasError(wf)) badges.push('<span class="cv-badge cv-badge-error">Error</span>');
@@ -1858,6 +1938,20 @@ export class MenuUI {
                 <div class="cv-advanced-title">Tasks detected</div>
                 <div id="cv-advanced-count" class="cv-advanced-value">0</div>
               </div>
+              <div class="cv-advanced-card">
+                <div class="cv-advanced-title">Current URL</div>
+                <div id="cv-advanced-url" class="cv-advanced-value">Unknown</div>
+              </div>
+            </div>
+            <div class="cv-detail-section">
+              <h4>Task JSON</h4>
+              <div class="cv-row gap">
+                <button id="cv-advanced-load" class="cv-btn secondary">Load current page</button>
+                <button id="cv-advanced-copy" class="cv-btn secondary">Copy JSON</button>
+                <button id="cv-advanced-apply" class="cv-btn">Apply JSON</button>
+              </div>
+              <textarea id="cv-advanced-json" class="cv-textarea cv-advanced-json" spellcheck="false"></textarea>
+              <div class="cv-hint">Edit workflows for the current page. Changes are in-memory only.</div>
             </div>
             <div class="cv-hint">Selector editor is available inside each task detail (Developer mode).</div>
           </div>
@@ -1968,14 +2062,16 @@ export class MenuUI {
       .cv-advanced-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; }
       .cv-advanced-card{ border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:8px; background: rgba(255,255,255,.04); }
       .cv-advanced-title{ font-size:11px; opacity:.7; text-transform:uppercase; letter-spacing:.4px; }
-      .cv-advanced-value{ font-weight:600; margin-top:4px; }
+      .cv-advanced-value{ font-weight:600; margin-top:4px; word-break: break-all; }
       .cv-row{ display:flex; gap:10px; align-items:center; margin: 8px 0; flex-wrap: wrap; }
       .cv-row.gap{ gap:6px; }
       .cv-row.right{ justify-content:flex-end; }
       .cv-row.between{ justify-content:space-between; }
       .cv-textarea{ width: 100%; min-height: 200px; background: rgba(0,0,0,.3); color: var(--cv-text); border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 12px; }
+      .cv-advanced-json{ min-height: 160px; }
       .cv-btn{ background: var(--cv-primary); color: var(--cv-text); border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; transition: background .15s ease, color .15s ease, border-color .15s ease; }
       .cv-btn:hover{ background: var(--cv-accent); }
+      .cv-btn:disabled{ opacity: .5; cursor: not-allowed; }
       .cv-btn.secondary{ background: transparent; border: 1px solid rgba(255,255,255,.2); color: var(--cv-text); }
       .cv-btn.secondary:hover{ border-color: var(--cv-accent); color: var(--cv-accent); }
       .cv-btn:focus-visible,
