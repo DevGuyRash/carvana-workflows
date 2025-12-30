@@ -8,6 +8,38 @@ var __g = (typeof globalThis !== "undefined") ? globalThis : window;
 var CVR = __g.__CARVANA_TC_RECIPE__ || (__g.__CARVANA_TC_RECIPE__ = {});
 
 // =====================================================================
+// REQUIRED COLUMNS (SOURCE TABLE) - used by downstream flows
+// ---------------------------------------------------------------------
+// Header matching is case-insensitive and ignores punctuation/spaces (see n()).
+//
+// MUST INCLUDE (at minimum) in the captured table view:
+//   - Key
+//   - Mailing Instructions (or Mail Instructions / Mailing)
+//   - Address
+//   - Description (or Details / Issue Details)
+//   - Fee Amount and/or Tax Amount (amount fallback math)
+//   - Check Request Amount OR Amount to be Paid / Amount to be paid
+//   - StockNumber and/or Stock Number
+//   - VIN (recommended)
+//   - PID (recommended)
+//
+// Optional but supported (improves accuracy / routing rules):
+//   - Vendor
+//   - Oracle Invoice Number
+//   - Oracle Error
+//   - AP Department
+//   - AP Description
+//   - AP Request Type
+//   - Summary / Ticket Summary / Title
+//
+// OUTPUT COLUMNS our flows consume (generated here):
+//   - Reference  (HUB-STOCK-VIN-PID)  <-- inserted after Mailing Instructions
+//   - Invoice    (STOCK-TR or MMDDYYYY-TR if no stock found)
+//   - StockNumber, VIN, PID
+//   - Final Amount (Check Request Amount -> Amount to be Paid -> Fee+Tax)
+// =====================================================================
+
+// =====================================================================
 // 1) TC_AOA: Element/Table -> AoA exporter (init once)
 // =====================================================================
 if (!CVR.TC_AOA) {
@@ -318,10 +350,13 @@ if (!CVR.apProcess) {
     return (data) => {
       if(!Array.isArray(data)||!data.length)return data;
 
+      // NOTE: New columns inserted after "Mailing Instructions":
+      //   Reference, Invoice, StockNumber, VIN, PID, Final Amount
       const O=[
         "Status","Invoice Exists","Oracle Error","Auto Close","Tracking ID","Key","Vendor",
-        "Oracle Invoice Number","Request Type","Mailing Instructions","Address",
-        "Street Address","Apt/Suite","City","State","Zip",
+        "Oracle Invoice Number","Request Type","Mailing Instructions",
+        "Reference","Invoice","StockNumber","VIN","PID","Final Amount",
+        "Address","Street Address","Apt/Suite","City","State","Zip",
         "Amount to be paid","Fee Amount","Tax Amount","Description",
         "AP Department","AP Description","AP Request Type"
       ];
@@ -355,10 +390,52 @@ if (!CVR.apProcess) {
         return[a,apt,city,st,z]
       };
 
+      // Money parser (used ONLY for Fee+Tax fallback math)
+      const pm=v=>{
+        v=s(v).replace(/[$,]/g,"").trim();
+        v=parseFloat(v);
+        return isFinite(v)?v:NaN
+      };
+
+      // Find values near labels in multi-line text (PS espanso logic -> JS)
+      const fv=(t,l,pat)=>{
+        let rx=new RegExp("\\b"+l+"(?:\\s*number(?:s)?)?\\b","ig"),m;
+        while((m=rx.exec(t))){
+          let a=t.slice(m.index+m[0].length),
+              line=(a.split("\n",2)[0]||""),
+              mm=new RegExp("^\\s*(?:[#:\\(\\)\\[\\]\\-]\\s*)*"+pat,"i").exec(line);
+          if(mm)return mm[1].trim();
+          let ls=a.split("\n");
+          for(let i=0;i<ls.length;i++){
+            let ln=ls[i];
+            if(!ln.trim())continue;
+            if(!/[A-Za-z0-9]/.test(ln))continue; // punctuation-only line like ':' -> skip
+            let m2=new RegExp("^\\s*"+pat,"i").exec(ln);
+            if(m2)return m2[1].trim();
+            break
+          }
+        }
+        return ""
+      };
+
+      // Patterns (kept compact + compiled once per run)
+      const VVP='([A-HJ-NPR-Z0-9]{11,17})\\b', SVP='([A-Z0-9-]{3,})\\b', PVP='(\\d{3,})\\b';
+      const VCHK=/^[A-HJ-NPR-Z0-9]{11,17}$/i;
+
+      // Today's date for Invoice fallback: MMDDYYYY-TR (example: 12302025-TR)
+      const _d=new Date(), DT=("0"+(_d.getMonth()+1)).slice(-2)+("0"+_d.getDate()).slice(-2)+_d.getFullYear();
+
       const H0=data[0].map(x=>s(x).trim()),mp={};
       for(let i=0;i<H0.length;i++)mp[n(H0[i])]=i;
 
       const ix=(...a)=>{for(let x of a){let k=n(x);if(k in mp)return mp[k]}return-1};
+
+      // Exact-header finder (used to support StockNumber vs Stock Number priority)
+      const ixr=(name)=>{
+        name=s(name).trim().toLowerCase();
+        for(let i=0;i<H0.length;i++)if(s(H0[i]).trim().toLowerCase()===name)return i;
+        return -1
+      };
 
       const iOE =ix("Oracle Error");
       const iK  =ix("Key");
@@ -366,9 +443,20 @@ if (!CVR.apProcess) {
       const iOIN=ix("Oracle Invoice Number","Oracle invoice #","Oracle Invoice #");
       const iMI =ix("Mailing Instructions","Mail Instructions","Mailing");
       const iAdr=ix("Address");
+
+      // Amount priority:
+      //   Check Request Amount -> Amount to be Paid -> Fee+Tax (treat missing as 0)
+      const iCRA=ix("Check Request Amount","Check Request Amt");
       const iAmt=ix("Amount to be paid","Amount to be Paid","Amount Payable","Amount");
       const iFee=ix("Fee Amount","Fees");
       const iTax=ix("Tax Amount","Taxes","Tax");
+
+      // Stock/VIN/PID (StockNumber primary, Stock Number fallback)
+      const iSN1=ixr("StockNumber");
+      const iSN2=ixr("Stock Number");
+      const iVIN=ix("VIN","VIN Number","VIN Numbers");
+      const iPID=ix("PID","PID Number");
+
       const iD  =ix("Description","Details","Issue Details");
       const iAPD=ix("AP Department","AP Dept","Department","AP Department ");
       const iAPX=ix("AP Description","AP Desc","AP-Description","AP description","A/P Description");
@@ -391,7 +479,7 @@ if (!CVR.apProcess) {
         a[1]&&(o[8]=a[1]);
         a[2]&&(o[9]=a[2]);
         a[3]&&(o[3]=T);
-        a[4]&&(o[10]=a[4])
+        a[4]&&(o[16]=a[4]) // Address moved (new columns inserted before it)
       };
 
       let rows=[];
@@ -416,17 +504,70 @@ if (!CVR.apProcess) {
 
         o[6]=iV>-1?s(row[iV]).trim():"";
         o[9]=iMI>-1?s(row[iMI]).trim():"";
-        o[10]=iAdr>-1?s(row[iAdr]).trim():"";
+        o[16]=iAdr>-1?s(row[iAdr]).trim():"";
 
-        o[16]=iAmt>-1?row[iAmt]:"";
-        o[17]=iFee>-1?row[iFee]:"";
-        o[18]=iTax>-1?row[iTax]:"";
-        o[19]=iD>-1?row[iD]:"";
-        o[20]=iAPD>-1?row[iAPD]:"";
-        o[21]=iAPX>-1?row[iAPX]:"";
-        o[22]=iAPT>-1?row[iAPT]:"";
+        // Raw columns (kept for visibility / debugging)
+        let _fee=iFee>-1?row[iFee]:"";
+        let _tax=iTax>-1?row[iTax]:"";
+        o[23]=_fee;
+        o[24]=_tax;
+
+        o[25]=iD>-1?row[iD]:"";
+        o[26]=iAPD>-1?row[iAPD]:"";
+        o[27]=iAPX>-1?row[iAPX]:"";
+        o[28]=iAPT>-1?row[iAPT]:"";
 
         let txt=row.map(s).join("\n");
+
+        // -------------------------------
+        // Stock / VIN / PID (columns -> description fallback)
+        // -------------------------------
+        let st=iSN1>-1?s(row[iSN1]).trim():"";
+        if(b(st)&&iSN2>-1)st=s(row[iSN2]).trim();
+
+        let vin=iVIN>-1?s(row[iVIN]).trim():"";
+        let pid=iPID>-1?s(row[iPID]).trim():"";
+
+        if(b(st)) st=fv(txt,"stock",SVP);
+        if(b(vin))vin=fv(txt,"vin",VVP);
+        if(b(pid))pid=fv(txt,"pid",PVP);
+
+       // Safety: don't let STOCK be a VIN by mistake
+       if(st && VCHK.test(st)) st="";
+
+       // Defaults (requested): if missing, output literal placeholders
+       // - StockNumber -> "STOCK"
+       // - PID         -> "PID"
+       // NOTE: we still use raw `st` for Invoice (date fallback) and for "found?" checks.
+       let stD=b(st)?"STOCK":st;
+       let pidD=b(pid)?"PID":pid;
+
+       o[12]=stD;
+       o[13]=vin;
+       o[14]=pidD;
+
+       // Reference: HUB-STOCK-VIN-PID (inserted after Mailing Instructions)
+       o[10]=(st||vin||pid) ? ("HUB-"+[stD,vin,pidD].join("-")) : "";
+
+        // Invoice: STOCK-TR else MMDDYYYY-TR (example: 12302025-TR)
+        o[11]=(st?st:DT)+"-TR";
+
+        // -------------------------------
+        // Final Amount (CRA -> Amount -> Fee+Tax)
+        // -------------------------------
+        let cra=iCRA>-1?s(row[iCRA]).trim():"";
+        let amt=iAmt>-1?s(row[iAmt]).trim():"";
+        let fin="";
+
+        if(!b(cra)) fin=cra;
+        else if(!b(amt)) fin=amt;
+        else {
+          let fn=pm(_fee),tn=pm(_tax);
+          if(isFinite(fn)||isFinite(tn)) fin=String((isFinite(fn)?fn:0)+(isFinite(tn)?tn:0))
+        }
+
+        o[15]=fin;   // New: Final Amount (near identifiers)
+        o[22]=fin;   // Existing: Amount to be paid now uses the same finalized value
 
         let u=oi.replace(/\s+/g,"").toUpperCase();
         if(u.endsWith("CR"))      o[8]=CR;
@@ -442,8 +583,8 @@ if (!CVR.apProcess) {
             hub=/hub\s*checks/i.test(txt),
             gdw=u.endsWith("GDW");
 
-        let apd=s(o[20]),
-            apx=s(o[21]),
+        let apd=s(o[26]),
+            apx=s(o[27]),
             stc=/(^|\b)stc(\b|$)/i;
 
         if(!hub&&!good&&!gdw&&/logistics/i.test(apd))o[8]=CR,o[9]=I;
@@ -468,12 +609,12 @@ if (!CVR.apProcess) {
         let mi=s(o[9]);
         o[9]=/inhouse/i.test(mi)?I:/hub\s*checks/i.test(mi)?H:/misc/i.test(mi)?M:mi;
 
-        let p=pa(o[10]);
-        o[11]=p[0];
-        o[12]=p[1];
-        o[13]=p[2];
-        o[14]=p[3];
-        o[15]=p[4];
+        let p=pa(o[16]);
+        o[17]=p[0];
+        o[18]=p[1];
+        o[19]=p[2];
+        o[20]=p[3];
+        o[21]=p[4];
 
         rows.push(o)
       }
