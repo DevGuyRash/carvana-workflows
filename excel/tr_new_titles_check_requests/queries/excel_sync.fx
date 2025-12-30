@@ -1,7 +1,8 @@
 =LET(
   dt, IF(ISNUMBER(B1), B1, DATEVALUE(B1)),
   prefix, "T&R Checks ",
-  
+  data_rng, "A2:P",
+
   REM_1, "--- PRE-CALCULATE DATE PARTS ---",
   mon_list, UNIQUE({TEXT(dt, "m"); TEXT(dt, "mm")}),
   day_list, UNIQUE({TEXT(dt, "d"); TEXT(dt, "dd")}),
@@ -35,7 +36,7 @@
   IF(ISNA(validSheet), 
     "ERROR: Checked " & COUNTA(tab_names) & " variations. No match found.",
     QUERY(
-      ARRAYFORMULA(SUBSTITUTE(TO_TEXT(INDIRECT("'" & validSheet & "'!A2:P")), "$", "")), 
+      ARRAYFORMULA(SUBSTITUTE(TO_TEXT(INDIRECT("'" & validSheet & "'!" & data_rng)), "$", "")), 
       "SELECT * WHERE Col1 IS NOT NULL AND NOT Col1 CONTAINS 'CLOSED' AND NOT Col1 CONTAINS 'WARNING'", 
       1
     )
