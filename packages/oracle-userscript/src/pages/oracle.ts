@@ -4,7 +4,14 @@ import {
   OracleExpandInvoicePerformWorkflow,
   OracleExpandInvoiceSearchWorkflow
 } from '../workflows/oracle-expand-invoice-search';
-import { OracleInvoiceCreatorWorkflow } from '../workflows/oracle-invoice-creator';
+import {
+  OracleInvoiceCreatorSupplierSiteEnsureWorkflow,
+  OracleInvoiceCreatorSupplierSiteFillWorkflow,
+  OracleInvoiceCreatorBusinessUnitEnsureWorkflow,
+  OracleInvoiceCreatorSupplierLovWorkflow,
+  OracleInvoiceCreatorNumberWorkflow,
+  OracleInvoiceCreatorWorkflow
+} from '../workflows/oracle-invoice-creator';
 import {
   OracleInvoiceValidationAlertWorkflow,
   OracleInvoiceValidationVerifyWorkflow
@@ -20,6 +27,11 @@ export const OracleMainPage: PageDefinition = {
     OracleExpandInvoiceEnsureWorkflow,
     OracleInvoiceValidationAlertWorkflow,
     OracleInvoiceValidationVerifyWorkflow,
-    OracleInvoiceCreatorWorkflow
+    OracleInvoiceCreatorWorkflow,
+    OracleInvoiceCreatorBusinessUnitEnsureWorkflow,
+    OracleInvoiceCreatorSupplierLovWorkflow,
+    OracleInvoiceCreatorSupplierSiteFillWorkflow,
+    OracleInvoiceCreatorSupplierSiteEnsureWorkflow,
+    OracleInvoiceCreatorNumberWorkflow
   ]
 };
