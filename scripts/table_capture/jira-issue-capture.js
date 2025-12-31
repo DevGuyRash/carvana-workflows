@@ -535,19 +535,22 @@ if (!CVR.apProcess) {
        // Safety: don't let STOCK be a VIN by mistake
        if(st && VCHK.test(st)) st="";
 
-       // Defaults (requested): if missing, output literal placeholders
-       // - StockNumber -> "STOCK"
-       // - PID         -> "PID"
-       // NOTE: we still use raw `st` for Invoice (date fallback) and for "found?" checks.
-       let stD=b(st)?"STOCK":st;
-       let pidD=b(pid)?"PID":pid;
+       // Defaults (requested):
+       // - If ANY of (stock/vin/pid) exists, fill missing pieces with placeholders:
+       //     StockNumber -> "STOCK", VIN -> "VIN", PID -> "PID"
+       // - If NONE exist, keep all three blank (no placeholders, no reference)
+       // NOTE: we still use raw `st` for Invoice (date fallback).
+       let anyId=!b(st)||!b(vin)||!b(pid);
+       let stD=anyId?(b(st)?"STOCK":st):"";
+       let vinD=anyId?(b(vin)?"VIN":vin):"";
+       let pidD=anyId?(b(pid)?"PID":pid):"";
 
        o[12]=stD;
-       o[13]=vin;
+       o[13]=vinD;
        o[14]=pidD;
 
        // Reference: HUB-STOCK-VIN-PID (inserted after Mailing Instructions)
-       o[10]=(st||vin||pid) ? ("HUB-"+[stD,vin,pidD].join("-")) : "";
+       o[10]=anyId?("HUB-"+[stD,vinD,pidD].join("-")):"";
 
         // Invoice: STOCK-TR else MMDDYYYY-TR (example: 12302025-TR)
         o[11]=(st?st:DT)+"-TR";
@@ -559,12 +562,15 @@ if (!CVR.apProcess) {
         let amt=iAmt>-1?s(row[iAmt]).trim():"";
         let fin="";
 
-        if(!b(cra)) fin=cra;
-        else if(!b(amt)) fin=amt;
-        else {
-          let fn=pm(_fee),tn=pm(_tax);
-          if(isFinite(fn)||isFinite(tn)) fin=String((isFinite(fn)?fn:0)+(isFinite(tn)?tn:0))
-        }
+       if(!b(cra)) fin=cra;
+       else if(!b(amt)) fin=amt;
+       else {
+         let fn=pm(_fee),tn=pm(_tax);
+         if(isFinite(fn)||isFinite(tn)) fin=String((isFinite(fn)?fn:0)+(isFinite(tn)?tn:0))
+       }
+
+       // Default Final Amount (requested): if every source is missing/blank -> "0"
+       if(b(fin)) fin="0";
 
         o[15]=fin;   // New: Final Amount (near identifiers)
         o[22]=fin;   // Existing: Amount to be paid now uses the same finalized value
