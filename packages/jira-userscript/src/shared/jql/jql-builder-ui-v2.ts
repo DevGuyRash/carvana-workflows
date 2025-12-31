@@ -437,7 +437,8 @@ interface V2State {
   showAdvancedSort: boolean;
   advancedSorts: JqlSortState[];
   searchText: string; // for quick search mode
-  selectedPreset: string | null;
+  selectedPresets: Set<string>; // Multiple presets can be selected
+  showReferencePanel: boolean; // For advanced mode
 }
 
 // ============================================================================
@@ -665,12 +666,15 @@ class JqlBuilderV2UI {
     showAdvancedSort: false,
     advancedSorts: [],
     searchText: '',
-    selectedPreset: null
+    selectedPresets: new Set(),
+    showReferencePanel: false
   };
 
   private panel!: HTMLDivElement;
   private previewEl!: HTMLTextAreaElement;
   private filtersContainer!: HTMLDivElement;
+  private advancedTextarea!: HTMLTextAreaElement;
+  private toastEl!: HTMLDivElement;
 
   constructor(
     shadow: ShadowRoot,
@@ -694,6 +698,19 @@ class JqlBuilderV2UI {
   destroy(): void {
     this.destroyed = true;
     this.panel?.remove();
+    this.toastEl?.remove();
+  }
+
+  private showToast(message: string): void {
+    if (!this.toastEl) {
+      this.toastEl = createElement('div', { className: 'cv-toast' });
+      this.shadow.appendChild(this.toastEl);
+    }
+    this.toastEl.textContent = message;
+    this.toastEl.classList.add('show');
+    setTimeout(() => {
+      this.toastEl.classList.remove('show');
+    }, 2000);
   }
 
   // ==========================================================================
@@ -1315,6 +1332,132 @@ class JqlBuilderV2UI {
         color: var(--cv-primary);
       }
 
+      /* Toast notification */
+      .cv-toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        padding: 12px 24px;
+        background: var(--cv-text);
+        color: white;
+        border-radius: var(--cv-radius-sm);
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: var(--cv-shadow-lg);
+        opacity: 0;
+        transition: all 300ms ease;
+        z-index: 2147483647;
+        pointer-events: none;
+      }
+
+      .cv-toast.show {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+      }
+
+      /* Reference panel for advanced mode */
+      .cv-ref-panel {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        right: 0;
+        background: var(--cv-bg);
+        border: 1px solid var(--cv-border);
+        border-radius: var(--cv-radius-sm);
+        box-shadow: var(--cv-shadow-lg);
+        margin-bottom: 8px;
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 10;
+      }
+
+      .cv-ref-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--cv-border);
+        padding: 8px;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+
+      .cv-ref-tab {
+        padding: 6px 12px;
+        border: 1px solid var(--cv-border);
+        background: var(--cv-bg);
+        border-radius: 999px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all var(--cv-transition);
+      }
+
+      .cv-ref-tab:hover {
+        border-color: var(--cv-primary-light);
+        color: var(--cv-primary);
+      }
+
+      .cv-ref-tab.active {
+        background: var(--cv-primary);
+        border-color: var(--cv-primary);
+        color: white;
+      }
+
+      .cv-ref-content {
+        padding: 12px;
+      }
+
+      .cv-ref-items {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .cv-ref-item {
+        padding: 4px 10px;
+        border: 1px solid var(--cv-border);
+        background: var(--cv-bg-secondary);
+        border-radius: var(--cv-radius-sm);
+        font-size: 12px;
+        font-family: "JetBrains Mono", "Fira Code", monospace;
+        cursor: pointer;
+        transition: all var(--cv-transition);
+      }
+
+      .cv-ref-item:hover {
+        border-color: var(--cv-primary);
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--cv-primary);
+      }
+
+      /* Preset multi-select indicator */
+      .cv-preset-btn.selected .cv-preset-check {
+        display: inline-flex;
+      }
+
+      .cv-preset-check {
+        display: none;
+        width: 18px;
+        height: 18px;
+        align-items: center;
+        justify-content: center;
+        background: var(--cv-primary);
+        color: white;
+        border-radius: 50%;
+        font-size: 10px;
+        margin-left: auto;
+      }
+
+      .cv-preset-btn {
+        flex-direction: row;
+        align-items: center;
+      }
+
+      .cv-preset-content {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: 1;
+      }
+
       /* Responsive */
       @media (max-width: 640px) {
         .cv-panel {
@@ -1418,67 +1561,37 @@ class JqlBuilderV2UI {
   private renderQuickMode(): HTMLDivElement {
     const container = createElement('div', { className: 'cv-quick-search' });
 
-    // Search input
-    const input = createElement('input', {
-      className: 'cv-quick-search-input',
-      attrs: { type: 'text', placeholder: 'Type what you are looking for...' }
-    }) as HTMLInputElement;
-    input.value = this.state.searchText;
-    input.addEventListener('input', () => {
-      this.state.searchText = input.value;
-      this.parseQuickSearch(input.value);
-    });
-    container.appendChild(input);
-
-    // Hint
-    const hint = createElement('div', { className: 'cv-quick-search-hint' });
-    hint.textContent = 'Try: "my open bugs", "high priority tasks", "created this week"';
-    container.appendChild(hint);
-
-    // Quick examples
-    const examples = createElement('div', { className: 'cv-quick-search-examples' });
-    const exampleQueries = [
-      'My open issues',
-      'High priority bugs',
-      'Updated today',
-      'Unassigned tasks',
-      'Due this week'
-    ];
-    exampleQueries.forEach((text) => {
-      const btn = createButton(text, 'cv-quick-example');
-      btn.addEventListener('click', () => {
-        input.value = text;
-        this.state.searchText = text;
-        this.parseQuickSearch(text);
-      });
-      examples.appendChild(btn);
-    });
-    container.appendChild(examples);
-
-    // Presets section
+    // Presets section - multi-select
     const presetsSection = createElement('div', { className: 'cv-section' });
-    presetsSection.style.marginTop = '24px';
     const presetsTitle = createElement('div', { className: 'cv-section-title' });
-    presetsTitle.textContent = '⚡ Quick Filters';
+    presetsTitle.innerHTML = '⚡ Quick Filters <span style="font-weight: normal; text-transform: none; font-size: 11px;">(select any combination)</span>';
     presetsSection.appendChild(presetsTitle);
 
     const presetsGrid = createElement('div', { className: 'cv-presets-grid' });
     QUICK_PRESETS.forEach((preset) => {
       const btn = createElement('button', { className: 'cv-preset-btn' });
-      if (this.state.selectedPreset === preset.id) btn.classList.add('selected');
+      if (this.state.selectedPresets.has(preset.id)) btn.classList.add('selected');
 
+      const content = createElement('div', { className: 'cv-preset-content' });
       const label = createElement('span', { className: 'cv-preset-label' });
       label.appendChild(createElement('span', { className: 'cv-preset-emoji', text: preset.emoji }));
       label.appendChild(document.createTextNode(preset.label));
-
       const desc = createElement('span', { className: 'cv-preset-desc', text: preset.description });
+      content.appendChild(label);
+      content.appendChild(desc);
 
-      btn.appendChild(label);
-      btn.appendChild(desc);
+      const check = createElement('span', { className: 'cv-preset-check', text: '✓' });
+
+      btn.appendChild(content);
+      btn.appendChild(check);
 
       btn.addEventListener('click', () => {
-        this.state.selectedPreset = preset.id;
-        this.previewEl.value = preset.jql;
+        if (this.state.selectedPresets.has(preset.id)) {
+          this.state.selectedPresets.delete(preset.id);
+        } else {
+          this.state.selectedPresets.add(preset.id);
+        }
+        this.combineSelectedPresets();
         this.rerender();
       });
 
@@ -1487,16 +1600,151 @@ class JqlBuilderV2UI {
     presetsSection.appendChild(presetsGrid);
     container.appendChild(presetsSection);
 
+    // Natural language search section
+    const searchSection = createElement('div', { className: 'cv-section' });
+    searchSection.style.marginTop = '20px';
+    const searchTitle = createElement('div', { className: 'cv-section-title' });
+    searchTitle.textContent = '🔍 Natural Language Search';
+    searchSection.appendChild(searchTitle);
+
+    const input = createElement('input', {
+      className: 'cv-quick-search-input',
+      attrs: { type: 'text', placeholder: 'Describe what you\'re looking for...' }
+    }) as HTMLInputElement;
+    input.value = this.state.searchText;
+    input.addEventListener('input', () => {
+      this.state.searchText = input.value;
+      this.state.selectedPresets.clear(); // Clear presets when typing
+      this.parseQuickSearch(input.value);
+      this.rerender();
+    });
+    searchSection.appendChild(input);
+
+    // Hint
+    const hint = createElement('div', { className: 'cv-quick-search-hint' });
+    hint.innerHTML = '<strong>Examples:</strong> "my open bugs", "high priority created this week", "unassigned tasks due soon", "status in progress project MYPROJ"';
+    searchSection.appendChild(hint);
+
+    // Quick examples
+    const examples = createElement('div', { className: 'cv-quick-search-examples' });
+    const exampleQueries = [
+      'my open issues',
+      'high priority bugs',
+      'updated today',
+      'unassigned tasks',
+      'created this week',
+      'overdue issues',
+      'blocked items',
+      'epic stories'
+    ];
+    exampleQueries.forEach((text) => {
+      const btn = createButton(text, 'cv-quick-example');
+      btn.addEventListener('click', () => {
+        input.value = text;
+        this.state.searchText = text;
+        this.state.selectedPresets.clear();
+        this.parseQuickSearch(text);
+        this.rerender();
+      });
+      examples.appendChild(btn);
+    });
+    searchSection.appendChild(examples);
+    container.appendChild(searchSection);
+
     return container;
   }
 
+  private combineSelectedPresets(): void {
+    // Combine multiple presets intelligently
+    const selected = Array.from(this.state.selectedPresets);
+    if (selected.length === 0) {
+      this.previewEl.value = '';
+      return;
+    }
+
+    // Parse each preset's JQL and combine clauses
+    const clauses: string[] = [];
+    let orderBy = '';
+
+    for (const presetId of selected) {
+      const preset = QUICK_PRESETS.find(p => p.id === presetId);
+      if (!preset) continue;
+
+      // Extract ORDER BY if present
+      const parts = preset.jql.split(/\s+ORDER\s+BY\s+/i);
+      const mainClause = parts[0].trim();
+      if (parts[1] && !orderBy) {
+        orderBy = parts[1].trim();
+      }
+
+      if (mainClause) {
+        clauses.push(`(${mainClause})`);
+      }
+    }
+
+    // Combine with AND (can be smart about it)
+    let combined = clauses.join(' AND ');
+
+    // Simplify: remove duplicate conditions
+    combined = this.simplifyJql(combined);
+
+    if (orderBy) {
+      combined += ` ORDER BY ${orderBy}`;
+    }
+
+    this.previewEl.value = combined;
+  }
+
+  private simplifyJql(jql: string): string {
+    // Remove redundant resolution = Unresolved if it appears multiple times
+    let result = jql;
+
+    // Count occurrences of common duplicate patterns
+    const patterns = [
+      /\(\s*resolution\s*=\s*Unresolved\s*\)\s*AND\s*/gi,
+      /\s*AND\s*\(\s*resolution\s*=\s*Unresolved\s*\)/gi
+    ];
+
+    // Keep only first occurrence
+    let foundResolution = false;
+    result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
+      if (/resolution\s*=\s*Unresolved/i.test(inner)) {
+        if (foundResolution) {
+          return ''; // Remove duplicate
+        }
+        foundResolution = true;
+      }
+      return match;
+    });
+
+    // Clean up empty parentheses and double ANDs
+    result = result.replace(/\(\s*\)/g, '');
+    result = result.replace(/AND\s+AND/g, 'AND');
+    result = result.replace(/^\s*AND\s+/i, '');
+    result = result.replace(/\s+AND\s*$/i, '');
+    result = result.trim();
+
+    return result;
+  }
+
   private parseQuickSearch(text: string): void {
-    // Simple natural language parsing
-    const lower = text.toLowerCase();
+    // Enhanced natural language parsing with fuzzy matching
+    const lower = text.toLowerCase().trim();
+    if (!lower) {
+      this.state.filters = [];
+      this.updatePreview();
+      return;
+    }
+
     this.state.filters = [];
 
-    // Detect patterns
-    if (lower.includes('my') || lower.includes('assigned to me')) {
+    // Tokenize for better matching
+    const tokens = lower.split(/\s+/);
+    const hasWord = (word: string) => tokens.some(t => t.includes(word) || word.includes(t));
+    const hasPhrase = (phrase: string) => lower.includes(phrase);
+
+    // User context detection
+    if (hasWord('my') || hasPhrase('assigned to me') || hasWord('mine')) {
       this.state.filters.push({
         id: createId(),
         fieldId: 'assignee',
@@ -1507,74 +1755,9 @@ class JqlBuilderV2UI {
       });
     }
 
-    if (lower.includes('open') || lower.includes('unresolved')) {
-      this.state.filters.push({
-        id: createId(),
-        fieldId: 'resolution',
-        operatorKey: 'is-empty',
-        value: '',
-        values: [],
-        isNegated: false
-      });
-    }
-
-    if (lower.includes('bug')) {
-      this.state.filters.push({
-        id: createId(),
-        fieldId: 'issuetype',
-        operatorKey: 'equals',
-        value: 'Bug',
-        values: [],
-        isNegated: false
-      });
-    }
-
-    if (lower.includes('task')) {
-      this.state.filters.push({
-        id: createId(),
-        fieldId: 'issuetype',
-        operatorKey: 'equals',
-        value: 'Task',
-        values: [],
-        isNegated: false
-      });
-    }
-
-    if (lower.includes('high priority')) {
-      this.state.filters.push({
-        id: createId(),
-        fieldId: 'priority',
-        operatorKey: 'in',
-        value: '',
-        values: ['Highest', 'High'],
-        isNegated: false
-      });
-    }
-
-    if (lower.includes('today') || lower.includes('updated today')) {
-      this.state.filters.push({
-        id: createId(),
-        fieldId: 'updated',
-        operatorKey: 'greater-than-equals',
-        value: 'startOfDay()',
-        values: [],
-        isNegated: false
-      });
-    }
-
-    if (lower.includes('this week')) {
-      this.state.filters.push({
-        id: createId(),
-        fieldId: 'updated',
-        operatorKey: 'greater-than-equals',
-        value: 'startOfWeek()',
-        values: [],
-        isNegated: false
-      });
-    }
-
-    if (lower.includes('unassigned')) {
-      this.state.filters = this.state.filters.filter((f) => f.fieldId !== 'assignee');
+    if (hasWord('unassigned') || hasPhrase('no assignee') || hasPhrase('not assigned')) {
+      // Remove any existing assignee filter
+      this.state.filters = this.state.filters.filter(f => f.fieldId !== 'assignee');
       this.state.filters.push({
         id: createId(),
         fieldId: 'assignee',
@@ -1585,15 +1768,192 @@ class JqlBuilderV2UI {
       });
     }
 
-    if (lower.includes('due this week')) {
+    if (hasPhrase('created by me') || hasPhrase('i created') || hasPhrase('reported by me')) {
       this.state.filters.push({
         id: createId(),
-        fieldId: 'due',
-        operatorKey: 'greater-than-equals',
-        value: 'startOfWeek()',
+        fieldId: 'reporter',
+        operatorKey: 'equals',
+        value: 'currentUser()',
         values: [],
         isNegated: false
       });
+    }
+
+    // Status detection
+    if (hasWord('open') || hasWord('unresolved') || hasWord('active')) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'resolution',
+        operatorKey: 'is-empty',
+        value: '',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    if (hasWord('closed') || hasWord('resolved') || hasWord('done') || hasWord('completed')) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'resolution',
+        operatorKey: 'is-not-empty',
+        value: '',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    if (hasWord('blocked') || hasWord('blocking')) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'status',
+        operatorKey: 'equals',
+        value: 'Blocked',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    if (hasPhrase('in progress') || hasWord('wip') || hasWord('working')) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'status',
+        operatorKey: 'equals',
+        value: 'In Progress',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    // Issue type detection
+    if (hasWord('bug') || hasWord('bugs') || hasWord('defect') || hasWord('defects')) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'issuetype',
+        operatorKey: 'equals',
+        value: 'Bug',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    if (hasWord('task') || hasWord('tasks')) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'issuetype',
+        operatorKey: 'equals',
+        value: 'Task',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    if (hasWord('story') || hasWord('stories')) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'issuetype',
+        operatorKey: 'equals',
+        value: 'Story',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    if (hasWord('epic') || hasWord('epics')) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'issuetype',
+        operatorKey: 'equals',
+        value: 'Epic',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    // Priority detection
+    if (hasPhrase('high priority') || hasWord('urgent') || hasWord('critical') || hasWord('important')) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'priority',
+        operatorKey: 'in',
+        value: '',
+        values: ['Highest', 'High'],
+        isNegated: false
+      });
+    }
+
+    if (hasPhrase('low priority') || hasWord('minor') || hasWord('trivial')) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'priority',
+        operatorKey: 'in',
+        value: '',
+        values: ['Low', 'Lowest'],
+        isNegated: false
+      });
+    }
+
+    // Time detection - updated/created
+    if (hasWord('today')) {
+      const field = hasPhrase('created today') ? 'created' : 'updated';
+      this.state.filters.push({
+        id: createId(),
+        fieldId: field,
+        operatorKey: 'greater-than-equals',
+        value: 'startOfDay()',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    if (hasWord('yesterday')) {
+      const field = hasPhrase('created yesterday') ? 'created' : 'updated';
+      this.state.filters.push({
+        id: createId(),
+        fieldId: field,
+        operatorKey: 'greater-than-equals',
+        value: '-1d',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    if (hasPhrase('this week') || hasPhrase('past week') || hasPhrase('last week')) {
+      const field = hasPhrase('created') ? 'created' : 'updated';
+      this.state.filters.push({
+        id: createId(),
+        fieldId: field,
+        operatorKey: 'greater-than-equals',
+        value: hasPhrase('last week') ? '-7d' : 'startOfWeek()',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    if (hasPhrase('this month') || hasPhrase('past month') || hasPhrase('last month')) {
+      const field = hasPhrase('created') ? 'created' : 'updated';
+      this.state.filters.push({
+        id: createId(),
+        fieldId: field,
+        operatorKey: 'greater-than-equals',
+        value: hasPhrase('last month') ? '-30d' : 'startOfMonth()',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    if (hasWord('recent') || hasWord('recently') || hasWord('latest')) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'updated',
+        operatorKey: 'greater-than-equals',
+        value: '-7d',
+        values: [],
+        isNegated: false
+      });
+    }
+
+    // Due date detection
+    if (hasPhrase('due this week') || hasPhrase('due soon')) {
       this.state.filters.push({
         id: createId(),
         fieldId: 'due',
@@ -1602,6 +1962,60 @@ class JqlBuilderV2UI {
         values: [],
         isNegated: false
       });
+    }
+
+    if (hasWord('overdue') || hasPhrase('past due') || hasWord('late')) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'due',
+        operatorKey: 'less-than',
+        value: 'now()',
+        values: [],
+        isNegated: false
+      });
+      // Also add unresolved if not present
+      if (!this.state.filters.some(f => f.fieldId === 'resolution')) {
+        this.state.filters.push({
+          id: createId(),
+          fieldId: 'resolution',
+          operatorKey: 'is-empty',
+          value: '',
+          values: [],
+          isNegated: false
+        });
+      }
+    }
+
+    // Project detection - look for uppercase words that might be project keys
+    const projectMatch = text.match(/\b(project\s+)?([A-Z]{2,10})\b/);
+    if (projectMatch && projectMatch[2]) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'project',
+        operatorKey: 'equals',
+        value: projectMatch[2],
+        values: [],
+        isNegated: false
+      });
+    }
+
+    // Text search - if there's quoted text, use it for summary search
+    const quotedMatch = text.match(/"([^"]+)"/);
+    if (quotedMatch) {
+      this.state.filters.push({
+        id: createId(),
+        fieldId: 'summary',
+        operatorKey: 'contains',
+        value: quotedMatch[1],
+        values: [],
+        isNegated: false
+      });
+    }
+
+    // Set default sort
+    if (!this.state.sortField) {
+      this.state.sortField = 'updated';
+      this.state.sortDirection = 'DESC';
     }
 
     this.updatePreview();
@@ -1628,7 +2042,8 @@ class JqlBuilderV2UI {
       label.appendChild(document.createTextNode(preset.label));
       btn.appendChild(label);
       btn.addEventListener('click', () => {
-        this.state.selectedPreset = preset.id;
+        this.state.selectedPresets.clear();
+        this.state.selectedPresets.add(preset.id);
         this.previewEl.value = preset.jql;
       });
       presetsGrid.appendChild(btn);
@@ -1708,7 +2123,7 @@ class JqlBuilderV2UI {
     Object.entries(categories).forEach(([cat, fields]) => {
       const optgroup = createElement('optgroup', { attrs: { label: categoryLabels[cat] ?? cat } }) as HTMLOptGroupElement;
       fields.forEach((f) => {
-        const option = new Option(`${f.emoji} ${f.label}`, f.id);
+        const option = new Option(f.label, f.id);
         option.selected = f.id === filter.fieldId;
         optgroup.appendChild(option);
       });
@@ -1928,52 +2343,260 @@ class JqlBuilderV2UI {
     hint.innerHTML = `
       <div class="cv-section-title">🔧 Advanced JQL Editor</div>
       <p style="color: var(--cv-text-muted); font-size: 13px; margin: 0;">
-        Edit the JQL query directly. Changes here will be applied when you click "Search".
+        Edit JQL directly. Click items below to insert at cursor.
       </p>
     `;
     container.appendChild(hint);
 
-    const textarea = createElement('textarea', {
+    // Textarea wrapper for positioning reference panel
+    const textareaWrap = createElement('div');
+    textareaWrap.style.position = 'relative';
+    textareaWrap.style.marginTop = '12px';
+
+    this.advancedTextarea = createElement('textarea', {
       className: 'cv-preview',
       attrs: { placeholder: 'Enter your JQL query...' }
     }) as HTMLTextAreaElement;
-    textarea.style.minHeight = '200px';
-    textarea.style.marginTop = '12px';
-    textarea.value = this.previewEl?.value || buildJqlFromV2State(this.state);
-    textarea.addEventListener('input', () => {
+    this.advancedTextarea.style.minHeight = '160px';
+    this.advancedTextarea.value = this.previewEl?.value || buildJqlFromV2State(this.state);
+    this.advancedTextarea.addEventListener('input', () => {
       if (this.previewEl) {
-        this.previewEl.value = textarea.value;
+        this.previewEl.value = this.advancedTextarea.value;
       }
     });
-    container.appendChild(textarea);
+    textareaWrap.appendChild(this.advancedTextarea);
+    container.appendChild(textareaWrap);
 
-    // Quick reference
-    const reference = createElement('div', { className: 'cv-section' });
-    reference.style.marginTop = '20px';
-    reference.innerHTML = `
-      <div class="cv-section-title">📚 Quick Reference</div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
-        <div style="font-size: 12px; color: var(--cv-text-muted);">
-          <strong>Common Fields:</strong><br>
-          project, status, assignee, reporter, priority, created, updated, due, labels, summary, description
-        </div>
-        <div style="font-size: 12px; color: var(--cv-text-muted);">
-          <strong>Operators:</strong><br>
-          = != ~ !~ > >= < <= IN NOT IN IS IS NOT WAS CHANGED
-        </div>
-        <div style="font-size: 12px; color: var(--cv-text-muted);">
-          <strong>Functions:</strong><br>
-          currentUser(), now(), startOfDay(), endOfWeek(), membersOf("group")
-        </div>
-        <div style="font-size: 12px; color: var(--cv-text-muted);">
-          <strong>Time:</strong><br>
-          -1d, -7d, -30d, startOfWeek(), endOfMonth(), "2024-01-01"
-        </div>
-      </div>
-    `;
-    container.appendChild(reference);
+    // Interactive reference sections
+    const refContainer = createElement('div', { className: 'cv-section' });
+    refContainer.style.marginTop = '16px';
+
+    // Reference tabs
+    const refTabs = createElement('div', { className: 'cv-ref-tabs' });
+    const categories = [
+      { id: 'fields', label: '📋 Fields', items: this.getFieldItems() },
+      { id: 'operators', label: '⚙️ Operators', items: this.getOperatorItems() },
+      { id: 'functions', label: 'ƒ Functions', items: this.getFunctionItems() },
+      { id: 'time', label: '🕐 Time', items: this.getTimeItems() },
+      { id: 'keywords', label: '🔤 Keywords', items: this.getKeywordItems() }
+    ];
+
+    let activeTab = 'fields';
+    const contentDiv = createElement('div', { className: 'cv-ref-content' });
+
+    const renderContent = (tabId: string) => {
+      const category = categories.find(c => c.id === tabId);
+      if (!category) return;
+
+      contentDiv.innerHTML = '';
+      const itemsWrap = createElement('div', { className: 'cv-ref-items' });
+
+      category.items.forEach(item => {
+        const btn = createButton(item.label, 'cv-ref-item');
+        btn.title = item.description || item.value;
+        btn.addEventListener('click', () => {
+          this.insertAtCursor(item.value);
+        });
+        itemsWrap.appendChild(btn);
+      });
+
+      contentDiv.appendChild(itemsWrap);
+    };
+
+    categories.forEach(cat => {
+      const tab = createButton(cat.label, 'cv-ref-tab');
+      if (cat.id === activeTab) tab.classList.add('active');
+      tab.addEventListener('click', () => {
+        refTabs.querySelectorAll('.cv-ref-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        activeTab = cat.id;
+        renderContent(cat.id);
+      });
+      refTabs.appendChild(tab);
+    });
+
+    refContainer.appendChild(refTabs);
+    refContainer.appendChild(contentDiv);
+    container.appendChild(refContainer);
+
+    // Render initial content
+    renderContent(activeTab);
 
     return container;
+  }
+
+  private getFieldItems(): Array<{ label: string; value: string; description?: string }> {
+    // Common fields first, then from autocomplete data
+    const common = [
+      { label: 'project', value: 'project', description: 'Project key or name' },
+      { label: 'status', value: 'status', description: 'Issue status' },
+      { label: 'assignee', value: 'assignee', description: 'Assigned user' },
+      { label: 'reporter', value: 'reporter', description: 'Issue reporter' },
+      { label: 'priority', value: 'priority', description: 'Issue priority' },
+      { label: 'issuetype', value: 'issuetype', description: 'Type of issue' },
+      { label: 'created', value: 'created', description: 'Creation date' },
+      { label: 'updated', value: 'updated', description: 'Last update date' },
+      { label: 'due', value: 'due', description: 'Due date' },
+      { label: 'resolved', value: 'resolved', description: 'Resolution date' },
+      { label: 'resolution', value: 'resolution', description: 'Resolution type' },
+      { label: 'labels', value: 'labels', description: 'Issue labels' },
+      { label: 'summary', value: 'summary', description: 'Issue title' },
+      { label: 'description', value: 'description', description: 'Issue description' },
+      { label: 'text', value: 'text', description: 'Full text search' },
+      { label: 'component', value: 'component', description: 'Project component' },
+      { label: 'fixVersion', value: 'fixVersion', description: 'Fix version' },
+      { label: 'affectedVersion', value: 'affectedVersion', description: 'Affected version' },
+      { label: 'sprint', value: 'sprint', description: 'Sprint name' },
+      { label: 'watcher', value: 'watcher', description: 'Issue watchers' },
+      { label: 'voter', value: 'voter', description: 'Issue voters' },
+      { label: 'comment', value: 'comment', description: 'Comment text' },
+      { label: 'key', value: 'key', description: 'Issue key (e.g., PROJ-123)' },
+      { label: 'id', value: 'id', description: 'Issue ID number' },
+      { label: 'parent', value: 'parent', description: 'Parent issue key' }
+    ];
+
+    // Add custom fields from autocomplete if available
+    if (this.data.fields.length > 0) {
+      const seen = new Set(common.map(c => c.value.toLowerCase()));
+      const custom = this.data.fields
+        .filter(f => !seen.has(f.value.toLowerCase()))
+        .slice(0, 20) // Limit to prevent overwhelming
+        .map(f => ({
+          label: f.displayName || f.value,
+          value: f.cfid ? `cf[${f.cfid}]` : `"${f.value}"`,
+          description: f.cfid ? `Custom field ${f.cfid}` : undefined
+        }));
+      return [...common, ...custom];
+    }
+
+    return common;
+  }
+
+  private getOperatorItems(): Array<{ label: string; value: string; description?: string }> {
+    return [
+      { label: '=', value: ' = ', description: 'Equals' },
+      { label: '!=', value: ' != ', description: 'Not equals' },
+      { label: '~', value: ' ~ ', description: 'Contains text' },
+      { label: '!~', value: ' !~ ', description: 'Does not contain' },
+      { label: '>', value: ' > ', description: 'Greater than' },
+      { label: '>=', value: ' >= ', description: 'Greater than or equal' },
+      { label: '<', value: ' < ', description: 'Less than' },
+      { label: '<=', value: ' <= ', description: 'Less than or equal' },
+      { label: 'IN', value: ' IN ()', description: 'In list of values' },
+      { label: 'NOT IN', value: ' NOT IN ()', description: 'Not in list of values' },
+      { label: 'IS', value: ' IS ', description: 'Is (for EMPTY/NULL)' },
+      { label: 'IS NOT', value: ' IS NOT ', description: 'Is not (for EMPTY/NULL)' },
+      { label: 'IS EMPTY', value: ' IS EMPTY', description: 'Field has no value' },
+      { label: 'IS NOT EMPTY', value: ' IS NOT EMPTY', description: 'Field has a value' },
+      { label: 'WAS', value: ' WAS ', description: 'Was previously' },
+      { label: 'WAS NOT', value: ' WAS NOT ', description: 'Was not previously' },
+      { label: 'CHANGED', value: ' CHANGED', description: 'Value changed' },
+      { label: 'AND', value: ' AND ', description: 'Both conditions' },
+      { label: 'OR', value: ' OR ', description: 'Either condition' },
+      { label: 'NOT', value: 'NOT ', description: 'Negate condition' },
+      { label: '( )', value: '()', description: 'Group conditions' }
+    ];
+  }
+
+  private getFunctionItems(): Array<{ label: string; value: string; description?: string }> {
+    return [
+      { label: 'currentUser()', value: 'currentUser()', description: 'Currently logged in user' },
+      { label: 'now()', value: 'now()', description: 'Current date/time' },
+      { label: 'startOfDay()', value: 'startOfDay()', description: 'Start of today' },
+      { label: 'endOfDay()', value: 'endOfDay()', description: 'End of today' },
+      { label: 'startOfWeek()', value: 'startOfWeek()', description: 'Start of this week' },
+      { label: 'endOfWeek()', value: 'endOfWeek()', description: 'End of this week' },
+      { label: 'startOfMonth()', value: 'startOfMonth()', description: 'Start of this month' },
+      { label: 'endOfMonth()', value: 'endOfMonth()', description: 'End of this month' },
+      { label: 'startOfYear()', value: 'startOfYear()', description: 'Start of this year' },
+      { label: 'endOfYear()', value: 'endOfYear()', description: 'End of this year' },
+      { label: 'membersOf()', value: 'membersOf("")', description: 'Members of a group' },
+      { label: 'linkedIssues()', value: 'linkedIssues()', description: 'Linked issues' },
+      { label: 'votedIssues()', value: 'votedIssues()', description: 'Issues you voted for' },
+      { label: 'watchedIssues()', value: 'watchedIssues()', description: 'Issues you watch' },
+      { label: 'issueHistory()', value: 'issueHistory()', description: 'Recently viewed issues' },
+      { label: 'openSprints()', value: 'openSprints()', description: 'Active sprints' },
+      { label: 'closedSprints()', value: 'closedSprints()', description: 'Completed sprints' },
+      { label: 'futureSprints()', value: 'futureSprints()', description: 'Upcoming sprints' },
+      { label: 'latestReleasedVersion()', value: 'latestReleasedVersion(PROJECT)', description: 'Latest released version' },
+      { label: 'unreleasedVersions()', value: 'unreleasedVersions(PROJECT)', description: 'Unreleased versions' },
+      { label: 'updatedBy()', value: 'updatedBy()', description: 'Updated by specific user' },
+      { label: 'currentLogin()', value: 'currentLogin()', description: 'Current session start' },
+      { label: 'lastLogin()', value: 'lastLogin()', description: 'Previous session start' }
+    ];
+  }
+
+  private getTimeItems(): Array<{ label: string; value: string; description?: string }> {
+    return [
+      { label: '-1d', value: '-1d', description: '1 day ago' },
+      { label: '-2d', value: '-2d', description: '2 days ago' },
+      { label: '-3d', value: '-3d', description: '3 days ago' },
+      { label: '-7d', value: '-7d', description: '1 week ago' },
+      { label: '-14d', value: '-14d', description: '2 weeks ago' },
+      { label: '-30d', value: '-30d', description: '1 month ago' },
+      { label: '-90d', value: '-90d', description: '3 months ago' },
+      { label: '-1w', value: '-1w', description: '1 week ago' },
+      { label: '-2w', value: '-2w', description: '2 weeks ago' },
+      { label: '-1m', value: '-1m', description: '1 month ago' },
+      { label: '-3m', value: '-3m', description: '3 months ago' },
+      { label: '-6m', value: '-6m', description: '6 months ago' },
+      { label: '-1y', value: '-1y', description: '1 year ago' },
+      { label: '+1d', value: '+1d', description: '1 day from now' },
+      { label: '+7d', value: '+7d', description: '1 week from now' },
+      { label: '+1w', value: '+1w', description: '1 week from now' },
+      { label: '+1m', value: '+1m', description: '1 month from now' },
+      { label: '"2024-01-01"', value: '"2024-01-01"', description: 'Specific date' },
+      { label: '"2024-12-31"', value: '"2024-12-31"', description: 'Specific date' }
+    ];
+  }
+
+  private getKeywordItems(): Array<{ label: string; value: string; description?: string }> {
+    return [
+      { label: 'EMPTY', value: 'EMPTY', description: 'No value' },
+      { label: 'NULL', value: 'NULL', description: 'Null value' },
+      { label: 'ORDER BY', value: ' ORDER BY ', description: 'Sort results' },
+      { label: 'ASC', value: ' ASC', description: 'Ascending order' },
+      { label: 'DESC', value: ' DESC', description: 'Descending order' },
+      { label: 'FROM', value: ' FROM ', description: 'History: from value' },
+      { label: 'TO', value: ' TO ', description: 'History: to value' },
+      { label: 'BY', value: ' BY ', description: 'History: by user' },
+      { label: 'AFTER', value: ' AFTER ', description: 'After date' },
+      { label: 'BEFORE', value: ' BEFORE ', description: 'Before date' },
+      { label: 'ON', value: ' ON ', description: 'On date' },
+      { label: 'DURING', value: ' DURING ', description: 'During period' }
+    ];
+  }
+
+  private insertAtCursor(text: string): void {
+    if (!this.advancedTextarea) return;
+
+    const textarea = this.advancedTextarea;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const before = textarea.value.substring(0, start);
+    const after = textarea.value.substring(end);
+
+    textarea.value = before + text + after;
+    textarea.focus();
+
+    // Position cursor intelligently
+    let cursorPos = start + text.length;
+
+    // If text contains () or "", position cursor inside
+    if (text.includes('()')) {
+      cursorPos = start + text.indexOf('(') + 1;
+    } else if (text.includes('""')) {
+      cursorPos = start + text.indexOf('""') + 1;
+    }
+
+    textarea.setSelectionRange(cursorPos, cursorPos);
+
+    // Update preview
+    if (this.previewEl) {
+      this.previewEl.value = textarea.value;
+    }
+
+    this.showToast(`Inserted: ${text.trim()}`);
   }
 
   // ==========================================================================
@@ -1994,6 +2617,7 @@ class JqlBuilderV2UI {
     copyBtn.title = 'Copy to clipboard';
     copyBtn.addEventListener('click', async () => {
       await navigator.clipboard.writeText(this.previewEl.value);
+      this.showToast('Copied to clipboard!');
     });
     previewActions.appendChild(copyBtn);
     previewLabel.appendChild(previewActions);
@@ -2013,7 +2637,7 @@ class JqlBuilderV2UI {
     const clearBtn = createButton('Clear All', 'cv-btn');
     clearBtn.addEventListener('click', () => {
       this.state.filters = [];
-      this.state.selectedPreset = null;
+      this.state.selectedPresets.clear();
       this.state.searchText = '';
       this.rerender();
     });
@@ -2053,12 +2677,10 @@ class JqlBuilderV2UI {
   private updatePreview(): void {
     if (!this.previewEl) return;
 
-    if (this.state.selectedPreset) {
-      const preset = QUICK_PRESETS.find((p) => p.id === this.state.selectedPreset);
-      if (preset) {
-        this.previewEl.value = preset.jql;
-        return;
-      }
+    // If presets are selected, combine them
+    if (this.state.selectedPresets.size > 0) {
+      this.combineSelectedPresets();
+      return;
     }
 
     this.previewEl.value = buildJqlFromV2State(this.state);
