@@ -49,6 +49,7 @@ export interface AppUi {
   cancel: HTMLButtonElement;
   status: HTMLPreElement;
   iframeHost: HTMLDivElement;
+  popout: HTMLButtonElement;
 }
 
 export interface PaginationInfo {

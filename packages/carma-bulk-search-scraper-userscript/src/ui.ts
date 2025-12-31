@@ -9,6 +9,7 @@ export interface UiHandlers {
   onCopyCsv: () => void | Promise<void>;
   onDownloadJson: () => void;
   onCopyJson: () => void | Promise<void>;
+  onPopoutTable: () => void;
   onOptionsChange: (opts: Options) => void;
   onClose: () => void;
 }
@@ -115,9 +116,10 @@ export function createUi(options: Options, handlers: UiHandlers): AppUi {
   const copyCsv = el('button', { class: 'cbss-btn', onclick: handlers.onCopyCsv }, 'Copy CSV');
   const downloadJson = el('button', { class: 'cbss-btn', onclick: handlers.onDownloadJson }, 'Download JSON');
   const copyJson = el('button', { class: 'cbss-btn', onclick: handlers.onCopyJson }, 'Copy JSON');
+  const popoutTable = el('button', { class: 'cbss-btn', onclick: handlers.onPopoutTable }, 'Popout Table') as HTMLButtonElement;
 
   const actions = el('div', { class: 'cbss-actions' }, [start, cancel]);
-  const exports = el('div', { class: 'cbss-actions' }, [downloadCsv, copyCsv, downloadJson, copyJson]);
+  const exports = el('div', { class: 'cbss-actions' }, [downloadCsv, copyCsv, downloadJson, copyJson, popoutTable]);
 
   card.appendChild(optionsTitle);
   card.appendChild(el('div', { class: 'cbss-row' }, [
@@ -207,6 +209,7 @@ export function createUi(options: Options, handlers: UiHandlers): AppUi {
     cancel,
     status,
     iframeHost,
+    popout: popoutTable,
   };
 }
 

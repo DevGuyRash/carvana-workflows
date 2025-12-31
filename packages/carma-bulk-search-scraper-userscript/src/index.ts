@@ -6,6 +6,7 @@ import { loadOptions, saveOptions } from './storage';
 import { downloadCsv, downloadJson, exportCsv, exportJson, runScrape } from './scraper';
 import type { AppUi } from './types';
 import { closeModal, createUi, installFab, openModal } from './ui';
+import { openResultsPopout } from './popout';
 
 declare global {
   interface Window {
@@ -20,6 +21,7 @@ declare global {
   const state = createInitialState();
   let ui!: AppUi;
   let logger!: Logger;
+  let popout: ReturnType<typeof openResultsPopout> | null = null;
 
   const onOpen = () => openModal(ui);
   const onClose = () => {
@@ -59,6 +61,26 @@ declare global {
     logger.log(ok ? '[OK] Copied JSON to clipboard.' : '[ERROR] Failed to copy JSON.');
   };
 
+  const onPopoutTable = () => {
+    if (popout && !popout.isClosed()) {
+      popout.focus();
+      popout.update();
+      logger.log('[INFO] Popout refreshed.');
+      return;
+    }
+    popout = openResultsPopout({
+      getRows: () => state.rows,
+      getRunning: () => state.running,
+      logger,
+    });
+    if (!popout) return;
+    if (state.running) {
+      logger.log('[INFO] Popout opened (live updates while running).');
+    } else {
+      logger.log('[INFO] Popout opened.');
+    }
+  };
+
   const options = loadOptions();
   ui = createUi(options, {
     onStart,
@@ -67,6 +89,7 @@ declare global {
     onCopyCsv,
     onDownloadJson,
     onCopyJson,
+    onPopoutTable,
     onOptionsChange: saveOptions,
     onClose,
   });
