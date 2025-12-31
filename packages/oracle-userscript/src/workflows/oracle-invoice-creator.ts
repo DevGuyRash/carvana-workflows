@@ -1,4 +1,4 @@
-import { findAll, findOne, type SelectorSpec, type WorkflowDefinition } from '@cv/core';
+import { findAll, findOne, type SelectorSpec, type WorkflowDefinition, type WorkflowExecuteContext } from '@cv/core';
 import { dropdownCellByText } from '../shared/field-selectors';
 
 const FIELD_DELAY_MS = 650;
@@ -432,7 +432,7 @@ const resolveInvoiceHeaderIds = (scope: Element) => {
 
 const verifyInvoiceHeaderSelectors = () => ({
   kind: 'execute' as const,
-  run: (ctx: { options: Record<string, any>; log: (message: string, level?: 'debug'|'info'|'warn'|'error') => void }) => {
+  run: (ctx: WorkflowExecuteContext) => {
     const scope = findOne(invoiceHeaderScope, { visibleOnly: true });
     if (!scope) {
       throw new Error('Invoice Header section not found.');
@@ -462,24 +462,44 @@ const verifyInvoiceHeaderSelectors = () => ({
       throw new Error(`Selector verification failed: missing ${missing.join(', ')}`);
     }
 
-    ctx.setVar('invoiceFieldIds', fieldIds);
+    const requireId = (value: string | null, label: string): string => {
+      if (!value) {
+        throw new Error(`Selector verification failed: missing ${label}`);
+      }
+      return value;
+    };
+
+    const requiredIds = {
+      businessUnit: requireId(fieldIds.businessUnit, BUSINESS_UNIT_LABEL),
+      supplier: requireId(fieldIds.supplier, SUPPLIER_LABEL),
+      supplierLov: requireId(fieldIds.supplierLov, `${SUPPLIER_LABEL} Search`),
+      supplierSite: requireId(fieldIds.supplierSite, SUPPLIER_SITE_LABEL),
+      invoiceGroup: requireId(fieldIds.invoiceGroup, INVOICE_GROUP_LABEL),
+      amount: requireId(fieldIds.amount, AMOUNT_LABEL),
+      description: requireId(fieldIds.description, DESCRIPTION_LABEL),
+      businessUnitLov: requireId(fieldIds.businessUnitLov, `${BUSINESS_UNIT_LABEL} Search`),
+      number: fieldIds.number ? requireId(fieldIds.number, NUMBER_LABEL) : null,
+      supplierSiteLov: fieldIds.supplierSiteLov
+    };
+
+    ctx.setVar('invoiceFieldIds', { ...fieldIds, ...requiredIds });
 
     const checks: Array<{ label: string; spec: SelectorSpec }> = [
       { label: 'Invoice Header section', spec: invoiceHeaderScope },
-      { label: BUSINESS_UNIT_LABEL, spec: { id: fieldIds.businessUnit, visible: true } },
-      { label: `${BUSINESS_UNIT_LABEL} Search`, spec: { id: fieldIds.businessUnitLov, visible: true } },
-      { label: SUPPLIER_LABEL, spec: { id: fieldIds.supplier, visible: true } },
-      { label: `${SUPPLIER_LABEL} Search`, spec: { id: fieldIds.supplierLov, visible: true } },
-      { label: SUPPLIER_SITE_LABEL, spec: { id: fieldIds.supplierSite, visible: true } },
-      { label: INVOICE_GROUP_LABEL, spec: { id: fieldIds.invoiceGroup, visible: true } },
-      { label: AMOUNT_LABEL, spec: { id: fieldIds.amount, visible: true } },
-      { label: DESCRIPTION_LABEL, spec: { id: fieldIds.description, visible: true } }
+      { label: BUSINESS_UNIT_LABEL, spec: { id: requiredIds.businessUnit, visible: true } },
+      { label: `${BUSINESS_UNIT_LABEL} Search`, spec: { id: requiredIds.businessUnitLov, visible: true } },
+      { label: SUPPLIER_LABEL, spec: { id: requiredIds.supplier, visible: true } },
+      { label: `${SUPPLIER_LABEL} Search`, spec: { id: requiredIds.supplierLov, visible: true } },
+      { label: SUPPLIER_SITE_LABEL, spec: { id: requiredIds.supplierSite, visible: true } },
+      { label: INVOICE_GROUP_LABEL, spec: { id: requiredIds.invoiceGroup, visible: true } },
+      { label: AMOUNT_LABEL, spec: { id: requiredIds.amount, visible: true } },
+      { label: DESCRIPTION_LABEL, spec: { id: requiredIds.description, visible: true } }
     ];
     if (!skipNumber) {
-      checks.push({ label: NUMBER_LABEL, spec: { id: fieldIds.number, visible: true } });
+      checks.push({ label: NUMBER_LABEL, spec: { id: requiredIds.number ?? undefined, visible: true } });
     }
-    if (fieldIds.supplierSiteLov) {
-      checks.push({ label: `${SUPPLIER_SITE_LABEL} Search`, spec: { id: fieldIds.supplierSiteLov, visible: true } });
+    if (requiredIds.supplierSiteLov) {
+      checks.push({ label: `${SUPPLIER_SITE_LABEL} Search`, spec: { id: requiredIds.supplierSiteLov, visible: true } });
     } else {
       ctx.log('Supplier Site search icon not found; LOV fallback will be skipped.', 'warn');
     }
