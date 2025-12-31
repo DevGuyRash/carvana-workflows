@@ -12,6 +12,7 @@ const POP_TITLE = 'Carma Bulk Search Scraper - Results';
 const PREFERRED_COLUMNS = ['searchTerm', 'searchUrl', 'table', 'page', 'Reference'];
 const CHUNK_SIZE = 250;
 const ROW_HEADER_LABEL = '#';
+const STYLE_ID = 'cbss-popout-style';
 
 function escapeTsv(value: unknown): string {
   return value === null || typeof value === 'undefined' ? '' : String(value);
@@ -40,30 +41,18 @@ async function copyText(win: Window, text: string): Promise<boolean> {
   }
 }
 
-export function openResultsPopout(params: {
-  getRows: () => ScrapedRow[];
-  getRunning: () => boolean;
-  logger: Logger;
-}): PopoutHandle | null {
-  const { getRows, getRunning, logger } = params;
-  const win = window.open('', 'cbss-results-popout', 'width=1300,height=800,noopener,noreferrer');
-  if (!win) {
-    logger.log('[ERROR] Popout blocked. Allow popups for this site.');
-    return null;
-  }
-
-  const doc = win.document;
-  doc.title = POP_TITLE;
-  doc.body.innerHTML = '';
-
+function ensureStyles(doc: Document): void {
+  if (doc.getElementById(STYLE_ID)) return;
   const style = doc.createElement('style');
+  style.id = STYLE_ID;
   style.textContent = `
     :root{color-scheme:light;}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:#f7f8fb;color:#0f172a;}
-    .cbss-popout{display:flex;flex-direction:column;height:100vh;}
+    html,body{height:100%;margin:0;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f7f8fb;color:#0f172a;}
+    .cbss-popout{display:flex;flex-direction:column;height:100%;}
     .cbss-popout-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#fff;border-bottom:1px solid #e2e8f0;}
     .cbss-popout-title{font-weight:800;font-size:16px;color:#0f172a;}
-    .cbss-popout-actions{display:flex;gap:8px;align-items:center;}
+    .cbss-popout-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
     .cbss-popout-btn{border:1px solid #cbd5f5;border-radius:8px;background:#fff;padding:6px 10px;font-weight:700;cursor:pointer;}
     .cbss-popout-status{font-size:12px;color:#475569;}
     .cbss-popout-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
@@ -79,8 +68,34 @@ export function openResultsPopout(params: {
     tbody tr.cbss-row-selected td{background:#fee2e2;}
     tbody td.cbss-cell-selected{background:#fef3c7;outline:1px solid #f59e0b;}
     tbody td.cbss-col-selected{background:#dbeafe;}
+    .cbss-inline-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:24px;}
+    .cbss-inline-modal{background:#fff;border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.35);width:min(1400px,96vw);height:min(92vh,900px);overflow:hidden;}
   `;
   doc.head.appendChild(style);
+}
+
+function createResultsView(params: {
+  hostWindow: Window;
+  doc: Document;
+  mount: HTMLElement;
+  inline: boolean;
+  getRows: () => ScrapedRow[];
+  getRunning: () => boolean;
+  logger: Logger;
+  onClose?: () => void;
+}): PopoutHandle {
+  const {
+    hostWindow,
+    doc,
+    mount,
+    inline,
+    getRows,
+    getRunning,
+    logger,
+    onClose,
+  } = params;
+
+  ensureStyles(doc);
 
   const root = doc.createElement('div');
   root.className = 'cbss-popout';
@@ -115,6 +130,15 @@ export function openResultsPopout(params: {
   actions.appendChild(refreshBtn);
   actions.appendChild(copyVisibleBtn);
   actions.appendChild(copySelectionBtn);
+
+  let closeBtn: HTMLButtonElement | null = null;
+  if (inline) {
+    closeBtn = doc.createElement('button');
+    closeBtn.className = 'cbss-popout-btn';
+    closeBtn.textContent = 'Close';
+    actions.appendChild(closeBtn);
+  }
+
   header.appendChild(title);
   header.appendChild(actions);
 
@@ -136,7 +160,7 @@ export function openResultsPopout(params: {
 
   root.appendChild(header);
   root.appendChild(body);
-  doc.body.appendChild(root);
+  mount.appendChild(root);
 
   const state = {
     columns: [] as string[],
@@ -249,7 +273,7 @@ export function openResultsPopout(params: {
           }
         }
         if (idx < existingRows.length) {
-          win.setTimeout(step, 0);
+          hostWindow.setTimeout(step, 0);
         } else {
           resolve();
         }
@@ -296,7 +320,7 @@ export function openResultsPopout(params: {
         }
         tbody.appendChild(frag);
         if (idx < rows.length) {
-          win.setTimeout(step, 0);
+          hostWindow.setTimeout(step, 0);
         } else {
           resolve();
         }
@@ -306,7 +330,7 @@ export function openResultsPopout(params: {
   };
 
   const update = async () => {
-    if (win.closed) return;
+    if (!root.isConnected) return;
     if (state.updating) {
       state.queued = true;
       return;
@@ -500,7 +524,7 @@ export function openResultsPopout(params: {
   const copyVisible = async () => {
     const rows = getRows().slice(0, state.lastRendered);
     const tsv = buildTsv(rows, state.columns);
-    const ok = await copyText(win, tsv);
+    const ok = await copyText(hostWindow, tsv);
     logger.log(ok ? '[OK] Copied visible table.' : '[ERROR] Failed to copy visible table.');
   };
 
@@ -510,7 +534,7 @@ export function openResultsPopout(params: {
       const rowIndexes = Array.from(selection.rows).sort((a, b) => a - b);
       const selectedRows = rowIndexes.map((idx) => rows[idx]).filter(Boolean);
       const tsv = buildTsv(selectedRows, state.columns);
-      const ok = await copyText(win, tsv);
+      const ok = await copyText(hostWindow, tsv);
       logger.log(ok ? '[OK] Copied selected rows.' : '[ERROR] Failed to copy selected rows.');
       return;
     }
@@ -519,7 +543,7 @@ export function openResultsPopout(params: {
       const colIndexes = Array.from(selection.cols).sort((a, b) => a - b);
       const cols = colIndexes.map((idx) => state.columns[idx]).filter(Boolean);
       const tsv = buildTsv(rows, cols);
-      const ok = await copyText(win, tsv);
+      const ok = await copyText(hostWindow, tsv);
       logger.log(ok ? '[OK] Copied selected columns.' : '[ERROR] Failed to copy selected columns.');
       return;
     }
@@ -558,7 +582,7 @@ export function openResultsPopout(params: {
         });
         lines.push(line.join('\t'));
       }
-      const ok = await copyText(win, lines.join('\n'));
+      const ok = await copyText(hostWindow, lines.join('\n'));
       logger.log(ok ? '[OK] Copied selected cells.' : '[ERROR] Failed to copy selected cells.');
       return;
     }
@@ -598,12 +622,14 @@ export function openResultsPopout(params: {
     }
   });
 
-  win.addEventListener('keydown', (event) => {
+  const onKeydown = (event: KeyboardEvent) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
       event.preventDefault();
       void copySelection();
     }
-  });
+  };
+
+  hostWindow.addEventListener('keydown', onKeydown);
 
   copyVisibleBtn.addEventListener('click', () => {
     void copyVisible();
@@ -613,35 +639,118 @@ export function openResultsPopout(params: {
     void copySelection();
   });
 
-  const interval = win.setInterval(() => {
-    if (win.closed) {
-      win.clearInterval(interval);
-      return;
-    }
+  refreshBtn.addEventListener('click', () => {
+    void update();
+  });
+
+  const interval = hostWindow.setInterval(() => {
     if (getRunning()) {
       void update();
     }
   }, 1500);
 
-  win.addEventListener('beforeunload', () => {
-    win.clearInterval(interval);
-  });
+  const cleanup = () => {
+    hostWindow.clearInterval(interval);
+    hostWindow.removeEventListener('keydown', onKeydown);
+  };
 
   const handle: PopoutHandle = {
     update: () => {
       void update();
     },
     focus: () => {
-      win.focus();
+      try {
+        hostWindow.focus();
+      } catch {
+        // ignore
+      }
     },
     close: () => {
-      win.close();
+      cleanup();
+      if (onClose) onClose();
     },
-    isClosed: () => win.closed,
+    isClosed: () => !root.isConnected,
   };
 
-  refreshBtn.addEventListener('click', handle.update);
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      handle.close();
+    });
+  }
+
   void update();
 
   return handle;
+}
+
+function openResultsInline(params: {
+  getRows: () => ScrapedRow[];
+  getRunning: () => boolean;
+  logger: Logger;
+}): PopoutHandle {
+  const { getRows, getRunning, logger } = params;
+  const doc = document;
+  ensureStyles(doc);
+  const overlay = doc.createElement('div');
+  overlay.className = 'cbss-inline-overlay';
+  const modal = doc.createElement('div');
+  modal.className = 'cbss-inline-modal';
+  overlay.appendChild(modal);
+  doc.body.appendChild(overlay);
+
+  return createResultsView({
+    hostWindow: window,
+    doc,
+    mount: modal,
+    inline: true,
+    getRows,
+    getRunning,
+    logger,
+    onClose: () => {
+      overlay.remove();
+    },
+  });
+}
+
+export function openResultsPopout(params: {
+  getRows: () => ScrapedRow[];
+  getRunning: () => boolean;
+  logger: Logger;
+}): PopoutHandle | null {
+  const { getRows, getRunning, logger } = params;
+  const win = window.open('', 'cbss-results-popout', 'width=1300,height=800');
+  if (!win) {
+    logger.log('[WARN] Popout blocked. Opening inline view.');
+    return openResultsInline({ getRows, getRunning, logger });
+  }
+
+  try {
+    const doc = win.document;
+    doc.title = POP_TITLE;
+    doc.body.innerHTML = '';
+    return createResultsView({
+      hostWindow: win,
+      doc,
+      mount: doc.body,
+      inline: false,
+      getRows,
+      getRunning,
+      logger,
+      onClose: () => {
+        try {
+          win.close();
+        } catch {
+          // ignore
+        }
+      },
+    });
+  } catch {
+    try {
+      win.close();
+    } catch {
+      // ignore
+    }
+    logger.log('[WARN] Popout inaccessible. Opening inline view.');
+    return openResultsInline({ getRows, getRunning, logger });
+  }
 }
