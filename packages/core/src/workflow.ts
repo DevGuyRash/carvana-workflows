@@ -922,7 +922,7 @@ export class Engine {
   async runWorkflow(
     wf: WorkflowDefinition,
     nested = false,
-    options: { silent?: boolean } = {}
+    options: { silent?: boolean; vars?: Record<string, any> } = {}
   ): Promise<boolean> {
     if (!wf) return false;
     if (this.running && !nested) {
@@ -940,7 +940,7 @@ export class Engine {
       workflowId: wf.id,
       opt: this.getWorkflowOptions(wf, activeProfile),
       profile: { id: activeProfile, label: displayLabel },
-      vars: Object.create(null)
+      vars: options.vars ?? Object.create(null)
     };
 
     let success = false;
@@ -1155,14 +1155,17 @@ export class Engine {
             options: ctx.opt,
             profile: ctx.profile,
             log,
-            runWorkflow: async (workflowId: string, options?: { silent?: boolean }) => {
+            runWorkflow: async (workflowId: string, options?: { silent?: boolean; shareVars?: boolean }) => {
               if (!workflowId) return false;
               const nested = this.findWorkflow(workflowId);
               if (!nested) {
                 log(`Nested workflow not found: ${workflowId}`, 'warn');
                 return false;
               }
-              const nestedOptions = { silent: options?.silent ?? true };
+              const nestedOptions = {
+                silent: options?.silent ?? true,
+                vars: options?.shareVars ? ctx.vars : undefined
+              };
               return this.runWorkflow(nested, true, nestedOptions);
             },
             setVar: (key: string, value: any) => {

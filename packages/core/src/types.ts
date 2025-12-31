@@ -93,7 +93,7 @@ export interface WorkflowExecuteContext {
   options: Record<string, any>;
   profile: { id: string; label: string };
   log: (message: string, level?: WorkflowLogLevel) => void;
-  runWorkflow: (workflowId: string, options?: { silent?: boolean }) => Promise<boolean>;
+  runWorkflow: (workflowId: string, options?: { silent?: boolean; shareVars?: boolean }) => Promise<boolean>;
   setVar: (key: string, value: any) => void;
   getVar: <T = any>(key: string) => T | undefined;
   store: Store;
