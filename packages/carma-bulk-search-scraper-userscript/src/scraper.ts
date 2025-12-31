@@ -1,6 +1,6 @@
 import { applyColumns, setPageSize } from './columns';
 import { downloadText, rowsToCsv } from './export';
-import { shouldKeepRow } from './filters';
+import { getRowValueByHeaderLike, isMeaningfulValue, shouldKeepRow } from './filters';
 import { loadIntoIframe } from './iframe';
 import type { Logger } from './logger';
 import { clickNextPage, getPaginationInfo, goToFirstPageIfNeeded } from './pagination';
@@ -9,11 +9,61 @@ import { baseTitle, getBlocksWithTables, parseCountFromTitle, scrapeCurrentPageR
 import { parseTerms } from './terms';
 import type { AppState, AppUi, BlockInfo, Options, TermInfo } from './types';
 import { cleanText, waitFor } from './utils';
+import { PURCHASE_ID_BLANK_MATCHERS, STOCK_NUMBER_BLANK_MATCHERS, VIN_BLANK_MATCHERS } from './constants';
 
 export interface ScrapeContext {
   state: AppState;
   ui: AppUi;
   logger: Logger;
+}
+
+function normalizeSegment(value: string, blankMatchers: Array<string | RegExp>): string {
+  return isMeaningfulValue(value, blankMatchers) ? cleanText(value) : '';
+}
+
+function buildReference(row: Record<string, unknown>): string {
+  const stockRaw = getRowValueByHeaderLike(row, [
+    /latest\s*purchase\s*stock\s*number/i,
+    /latestpurchasestocknumber/i,
+    /stock\s*number/i,
+    /stocknumber/i,
+  ]);
+  const vinRaw = getRowValueByHeaderLike(row, [
+    /latest\s*purchase\s*vin/i,
+    /latestpurchasevin/i,
+    /^vin$/i,
+  ]);
+  const purchaseIdRaw = getRowValueByHeaderLike(row, [
+    /latest\s*purchase\s*purchase\s*id/i,
+    /latestpurchasepurchaseid/i,
+    /purchase\s*id/i,
+    /purchaseid/i,
+  ]);
+
+  const stock = normalizeSegment(stockRaw, STOCK_NUMBER_BLANK_MATCHERS);
+  const vin = normalizeSegment(vinRaw, VIN_BLANK_MATCHERS);
+  const purchaseId = normalizeSegment(purchaseIdRaw, PURCHASE_ID_BLANK_MATCHERS);
+
+  if (!stock && !vin && !purchaseId) return '';
+
+  return `HUB-${stock || 'STOCK'}-${vin || 'VIN'}-${purchaseId || 'PID'}`;
+}
+
+function hasEmptyResults(doc: Document): boolean {
+  const blocks = Array.from(doc.querySelectorAll('.cpl__block'));
+  for (const block of blocks) {
+    const title = cleanText(block.querySelector('.cpl__block__header-title')?.textContent || '');
+    if (!/\(\s*0\s*\)/.test(title)) continue;
+    const blockText = cleanText(block.textContent || '');
+    if (/no\s+results/i.test(blockText)) return true;
+    if (/no\s+\w+\s+found/i.test(blockText)) return true;
+  }
+
+  const bodyText = cleanText(doc.body?.innerText || '');
+  if (!bodyText) return false;
+  if (/no\s+results/i.test(bodyText)) return true;
+  if (/no\s+customers?\s+found/i.test(bodyText)) return true;
+  return false;
 }
 
 function readOptions(ui: AppUi): Options {
@@ -160,8 +210,10 @@ async function scrapeBlockPages(params: {
         searchUrl: termInfo.url,
         table: name,
         page,
+        Reference: '',
         ...row,
       };
+      out.Reference = buildReference(out);
 
       if (shouldKeepRow(out, filters)) {
         state.rows.push(out);
@@ -280,16 +332,21 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
         continue;
       }
 
+      let renderState: 'table' | 'empty';
       try {
-        await waitFor(() => {
+        renderState = await waitFor(() => {
           const hasTable = doc.querySelector('table[data-testid="data-table"]');
-          if (hasTable) return true;
-          const text = cleanText(doc.body?.innerText || '');
-          if (text && /no\s+results/i.test(text)) return true;
-          return false;
+          if (hasTable) return 'table';
+          if (hasEmptyResults(doc)) return 'empty';
+          return null;
         }, { timeoutMs: 20000, intervalMs: 200, debugLabel: 'results render' });
       } catch (error) {
         workerLogger.log(`[WARN] Results did not render in time: ${(error as Error).message}`);
+        continue;
+      }
+
+      if (renderState === 'empty') {
+        workerLogger.log('[INFO] No results found on this page.');
         continue;
       }
 

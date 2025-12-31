@@ -11,7 +11,7 @@ export function getRowValueByHeaderLike(row: Record<string, unknown>, patterns: 
   return '';
 }
 
-function isNonEmpty(value: string, blankMatchers: Array<string | RegExp> = []): boolean {
+export function isMeaningfulValue(value: string, blankMatchers: Array<string | RegExp> = []): boolean {
   const text = cleanText(value);
   if (!text) return false;
   if (/^(null|undefined)$/i.test(text)) return false;
@@ -36,15 +36,15 @@ export function shouldKeepRow(row: Record<string, unknown>, filters: {
 }): boolean {
   if (filters.requirePurchaseId) {
     const value = getRowValueByHeaderLike(row, [/purchase\s*id/i, /purchaseid/i]);
-    if (!isNonEmpty(value, PURCHASE_ID_BLANK_MATCHERS)) return false;
+    if (!isMeaningfulValue(value, PURCHASE_ID_BLANK_MATCHERS)) return false;
   }
   if (filters.requireVin) {
     const value = getRowValueByHeaderLike(row, [/^vin$/i]);
-    if (!isNonEmpty(value, VIN_BLANK_MATCHERS)) return false;
+    if (!isMeaningfulValue(value, VIN_BLANK_MATCHERS)) return false;
   }
   if (filters.requireStockNumber) {
     const value = getRowValueByHeaderLike(row, [/stock\s*number/i, /stocknumber/i]);
-    if (!isNonEmpty(value, STOCK_NUMBER_BLANK_MATCHERS)) return false;
+    if (!isMeaningfulValue(value, STOCK_NUMBER_BLANK_MATCHERS)) return false;
   }
 
   return true;

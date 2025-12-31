@@ -33,7 +33,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 export function rowsToCsv(rows: Array<Record<string, unknown>>): string {
   if (!rows.length) return '';
 
-  const preferred = ['searchTerm', 'searchUrl', 'table', 'page'];
+  const preferred = ['searchTerm', 'searchUrl', 'table', 'page', 'Reference'];
   const cols: string[] = [];
   const seen = new Set<string>();
 
