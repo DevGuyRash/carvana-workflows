@@ -69,6 +69,30 @@ const QUICK_PRESETS: QuickPreset[] = [
     jql: 'watcher = currentUser() ORDER BY updated DESC',
     category: 'personal'
   },
+  {
+    id: 'voted',
+    label: 'Voted For',
+    emoji: '🗳️',
+    description: 'Issues you voted for',
+    jql: 'voter = currentUser() ORDER BY updated DESC',
+    category: 'personal'
+  },
+  {
+    id: 'mentioned',
+    label: 'Mentioned Me',
+    emoji: '💬',
+    description: 'Issues where you are mentioned',
+    jql: 'text ~ currentUser() ORDER BY updated DESC',
+    category: 'personal'
+  },
+  {
+    id: 'recently-viewed',
+    label: 'Recently Viewed',
+    emoji: '🕐',
+    description: 'Issues you recently viewed',
+    jql: 'issuekey in issueHistory() ORDER BY lastViewed DESC',
+    category: 'personal'
+  },
   // Time-based
   {
     id: 'recently-updated',
@@ -87,11 +111,43 @@ const QUICK_PRESETS: QuickPreset[] = [
     category: 'time'
   },
   {
+    id: 'created-this-week',
+    label: 'Created This Week',
+    emoji: '📅',
+    description: 'Issues created this week',
+    jql: 'created >= startOfWeek() ORDER BY created DESC',
+    category: 'time'
+  },
+  {
+    id: 'updated-since-login',
+    label: 'Updated Since Login',
+    emoji: '🔑',
+    description: 'Updated since your session started',
+    jql: 'updated >= currentLogin() ORDER BY updated DESC',
+    category: 'time'
+  },
+  {
+    id: 'resolved-this-week',
+    label: 'Resolved This Week',
+    emoji: '✅',
+    description: 'Issues resolved this week',
+    jql: 'resolved >= startOfWeek() ORDER BY resolved DESC',
+    category: 'time'
+  },
+  {
     id: 'due-this-week',
     label: 'Due This Week',
     emoji: '📅',
     description: 'Issues due within this week',
     jql: 'due >= startOfWeek() AND due <= endOfWeek() ORDER BY due ASC',
+    category: 'time'
+  },
+  {
+    id: 'due-soon',
+    label: 'Due in 7 Days',
+    emoji: '⏰',
+    description: 'Issues due in the next 7 days',
+    jql: 'due >= now() AND due <= 7d ORDER BY due ASC',
     category: 'time'
   },
   {
@@ -102,6 +158,14 @@ const QUICK_PRESETS: QuickPreset[] = [
     jql: 'due < now() AND resolution = Unresolved ORDER BY due ASC',
     category: 'time'
   },
+  {
+    id: 'no-due-date',
+    label: 'No Due Date',
+    emoji: '❓',
+    description: 'Issues without a due date',
+    jql: 'due IS EMPTY AND resolution = Unresolved ORDER BY priority DESC',
+    category: 'time'
+  },
   // Priority/Status
   {
     id: 'high-priority',
@@ -109,6 +173,22 @@ const QUICK_PRESETS: QuickPreset[] = [
     emoji: '🔥',
     description: 'Highest and High priority issues',
     jql: 'priority in (Highest, High) AND resolution = Unresolved ORDER BY priority DESC',
+    category: 'priority'
+  },
+  {
+    id: 'blockers',
+    label: 'Blockers',
+    emoji: '🚨',
+    description: 'Blocker priority issues',
+    jql: 'priority = Blocker AND resolution = Unresolved ORDER BY created DESC',
+    category: 'priority'
+  },
+  {
+    id: 'critical',
+    label: 'Critical Issues',
+    emoji: '💥',
+    description: 'Critical priority issues',
+    jql: 'priority = Critical AND resolution = Unresolved ORDER BY created DESC',
     category: 'priority'
   },
   {
@@ -126,6 +206,95 @@ const QUICK_PRESETS: QuickPreset[] = [
     description: 'Issues with Blocked status',
     jql: 'status = Blocked ORDER BY updated DESC',
     category: 'priority'
+  },
+  {
+    id: 'in-progress',
+    label: 'In Progress',
+    emoji: '🔧',
+    description: 'Issues being worked on',
+    jql: 'status = "In Progress" ORDER BY updated DESC',
+    category: 'priority'
+  },
+  {
+    id: 'recently-resolved',
+    label: 'Recently Resolved',
+    emoji: '🎉',
+    description: 'Resolved in the last 7 days',
+    jql: 'resolved >= -7d ORDER BY resolved DESC',
+    category: 'priority'
+  },
+  // Team
+  {
+    id: 'team-open',
+    label: 'All Open Issues',
+    emoji: '📂',
+    description: 'All open issues in project',
+    jql: 'resolution = Unresolved ORDER BY priority DESC, updated DESC',
+    category: 'team'
+  },
+  {
+    id: 'open-bugs',
+    label: 'Open Bugs',
+    emoji: '🐛',
+    description: 'All unresolved bugs',
+    jql: 'issuetype = Bug AND resolution = Unresolved ORDER BY priority DESC, created DESC',
+    category: 'team'
+  },
+  {
+    id: 'open-tasks',
+    label: 'Open Tasks',
+    emoji: '✅',
+    description: 'All unresolved tasks',
+    jql: 'issuetype = Task AND resolution = Unresolved ORDER BY priority DESC, created DESC',
+    category: 'team'
+  },
+  {
+    id: 'open-stories',
+    label: 'Open Stories',
+    emoji: '📖',
+    description: 'All unresolved stories',
+    jql: 'issuetype = Story AND resolution = Unresolved ORDER BY priority DESC, created DESC',
+    category: 'team'
+  },
+  {
+    id: 'current-sprint',
+    label: 'Current Sprint',
+    emoji: '🏃',
+    description: 'Issues in active sprint',
+    jql: 'sprint in openSprints() ORDER BY priority DESC',
+    category: 'team'
+  },
+  {
+    id: 'next-sprint',
+    label: 'Next Sprint',
+    emoji: '⏭️',
+    description: 'Issues in upcoming sprints',
+    jql: 'sprint in futureSprints() ORDER BY priority DESC',
+    category: 'team'
+  },
+  {
+    id: 'backlog',
+    label: 'Backlog',
+    emoji: '📚',
+    description: 'Issues not in any sprint',
+    jql: 'sprint IS EMPTY AND resolution = Unresolved ORDER BY priority DESC',
+    category: 'team'
+  },
+  {
+    id: 'has-attachments',
+    label: 'Has Attachments',
+    emoji: '📎',
+    description: 'Issues with attachments',
+    jql: 'attachments IS NOT EMPTY ORDER BY updated DESC',
+    category: 'team'
+  },
+  {
+    id: 'stale',
+    label: 'Stale Issues',
+    emoji: '🕸️',
+    description: 'Not updated in 30+ days',
+    jql: 'updated < -30d AND resolution = Unresolved ORDER BY updated ASC',
+    category: 'team'
   }
 ];
 
@@ -170,11 +339,32 @@ const FRIENDLY_FIELDS: FriendlyField[] = [
     commonValues: ['Me (current user)']
   },
   {
+    id: 'creator',
+    label: 'Creator',
+    emoji: '👷',
+    description: 'Original creator of the issue',
+    jqlField: 'creator',
+    category: 'who',
+    defaultOperator: 'equals',
+    valueType: 'user',
+    commonValues: ['Me (current user)']
+  },
+  {
     id: 'watcher',
     label: 'Watched by',
     emoji: '👀',
     description: 'Who is watching it',
     jqlField: 'watcher',
+    category: 'who',
+    defaultOperator: 'equals',
+    valueType: 'user'
+  },
+  {
+    id: 'voter',
+    label: 'Voted by',
+    emoji: '🗳️',
+    description: 'Who voted for this issue',
+    jqlField: 'voter',
     category: 'who',
     defaultOperator: 'equals',
     valueType: 'user'
@@ -201,6 +391,26 @@ const FRIENDLY_FIELDS: FriendlyField[] = [
     valueType: 'text'
   },
   {
+    id: 'environment',
+    label: 'Environment contains',
+    emoji: '🌍',
+    description: 'Search in environment field',
+    jqlField: 'environment',
+    category: 'what',
+    defaultOperator: 'contains',
+    valueType: 'text'
+  },
+  {
+    id: 'comment',
+    label: 'Comment contains',
+    emoji: '💬',
+    description: 'Search in issue comments',
+    jqlField: 'comment',
+    category: 'what',
+    defaultOperator: 'contains',
+    valueType: 'text'
+  },
+  {
     id: 'text',
     label: 'Anywhere (text search)',
     emoji: '🔍',
@@ -220,6 +430,36 @@ const FRIENDLY_FIELDS: FriendlyField[] = [
     defaultOperator: 'equals',
     valueType: 'list'
   },
+  {
+    id: 'issuekey',
+    label: 'Issue Key',
+    emoji: '🔑',
+    description: 'Search by issue key (e.g., PROJ-123)',
+    jqlField: 'issuekey',
+    category: 'what',
+    defaultOperator: 'equals',
+    valueType: 'text'
+  },
+  {
+    id: 'parent',
+    label: 'Parent Issue',
+    emoji: '⬆️',
+    description: 'Parent of sub-task',
+    jqlField: 'parent',
+    category: 'what',
+    defaultOperator: 'equals',
+    valueType: 'text'
+  },
+  {
+    id: 'attachments',
+    label: 'Has Attachments',
+    emoji: '📎',
+    description: 'Issues with/without attachments',
+    jqlField: 'attachments',
+    category: 'what',
+    defaultOperator: 'is-not-empty',
+    valueType: 'list'
+  },
   // STATUS
   {
     id: 'status',
@@ -230,7 +470,7 @@ const FRIENDLY_FIELDS: FriendlyField[] = [
     category: 'status',
     defaultOperator: 'equals',
     valueType: 'status',
-    commonValues: ['Open', 'In Progress', 'Done', 'Closed', 'To Do', 'Blocked']
+    commonValues: ['Open', 'In Progress', 'Done', 'Closed', 'To Do', 'Blocked', 'Resolved', 'Reopened']
   },
   {
     id: 'resolution',
@@ -241,7 +481,7 @@ const FRIENDLY_FIELDS: FriendlyField[] = [
     category: 'status',
     defaultOperator: 'equals',
     valueType: 'status',
-    commonValues: ['Unresolved', 'Done', 'Fixed', "Won't Do", 'Duplicate']
+    commonValues: ['Unresolved', 'Done', 'Fixed', "Won't Do", "Won't Fix", 'Duplicate', 'Cannot Reproduce', 'Incomplete']
   },
   {
     id: 'priority',
@@ -252,7 +492,27 @@ const FRIENDLY_FIELDS: FriendlyField[] = [
     category: 'status',
     defaultOperator: 'equals',
     valueType: 'priority',
-    commonValues: ['Highest', 'High', 'Medium', 'Low', 'Lowest']
+    commonValues: ['Highest', 'High', 'Medium', 'Low', 'Lowest', 'Blocker', 'Critical', 'Major', 'Minor', 'Trivial']
+  },
+  {
+    id: 'votes',
+    label: 'Votes',
+    emoji: '👍',
+    description: 'Number of votes',
+    jqlField: 'votes',
+    category: 'status',
+    defaultOperator: 'greater-than',
+    valueType: 'number'
+  },
+  {
+    id: 'watchers',
+    label: 'Watcher Count',
+    emoji: '👁️',
+    description: 'Number of watchers',
+    jqlField: 'watchers',
+    category: 'status',
+    defaultOperator: 'greater-than',
+    valueType: 'number'
   },
   // WHERE
   {
@@ -274,7 +534,7 @@ const FRIENDLY_FIELDS: FriendlyField[] = [
     category: 'where',
     defaultOperator: 'equals',
     valueType: 'type',
-    commonValues: ['Bug', 'Task', 'Story', 'Epic', 'Sub-task']
+    commonValues: ['Bug', 'Task', 'Story', 'Epic', 'Sub-task', 'Improvement', 'New Feature', 'Incident', 'Service Request', 'Change']
   },
   {
     id: 'component',
@@ -282,6 +542,56 @@ const FRIENDLY_FIELDS: FriendlyField[] = [
     emoji: '🧩',
     description: 'Project component',
     jqlField: 'component',
+    category: 'where',
+    defaultOperator: 'equals',
+    valueType: 'list'
+  },
+  {
+    id: 'category',
+    label: 'Category',
+    emoji: '📂',
+    description: 'Project category',
+    jqlField: 'category',
+    category: 'where',
+    defaultOperator: 'equals',
+    valueType: 'list'
+  },
+  {
+    id: 'fixVersion',
+    label: 'Fix Version',
+    emoji: '🏁',
+    description: 'Target release version',
+    jqlField: 'fixVersion',
+    category: 'where',
+    defaultOperator: 'equals',
+    valueType: 'list'
+  },
+  {
+    id: 'affectedVersion',
+    label: 'Affected Version',
+    emoji: '🐛',
+    description: 'Version affected by issue',
+    jqlField: 'affectedVersion',
+    category: 'where',
+    defaultOperator: 'equals',
+    valueType: 'list'
+  },
+  {
+    id: 'sprint',
+    label: 'Sprint',
+    emoji: '🏃',
+    description: 'Agile sprint',
+    jqlField: 'sprint',
+    category: 'where',
+    defaultOperator: 'equals',
+    valueType: 'list'
+  },
+  {
+    id: 'level',
+    label: 'Security Level',
+    emoji: '🔒',
+    description: 'Issue security level',
+    jqlField: 'level',
     category: 'where',
     defaultOperator: 'equals',
     valueType: 'list'
@@ -326,6 +636,57 @@ const FRIENDLY_FIELDS: FriendlyField[] = [
     category: 'when',
     defaultOperator: 'greater-than-equals',
     valueType: 'date'
+  },
+  {
+    id: 'lastViewed',
+    label: 'Last Viewed',
+    emoji: '👁️',
+    description: 'When you last viewed it',
+    jqlField: 'lastViewed',
+    category: 'when',
+    defaultOperator: 'greater-than-equals',
+    valueType: 'date'
+  },
+  // TIME TRACKING
+  {
+    id: 'originalEstimate',
+    label: 'Original Estimate',
+    emoji: '📊',
+    description: 'Original time estimate',
+    jqlField: 'originalEstimate',
+    category: 'status',
+    defaultOperator: 'greater-than',
+    valueType: 'number'
+  },
+  {
+    id: 'remainingEstimate',
+    label: 'Remaining Estimate',
+    emoji: '⏳',
+    description: 'Remaining time estimate',
+    jqlField: 'remainingEstimate',
+    category: 'status',
+    defaultOperator: 'greater-than',
+    valueType: 'number'
+  },
+  {
+    id: 'timeSpent',
+    label: 'Time Spent',
+    emoji: '⏱️',
+    description: 'Time logged on issue',
+    jqlField: 'timeSpent',
+    category: 'status',
+    defaultOperator: 'greater-than',
+    valueType: 'number'
+  },
+  {
+    id: 'workRatio',
+    label: 'Work Ratio',
+    emoji: '📈',
+    description: 'Logged vs estimated time (%)',
+    jqlField: 'workRatio',
+    category: 'status',
+    defaultOperator: 'greater-than',
+    valueType: 'number'
   }
 ];
 
@@ -367,16 +728,36 @@ interface DatePreset {
 }
 
 const DATE_PRESETS: DatePreset[] = [
+  // Relative past - common
   { label: 'Today', value: 'startOfDay()', description: 'Start of today' },
   { label: 'Yesterday', value: '-1d', description: '24 hours ago' },
+  { label: 'Last 2 days', value: '-2d', description: '2 days ago' },
+  { label: 'Last 3 days', value: '-3d', description: '3 days ago' },
   { label: 'This week', value: 'startOfWeek()', description: 'Start of this week' },
+  { label: 'Last week', value: 'startOfWeek(-1)', description: 'Start of last week' },
   { label: 'Last 7 days', value: '-7d', description: '7 days ago' },
+  { label: 'Last 14 days', value: '-14d', description: '14 days ago' },
   { label: 'This month', value: 'startOfMonth()', description: 'Start of this month' },
+  { label: 'Last month', value: 'startOfMonth(-1)', description: 'Start of last month' },
   { label: 'Last 30 days', value: '-30d', description: '30 days ago' },
+  { label: 'Last 60 days', value: '-60d', description: '60 days ago' },
+  { label: 'Last 90 days', value: '-90d', description: '90 days ago' },
+  { label: 'This quarter', value: '-90d', description: 'Approximately this quarter' },
   { label: 'This year', value: 'startOfYear()', description: 'Start of this year' },
+  { label: 'Last year', value: 'startOfYear(-1)', description: 'Start of last year' },
+  // End dates - for due date ranges
   { label: 'End of today', value: 'endOfDay()', description: 'End of today' },
+  { label: 'End of tomorrow', value: 'endOfDay(1)', description: 'End of tomorrow' },
   { label: 'End of week', value: 'endOfWeek()', description: 'End of this week' },
-  { label: 'End of month', value: 'endOfMonth()', description: 'End of this month' }
+  { label: 'End of next week', value: 'endOfWeek(1)', description: 'End of next week' },
+  { label: 'End of month', value: 'endOfMonth()', description: 'End of this month' },
+  { label: 'End of next month', value: 'endOfMonth(1)', description: 'End of next month' },
+  { label: 'End of year', value: 'endOfYear()', description: 'End of this year' },
+  // Session-based
+  { label: 'Since login', value: 'currentLogin()', description: 'Since current session started' },
+  { label: 'Since last login', value: 'lastLogin()', description: 'Since previous session' },
+  // Now
+  { label: 'Now', value: 'now()', description: 'Current date and time' }
 ];
 
 // ============================================================================

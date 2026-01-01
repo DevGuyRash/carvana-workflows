@@ -250,54 +250,71 @@ export interface JqlFunctionDoc {
 }
 
 export const JQL_FUNCTION_DOCS: JqlFunctionDoc[] = [
-  { name: 'approved()', description: 'Only available when Jira Service Management approvals are enabled.', category: 'Service Management' },
-  { name: 'approver()', description: 'Only available when Jira Service Management approvals are enabled.', category: 'Service Management' },
-  { name: 'breached()', description: 'Only available when Jira Service Management SLA data is enabled.', category: 'Service Management' },
-  { name: 'cascadeOption()', description: 'Matches selected values of a cascading select custom field.' },
-  { name: 'closedSprints()', description: 'Issues in completed sprints.' },
-  { name: 'completed()', description: 'Only available when Jira Service Management SLA data is enabled.', category: 'Service Management' },
-  { name: 'componentsLeadByUser()', description: 'Issues in components led by a specified user (defaults to you).' },
-  { name: 'currentLogin()', description: 'Matches times based on the start of the current session.' },
-  { name: 'currentUser()', description: 'Matches the currently logged-in user.' },
-  { name: 'earliestUnreleasedVersion()', description: 'Earliest unreleased version for a project.' },
-  { name: 'elapsed()', description: 'Only available when Jira Service Management SLA data is enabled.', category: 'Service Management' },
-  { name: 'endOfDay()', description: 'End of the current day.' },
-  { name: 'endOfMonth()', description: 'End of the current month.' },
-  { name: 'endOfWeek()', description: 'End of the current week.' },
-  { name: 'endOfYear()', description: 'End of the current year.' },
-  { name: 'everbreached()', description: 'Only available when Jira Service Management SLA data is enabled.', category: 'Service Management' },
-  { name: 'futureSprints()', description: 'Issues in sprints that have not started yet.' },
-  { name: 'issueHistory()', description: 'Issues you have recently viewed.' },
-  { name: 'issuesWithRemoteLinksByGlobalId()', description: 'Issues that have remote links with the provided global IDs.' },
-  { name: 'lastLogin()', description: 'Matches times based on the previous session start.' },
-  { name: 'latestReleasedVersion()', description: 'Latest released version for a project.' },
-  { name: 'linkedIssues()', description: 'Issues linked to a specific issue (optionally by link type).' },
-  { name: 'membersOf()', description: 'Users in a specified group.' },
-  { name: 'myApproval()', description: 'Only available when Jira Service Management approvals are enabled.', category: 'Service Management' },
-  { name: 'myPending()', description: 'Only available when Jira Service Management approvals are enabled.', category: 'Service Management' },
-  { name: 'now()', description: 'Current date/time.' },
-  { name: 'openSprints()', description: 'Issues in sprints that are currently open.' },
-  { name: 'outdated()', description: 'Only available when Jira Service Management SLA data is enabled.', category: 'Service Management' },
-  { name: 'paused()', description: 'Only available when Jira Service Management SLA data is enabled.', category: 'Service Management' },
-  { name: 'pending()', description: 'Only available when Jira Service Management SLA data is enabled.', category: 'Service Management' },
-  { name: 'pendingBy()', description: 'Only available when Jira Service Management SLA data is enabled.', category: 'Service Management' },
-  { name: 'projectsLeadByUser()', description: 'Projects led by a specified user (defaults to you).' },
-  { name: 'projectsWhereUserHasPermission()', description: 'Projects where you have a specified permission.' },
-  { name: 'projectsWhereUserHasRole()', description: 'Projects where you have a specified role.' },
-  { name: 'releasedVersions()', description: 'Released versions for a project.' },
-  { name: 'remaining()', description: 'Only available when Jira Service Management SLA data is enabled.', category: 'Service Management' },
-  { name: 'running()', description: 'Only available when Jira Service Management SLA data is enabled.', category: 'Service Management' },
-  { name: 'standardIssueTypes()', description: 'Issue types that are not sub-tasks.' },
-  { name: 'startOfDay()', description: 'Start of the current day.' },
-  { name: 'startOfMonth()', description: 'Start of the current month.' },
-  { name: 'startOfWeek()', description: 'Start of the current week.' },
-  { name: 'startOfYear()', description: 'Start of the current year.' },
-  { name: 'subtaskIssueTypes()', description: 'Issue types that are sub-tasks.' },
-  { name: 'unreleasedVersions()', description: 'Unreleased versions for a project.' },
-  { name: 'updatedBy()', description: 'Issues updated by a specific user, optionally within a time range.' },
-  { name: 'votedIssues()', description: 'Issues you have voted for.' },
-  { name: 'watchedIssues()', description: 'Issues you are watching.' },
-  { name: 'withinCalendarHours()', description: 'Only available when Jira Service Management SLA data is enabled.', category: 'Service Management' }
+  // User Functions
+  { name: 'currentUser()', description: 'Matches the currently logged-in user. Works with assignee, reporter, voter, watcher, creator.', category: 'User' },
+  { name: 'membersOf(group)', description: 'Users in a specified group. Use with IN/NOT IN operators.', category: 'User' },
+  { name: 'componentsLeadByUser()', description: 'Issues in components led by you (or specified user).', category: 'User' },
+  { name: 'projectsLeadByUser()', description: 'Projects led by a specified user (defaults to you).', category: 'User' },
+  { name: 'projectsWhereUserHasPermission(permission)', description: 'Projects where you have a specified permission.', category: 'User' },
+  { name: 'projectsWhereUserHasRole(role)', description: 'Projects where you have a specified role.', category: 'User' },
+
+  // Date/Time Functions
+  { name: 'now()', description: 'Current date/time.', category: 'Date' },
+  { name: 'currentLogin()', description: 'Matches times based on the start of the current session.', category: 'Date' },
+  { name: 'lastLogin()', description: 'Matches times based on the previous session start.', category: 'Date' },
+  { name: 'startOfDay()', description: 'Start of the current day. Supports increments like startOfDay(-1) for yesterday.', category: 'Date' },
+  { name: 'startOfWeek()', description: 'Start of the current week. Supports increments like startOfWeek(-1) for last week.', category: 'Date' },
+  { name: 'startOfMonth()', description: 'Start of the current month. Supports increments like startOfMonth(-1).', category: 'Date' },
+  { name: 'startOfYear()', description: 'Start of the current year. Supports increments like startOfYear(-1).', category: 'Date' },
+  { name: 'endOfDay()', description: 'End of the current day. Supports increments like endOfDay(1) for tomorrow.', category: 'Date' },
+  { name: 'endOfWeek()', description: 'End of the current week. Supports increments like endOfWeek(1).', category: 'Date' },
+  { name: 'endOfMonth()', description: 'End of the current month. Supports increments like endOfMonth(1).', category: 'Date' },
+  { name: 'endOfYear()', description: 'End of the current year. Supports increments like endOfYear(1).', category: 'Date' },
+
+  // Sprint Functions
+  { name: 'openSprints()', description: 'Issues in sprints that are currently active/open.', category: 'Sprint' },
+  { name: 'closedSprints()', description: 'Issues in completed sprints.', category: 'Sprint' },
+  { name: 'futureSprints()', description: 'Issues in sprints that have not started yet.', category: 'Sprint' },
+
+  // Version Functions
+  { name: 'releasedVersions()', description: 'Released versions for a project. Use: fixVersion in releasedVersions()', category: 'Version' },
+  { name: 'unreleasedVersions()', description: 'Unreleased versions for a project.', category: 'Version' },
+  { name: 'latestReleasedVersion(project)', description: 'Latest released version for a project.', category: 'Version' },
+  { name: 'earliestUnreleasedVersion(project)', description: 'Earliest unreleased version for a project.', category: 'Version' },
+
+  // Issue Functions
+  { name: 'issueHistory()', description: 'Issues you have recently viewed (up to 50).', category: 'Issue' },
+  { name: 'linkedIssues(issueKey)', description: 'Issues linked to a specific issue. Can filter by link type: linkedIssues(ABC-123, "blocks")', category: 'Issue' },
+  { name: 'votedIssues()', description: 'Issues you have voted for.', category: 'Issue' },
+  { name: 'watchedIssues()', description: 'Issues you are watching.', category: 'Issue' },
+  { name: 'updatedBy(user)', description: 'Issues updated by a specific user. Can filter by date: updatedBy(jsmith, "-7d")', category: 'Issue' },
+  { name: 'issuesWithRemoteLinksByGlobalId(id)', description: 'Issues that have remote links with the provided global IDs.', category: 'Issue' },
+
+  // Issue Type Functions
+  { name: 'standardIssueTypes()', description: 'Issue types that are not sub-tasks.', category: 'Issue Type' },
+  { name: 'subtaskIssueTypes()', description: 'Issue types that are sub-tasks.', category: 'Issue Type' },
+
+  // Custom Field Functions
+  { name: 'cascadeOption(parent, child)', description: 'Matches cascading select custom field values. Use "none" for empty.', category: 'Custom Field' },
+
+  // Service Management - Approval Functions
+  { name: 'approved()', description: 'Issues with final approval decision of "approved".', category: 'Service Management' },
+  { name: 'approver(user1, user2)', description: 'Issues requiring approval from specified users.', category: 'Service Management' },
+  { name: 'myApproval()', description: 'Issues requiring your approval decision.', category: 'Service Management' },
+  { name: 'myPending()', description: 'Issues where your approval is pending.', category: 'Service Management' },
+  { name: 'pending()', description: 'Issues with pending approval decisions.', category: 'Service Management' },
+  { name: 'pendingBy(user1, user2)', description: 'Issues pending approval by specified users.', category: 'Service Management' },
+
+  // Service Management - SLA Functions
+  { name: 'breached()', description: 'SLAs that missed their goal (most recent cycle).', category: 'Service Management' },
+  { name: 'everbreached()', description: 'SLAs that have ever missed their goal.', category: 'Service Management' },
+  { name: 'completed()', description: 'SLAs that have completed at least one cycle.', category: 'Service Management' },
+  { name: 'paused()', description: 'SLAs that are currently paused.', category: 'Service Management' },
+  { name: 'running()', description: 'SLAs that are currently running.', category: 'Service Management' },
+  { name: 'elapsed()', description: 'Elapsed time on an SLA. Use with comparison operators.', category: 'Service Management' },
+  { name: 'remaining(time)', description: 'Remaining time on SLA. Example: remaining("2h")', category: 'Service Management' },
+  { name: 'withinCalendarHours()', description: 'SLAs running within calendar hours.', category: 'Service Management' },
+  { name: 'outdated()', description: 'SLAs with outdated data.', category: 'Service Management' }
 ];
 
 export const JQL_FUNCTION_DOCS_BY_NAME = new Map(
