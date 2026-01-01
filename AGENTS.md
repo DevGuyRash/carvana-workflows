@@ -242,3 +242,9 @@ If the new action introduces new selector fields, update `packages/core/src/ui.t
 * **DRY, SOLID, KISS, YAGNI** across workflows and selectors.
 * Prefer semantic attributes, roles, and text over brittle positional CSS.
 * Keep workflows small, composable, and data‑driven (selectors and values in settings/storage where possible).
+
+---
+
+## Git Operations
+
+When asked to commit at all, you shall use conventional commits. If you are asked to commit the worktree or multiple files at once, you shall commit related-files in batches using conventional commits (do not mass-commit unrelated files).
