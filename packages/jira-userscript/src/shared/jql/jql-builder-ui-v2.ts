@@ -27,6 +27,10 @@ import {
 const ROOT_ID = 'cv-jql-builder-root';
 const STATE_KEY = 'jira.jql.builder:state';
 const SETTINGS_KEY = 'jira.jql.builder:settings';
+const CUSTOM_PRESETS_KEY = 'jira.jql.builder:customPresets';
+const PRESET_ORDER_KEY = 'jira.jql.builder:presetOrder';
+const PINNED_PRESETS_KEY = 'jira.jql.builder:pinnedPresets';
+const RECENT_FILTERS_KEY = 'jira.jql.builder:recentFilters';
 const AUTO_CACHE_KEY = '__cvJqlAutocompleteData';
 const AUTO_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -40,11 +44,36 @@ interface QuickPreset {
   emoji: string;
   description: string;
   jql: string;
-  category: 'personal' | 'team' | 'time' | 'priority';
+  category: 'personal' | 'team' | 'time' | 'priority' | 'custom';
+  isCustom?: boolean;
 }
 
+// Common "in progress" type statuses that various projects use
+const ACTIVE_WORK_STATUSES = [
+  'In Progress',
+  'Work in progress',
+  'Waiting for support',
+  'Waiting for customer',
+  'Approved',
+  'AP In Progress',
+  'In Development',
+  'In Review',
+  'Under Review',
+  'Working',
+  'Active',
+  'Implementing'
+];
+
 const QUICK_PRESETS: QuickPreset[] = [
-  // Personal
+  // === TOP PRIORITY FOR AP - Daily workflow essentials ===
+  {
+    id: 'my-active-work',
+    label: 'My Active Work',
+    emoji: '🚀',
+    description: 'All issues actively being worked on by you',
+    jql: `assignee = currentUser() AND status in ("${ACTIVE_WORK_STATUSES.slice(0, 8).join('", "')}") ORDER BY updated DESC, priority DESC`,
+    category: 'personal'
+  },
   {
     id: 'my-open',
     label: 'My Open Issues',
@@ -52,6 +81,47 @@ const QUICK_PRESETS: QuickPreset[] = [
     description: 'Issues assigned to you that are not done',
     jql: 'assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC',
     category: 'personal'
+  },
+  {
+    id: 'overdue',
+    label: 'Overdue',
+    emoji: '⚠️',
+    description: 'Past due date and not resolved',
+    jql: 'due < now() AND resolution = Unresolved ORDER BY due ASC',
+    category: 'time'
+  },
+  {
+    id: 'due-soon',
+    label: 'Due in 7 Days',
+    emoji: '⏰',
+    description: 'Issues due in the next 7 days',
+    jql: 'due >= now() AND due <= 7d ORDER BY due ASC',
+    category: 'time'
+  },
+  {
+    id: 'high-priority',
+    label: 'High Priority',
+    emoji: '🔥',
+    description: 'Highest and High priority issues',
+    jql: 'priority in (Highest, High) AND resolution = Unresolved ORDER BY priority DESC',
+    category: 'priority'
+  },
+  {
+    id: 'due-this-week',
+    label: 'Due This Week',
+    emoji: '📅',
+    description: 'Issues due within this week',
+    jql: 'due >= startOfWeek() AND due <= endOfWeek() ORDER BY due ASC',
+    category: 'time'
+  },
+  // === COMMONLY USED - Regular daily checks ===
+  {
+    id: 'recently-updated',
+    label: 'Recently Updated',
+    emoji: '🔄',
+    description: 'Updated in the last 24 hours',
+    jql: 'updated >= -1d ORDER BY updated DESC',
+    category: 'time'
   },
   {
     id: 'created-by-me',
@@ -70,20 +140,12 @@ const QUICK_PRESETS: QuickPreset[] = [
     category: 'personal'
   },
   {
-    id: 'voted',
-    label: 'Voted For',
-    emoji: '🗳️',
-    description: 'Issues you voted for',
-    jql: 'voter = currentUser() ORDER BY updated DESC',
-    category: 'personal'
-  },
-  {
-    id: 'mentioned',
-    label: 'Mentioned Me',
-    emoji: '💬',
-    description: 'Issues where you are mentioned',
-    jql: 'text ~ currentUser() ORDER BY updated DESC',
-    category: 'personal'
+    id: 'in-progress',
+    label: 'In Progress',
+    emoji: '🔧',
+    description: 'Issues being worked on',
+    jql: 'status = "In Progress" ORDER BY updated DESC',
+    category: 'priority'
   },
   {
     id: 'recently-viewed',
@@ -93,15 +155,15 @@ const QUICK_PRESETS: QuickPreset[] = [
     jql: 'issuekey in issueHistory() ORDER BY lastViewed DESC',
     category: 'personal'
   },
-  // Time-based
   {
-    id: 'recently-updated',
-    label: 'Recently Updated',
-    emoji: '🔄',
-    description: 'Updated in the last 24 hours',
-    jql: 'updated >= -1d ORDER BY updated DESC',
-    category: 'time'
+    id: 'unassigned',
+    label: 'Unassigned',
+    emoji: '❓',
+    description: 'Issues without an assignee',
+    jql: 'assignee IS EMPTY AND resolution = Unresolved ORDER BY created DESC',
+    category: 'priority'
   },
+  // === MODERATE USE - Weekly/periodic checks ===
   {
     id: 'created-today',
     label: 'Created Today',
@@ -119,12 +181,20 @@ const QUICK_PRESETS: QuickPreset[] = [
     category: 'time'
   },
   {
-    id: 'updated-since-login',
-    label: 'Updated Since Login',
-    emoji: '🔑',
-    description: 'Updated since your session started',
-    jql: 'updated >= currentLogin() ORDER BY updated DESC',
+    id: 'no-due-date',
+    label: 'No Due Date',
+    emoji: '❓',
+    description: 'Issues without a due date',
+    jql: 'due IS EMPTY AND resolution = Unresolved ORDER BY priority DESC',
     category: 'time'
+  },
+  {
+    id: 'team-open',
+    label: 'All Open Issues',
+    emoji: '📂',
+    description: 'All open issues in project',
+    jql: 'resolution = Unresolved ORDER BY priority DESC, updated DESC',
+    category: 'team'
   },
   {
     id: 'resolved-this-week',
@@ -135,46 +205,63 @@ const QUICK_PRESETS: QuickPreset[] = [
     category: 'time'
   },
   {
-    id: 'due-this-week',
-    label: 'Due This Week',
-    emoji: '📅',
-    description: 'Issues due within this week',
-    jql: 'due >= startOfWeek() AND due <= endOfWeek() ORDER BY due ASC',
-    category: 'time'
-  },
-  {
-    id: 'due-soon',
-    label: 'Due in 7 Days',
-    emoji: '⏰',
-    description: 'Issues due in the next 7 days',
-    jql: 'due >= now() AND due <= 7d ORDER BY due ASC',
-    category: 'time'
-  },
-  {
-    id: 'overdue',
-    label: 'Overdue',
-    emoji: '⚠️',
-    description: 'Past due date and not resolved',
-    jql: 'due < now() AND resolution = Unresolved ORDER BY due ASC',
-    category: 'time'
-  },
-  {
-    id: 'no-due-date',
-    label: 'No Due Date',
-    emoji: '❓',
-    description: 'Issues without a due date',
-    jql: 'due IS EMPTY AND resolution = Unresolved ORDER BY priority DESC',
-    category: 'time'
-  },
-  // Priority/Status
-  {
-    id: 'high-priority',
-    label: 'High Priority',
-    emoji: '🔥',
-    description: 'Highest and High priority issues',
-    jql: 'priority in (Highest, High) AND resolution = Unresolved ORDER BY priority DESC',
+    id: 'recently-resolved',
+    label: 'Recently Resolved',
+    emoji: '🎉',
+    description: 'Resolved in the last 7 days',
+    jql: 'resolved >= -7d ORDER BY resolved DESC',
     category: 'priority'
   },
+  {
+    id: 'open-tasks',
+    label: 'Open Tasks',
+    emoji: '✅',
+    description: 'All unresolved tasks',
+    jql: 'issuetype = Task AND resolution = Unresolved ORDER BY priority DESC, created DESC',
+    category: 'team'
+  },
+  {
+    id: 'blocked',
+    label: 'Blocked',
+    emoji: '🚫',
+    description: 'Issues with Blocked status',
+    jql: 'status = Blocked ORDER BY updated DESC',
+    category: 'priority'
+  },
+  // === LESS COMMON - Specialized searches ===
+  {
+    id: 'my-comments',
+    label: 'My Comments',
+    emoji: '💬',
+    description: 'Issues I commented on',
+    jql: 'issuekey in issueHistory() AND updated >= -30d ORDER BY updated DESC',
+    category: 'personal'
+  },
+  {
+    id: 'stale',
+    label: 'Stale Issues',
+    emoji: '🕸️',
+    description: 'Not updated in 30+ days',
+    jql: 'updated < -30d AND resolution = Unresolved ORDER BY updated ASC',
+    category: 'team'
+  },
+  {
+    id: 'has-attachments',
+    label: 'Has Attachments',
+    emoji: '📎',
+    description: 'Issues with attachments',
+    jql: 'attachments IS NOT EMPTY ORDER BY updated DESC',
+    category: 'team'
+  },
+  {
+    id: 'updated-since-login',
+    label: 'Updated Since Login',
+    emoji: '🔑',
+    description: 'Updated since your session started',
+    jql: 'updated >= currentLogin() ORDER BY updated DESC',
+    category: 'time'
+  },
+  // === DEV/SPRINT FOCUSED - Less used in AP ===
   {
     id: 'blockers',
     label: 'Blockers',
@@ -192,60 +279,11 @@ const QUICK_PRESETS: QuickPreset[] = [
     category: 'priority'
   },
   {
-    id: 'unassigned',
-    label: 'Unassigned',
-    emoji: '❓',
-    description: 'Issues without an assignee',
-    jql: 'assignee IS EMPTY AND resolution = Unresolved ORDER BY created DESC',
-    category: 'priority'
-  },
-  {
-    id: 'blocked',
-    label: 'Blocked',
-    emoji: '🚫',
-    description: 'Issues with Blocked status',
-    jql: 'status = Blocked ORDER BY updated DESC',
-    category: 'priority'
-  },
-  {
-    id: 'in-progress',
-    label: 'In Progress',
-    emoji: '🔧',
-    description: 'Issues being worked on',
-    jql: 'status = "In Progress" ORDER BY updated DESC',
-    category: 'priority'
-  },
-  {
-    id: 'recently-resolved',
-    label: 'Recently Resolved',
-    emoji: '🎉',
-    description: 'Resolved in the last 7 days',
-    jql: 'resolved >= -7d ORDER BY resolved DESC',
-    category: 'priority'
-  },
-  // Team
-  {
-    id: 'team-open',
-    label: 'All Open Issues',
-    emoji: '📂',
-    description: 'All open issues in project',
-    jql: 'resolution = Unresolved ORDER BY priority DESC, updated DESC',
-    category: 'team'
-  },
-  {
     id: 'open-bugs',
     label: 'Open Bugs',
     emoji: '🐛',
     description: 'All unresolved bugs',
     jql: 'issuetype = Bug AND resolution = Unresolved ORDER BY priority DESC, created DESC',
-    category: 'team'
-  },
-  {
-    id: 'open-tasks',
-    label: 'Open Tasks',
-    emoji: '✅',
-    description: 'All unresolved tasks',
-    jql: 'issuetype = Task AND resolution = Unresolved ORDER BY priority DESC, created DESC',
     category: 'team'
   },
   {
@@ -281,20 +319,12 @@ const QUICK_PRESETS: QuickPreset[] = [
     category: 'team'
   },
   {
-    id: 'has-attachments',
-    label: 'Has Attachments',
-    emoji: '📎',
-    description: 'Issues with attachments',
-    jql: 'attachments IS NOT EMPTY ORDER BY updated DESC',
-    category: 'team'
-  },
-  {
-    id: 'stale',
-    label: 'Stale Issues',
-    emoji: '🕸️',
-    description: 'Not updated in 30+ days',
-    jql: 'updated < -30d AND resolution = Unresolved ORDER BY updated ASC',
-    category: 'team'
+    id: 'voted',
+    label: 'Voted For',
+    emoji: '🗳️',
+    description: 'Issues you voted for',
+    jql: 'voter = currentUser() ORDER BY updated DESC',
+    category: 'personal'
   }
 ];
 
@@ -810,17 +840,71 @@ interface FilterCard {
   isNegated: boolean;
 }
 
+interface SortEntry {
+  field: string;
+  direction: 'ASC' | 'DESC';
+}
+
+interface RecentFilter {
+  jql: string;
+  label?: string;
+  usedAt: number;
+}
+
 interface V2State {
   mode: ViewMode;
   filters: FilterCard[];
   sortField: string;
   sortDirection: 'ASC' | 'DESC';
+  sortEntries: SortEntry[]; // Multiple sort support
   showAdvancedSort: boolean;
   advancedSorts: JqlSortState[];
   searchText: string; // for quick search mode
   selectedPresets: Set<string>; // Multiple presets can be selected
   showReferencePanel: boolean; // For advanced mode
+  customPresets: QuickPreset[]; // User-created presets
+  pinnedPresets: string[]; // IDs of presets to show in visual mode (4 max)
+  recentFilters: RecentFilter[]; // Recently used filters
+  draggedPresetId: string | null; // For drag-and-drop reordering
 }
+
+// ============================================================================
+// STORAGE HELPERS - Using GM_setValue/GM_getValue for Tampermonkey/Violentmonkey
+// ============================================================================
+
+const gmStorage = {
+  get<T>(key: string, defaultValue: T): T {
+    try {
+      // Try GM_getValue first (Tampermonkey/Violentmonkey)
+      if (typeof GM_getValue !== 'undefined') {
+        const val = GM_getValue(key, null);
+        if (val !== null) return JSON.parse(val);
+      }
+      // Fallback to localStorage
+      const stored = localStorage.getItem(key);
+      return stored ? JSON.parse(stored) : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  },
+  set<T>(key: string, value: T): void {
+    try {
+      const json = JSON.stringify(value);
+      // Try GM_setValue first (Tampermonkey/Violentmonkey)
+      if (typeof GM_setValue !== 'undefined') {
+        GM_setValue(key, json);
+      }
+      // Also save to localStorage as backup
+      localStorage.setItem(key, json);
+    } catch (e) {
+      console.warn('Failed to save to storage:', e);
+    }
+  }
+};
+
+// Declare GM functions for TypeScript
+declare function GM_getValue(key: string, defaultValue: any): any;
+declare function GM_setValue(key: string, value: any): void;
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -846,12 +930,14 @@ const createElement = <K extends keyof HTMLElementTagNameMap>(
     text?: string;
     html?: string;
     attrs?: Record<string, string>;
+    style?: string;
   } = {}
 ): HTMLElementTagNameMap[K] => {
   const el = document.createElement(tag);
   if (options.className) el.className = options.className;
   if (options.text != null) el.textContent = options.text;
   if (options.html != null) el.innerHTML = options.html;
+  if (options.style != null) el.style.cssText = options.style;
   if (options.attrs) {
     for (const [key, value] of Object.entries(options.attrs)) {
       if (value == null) continue;
@@ -989,8 +1075,12 @@ const buildJqlFromV2State = (state: V2State): string => {
 
   let jql = clauses.join(' AND ');
 
-  // Add sorting
-  if (state.sortField) {
+  // Add sorting - support multiple sort entries
+  if (state.sortEntries && state.sortEntries.length > 0) {
+    const sortParts = state.sortEntries.map(e => `${e.field} ${e.direction}`);
+    jql += ` ORDER BY ${sortParts.join(', ')}`;
+  } else if (state.sortField) {
+    // Fallback to legacy single sort
     jql += ` ORDER BY ${state.sortField} ${state.sortDirection}`;
   }
 
@@ -1044,11 +1134,16 @@ class JqlBuilderV2UI {
     filters: [],
     sortField: 'updated',
     sortDirection: 'DESC',
+    sortEntries: [{ field: 'updated', direction: 'DESC' }],
     showAdvancedSort: false,
     advancedSorts: [],
     searchText: '',
     selectedPresets: new Set(),
-    showReferencePanel: false
+    showReferencePanel: false,
+    customPresets: [],
+    pinnedPresets: ['my-active-work', 'my-open', 'recently-updated', 'overdue'],
+    recentFilters: [],
+    draggedPresetId: null
   };
 
   private panel!: HTMLDivElement;
@@ -1067,6 +1162,49 @@ class JqlBuilderV2UI {
     this.store = store;
     this.log = log;
     this.data = data;
+    this.loadStoredPreferences();
+  }
+
+  private loadStoredPreferences(): void {
+    // Load custom presets
+    this.state.customPresets = gmStorage.get<QuickPreset[]>(CUSTOM_PRESETS_KEY, []);
+    // Load pinned presets (the 4 shown in visual mode)
+    this.state.pinnedPresets = gmStorage.get<string[]>(PINNED_PRESETS_KEY,
+      ['my-active-work', 'my-open', 'recently-updated', 'overdue']
+    );
+    // Load recent filters
+    this.state.recentFilters = gmStorage.get<RecentFilter[]>(RECENT_FILTERS_KEY, []);
+  }
+
+  private saveCustomPresets(): void {
+    gmStorage.set(CUSTOM_PRESETS_KEY, this.state.customPresets);
+  }
+
+  private savePinnedPresets(): void {
+    gmStorage.set(PINNED_PRESETS_KEY, this.state.pinnedPresets);
+  }
+
+  private saveRecentFilters(): void {
+    gmStorage.set(RECENT_FILTERS_KEY, this.state.recentFilters);
+  }
+
+  private addToRecentFilters(jql: string, label?: string): void {
+    const now = Date.now();
+    // Remove if already exists
+    this.state.recentFilters = this.state.recentFilters.filter(f => f.jql !== jql);
+    // Add to front
+    this.state.recentFilters.unshift({ jql, label, usedAt: now });
+    // Keep only last 4
+    this.state.recentFilters = this.state.recentFilters.slice(0, 4);
+    this.saveRecentFilters();
+    // Update the Recent Filters section in Visual mode if visible
+    if (this.state.mode === 'visual') {
+      this.rerenderVisualMode();
+    }
+  }
+
+  private getAllPresets(): QuickPreset[] {
+    return [...QUICK_PRESETS, ...this.state.customPresets];
   }
 
   mount(): void {
@@ -1074,6 +1212,26 @@ class JqlBuilderV2UI {
     this.panel = this.renderPanel();
     this.shadow.appendChild(this.panel);
     this.updatePreview();
+
+    // Hijack keyboard events on textboxes to prevent Jira shortcuts from firing
+    this.panel.addEventListener('keydown', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        e.stopPropagation();
+      }
+    }, true);
+    this.panel.addEventListener('keyup', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        e.stopPropagation();
+      }
+    }, true);
+    this.panel.addEventListener('keypress', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        e.stopPropagation();
+      }
+    }, true);
   }
 
   destroy(): void {
@@ -1471,22 +1629,30 @@ class JqlBuilderV2UI {
       /* Sort Section */
       .cv-sort-section {
         display: flex;
-        align-items: center;
-        gap: 12px;
+        flex-direction: column;
+        gap: 8px;
         padding: 12px 16px;
         background: var(--cv-bg-secondary);
         border: 1px solid var(--cv-border);
         border-radius: var(--cv-radius-sm);
       }
 
+      .cv-sort-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
       .cv-sort-label {
         font-size: 13px;
         color: var(--cv-text-muted);
         white-space: nowrap;
+        min-width: 55px;
       }
 
       .cv-sort-section select {
         flex: 1;
+        max-width: 160px;
         border: 1px solid var(--cv-border);
         background: var(--cv-bg);
         padding: 6px 10px;
@@ -1494,6 +1660,188 @@ class JqlBuilderV2UI {
         font-size: 13px;
         color: var(--cv-text);
         cursor: pointer;
+      }
+
+      /* Modern Secondary Action Button */
+      .cv-secondary-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        border: 1px solid var(--cv-border);
+        background: var(--cv-bg);
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--cv-text-muted);
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .cv-secondary-btn:hover {
+        border-color: var(--cv-primary-light);
+        background: rgba(99, 102, 241, 0.08);
+        color: var(--cv-primary);
+        transform: translateY(-1px);
+      }
+
+      .cv-secondary-btn:active {
+        transform: translateY(0);
+      }
+
+      /* Small Pill Button */
+      .cv-pill-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border: 1px solid var(--cv-border);
+        background: var(--cv-bg);
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--cv-text-muted);
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .cv-pill-btn:hover {
+        border-color: var(--cv-primary-light);
+        background: rgba(99, 102, 241, 0.08);
+        color: var(--cv-primary);
+      }
+
+      /* Copy Button with text */
+      .cv-copy-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border: 1px solid var(--cv-border);
+        background: var(--cv-bg);
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--cv-text-muted);
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .cv-copy-btn:hover {
+        border-color: var(--cv-primary-light);
+        background: rgba(99, 102, 241, 0.08);
+        color: var(--cv-primary);
+      }
+
+      .cv-copy-btn.copied {
+        border-color: var(--cv-success);
+        background: rgba(34, 197, 94, 0.1);
+        color: var(--cv-success);
+      }
+
+      /* Remove Sort Button */
+      .cv-remove-sort-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border: 1px solid var(--cv-border);
+        background: var(--cv-bg);
+        border-radius: 6px;
+        font-size: 12px;
+        color: var(--cv-text-muted);
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .cv-remove-sort-btn:hover {
+        border-color: var(--cv-danger);
+        background: rgba(239, 68, 68, 0.1);
+        color: var(--cv-danger);
+      }
+
+      /* Drag and Drop Styles */
+      .cv-preset-picker-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: var(--cv-bg-hover);
+        cursor: grab;
+        transition: all 0.2s ease;
+        border: 2px solid transparent;
+      }
+
+      .cv-preset-picker-row:hover {
+        background: var(--cv-bg-secondary);
+      }
+
+      .cv-preset-picker-row.pinned {
+        background: rgba(99, 102, 241, 0.1);
+        border-color: rgba(99, 102, 241, 0.2);
+      }
+
+      .cv-preset-picker-row.dragging {
+        opacity: 0.6;
+        transform: scale(1.02);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        cursor: grabbing;
+      }
+
+      .cv-preset-picker-row.drag-over {
+        border-top-color: var(--cv-primary);
+        background: rgba(99, 102, 241, 0.15);
+      }
+
+      .cv-preset-picker-row .drag-handle {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 4px;
+        color: var(--cv-text-light);
+        cursor: grab;
+      }
+
+      .cv-preset-picker-row .drag-handle span {
+        display: block;
+        width: 12px;
+        height: 2px;
+        background: currentColor;
+        border-radius: 1px;
+      }
+
+      .cv-preset-picker-row .preset-checkbox {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--cv-primary);
+        cursor: pointer;
+      }
+
+      .cv-preset-picker-row .preset-info {
+        flex: 1;
+        font-size: 14px;
+        color: var(--cv-text);
+      }
+
+      .cv-preset-picker-row .delete-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        border-radius: 6px;
+        color: var(--cv-text-muted);
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .cv-preset-picker-row .delete-btn:hover {
+        background: rgba(239, 68, 68, 0.1);
+        color: var(--cv-danger);
       }
 
       /* Footer */
@@ -1981,6 +2329,18 @@ class JqlBuilderV2UI {
     presetsSection.appendChild(presetsGrid);
     container.appendChild(presetsSection);
 
+    // Add "+ Create Filter" button section
+    const createSection = createElement('div', { className: 'cv-section', style: 'margin-top: 16px;' });
+    const createBtn = createElement('button', {
+      className: 'cv-btn',
+      style: 'width: 100%; border-style: dashed; opacity: 0.8;'
+    });
+    createBtn.innerHTML = '➕ Create Custom Filter';
+    createBtn.title = 'Create a custom quick filter from any JQL query';
+    createBtn.addEventListener('click', () => this.showCreatePresetModal());
+    createSection.appendChild(createBtn);
+    container.appendChild(createSection);
+
     // Natural language search section
     const searchSection = createElement('div', { className: 'cv-section' });
     searchSection.style.marginTop = '20px';
@@ -1997,7 +2357,8 @@ class JqlBuilderV2UI {
       this.state.searchText = input.value;
       this.state.selectedPresets.clear(); // Clear presets when typing
       this.parseQuickSearch(input.value);
-      this.rerender();
+      // Only update preview, don't rerender (prevents scroll jump)
+      this.updatePreview();
     });
     searchSection.appendChild(input);
 
@@ -2077,33 +2438,25 @@ class JqlBuilderV2UI {
   }
 
   private simplifyJql(jql: string): string {
-    // Remove redundant resolution = Unresolved if it appears multiple times
+    // Simplify combined JQL by removing redundant standalone clauses
     let result = jql;
 
-    // Count occurrences of common duplicate patterns
-    const patterns = [
-      /\(\s*resolution\s*=\s*Unresolved\s*\)\s*AND\s*/gi,
-      /\s*AND\s*\(\s*resolution\s*=\s*Unresolved\s*\)/gi
-    ];
-
-    // Keep only first occurrence
-    let foundResolution = false;
-    result = result.replace(/\(([^()]+)\)/g, (match, inner) => {
-      if (/resolution\s*=\s*Unresolved/i.test(inner)) {
-        if (foundResolution) {
-          return ''; // Remove duplicate
-        }
-        foundResolution = true;
+    // Only remove standalone duplicate resolution = Unresolved clauses
+    // Pattern: (resolution = Unresolved) as a standalone group
+    let foundStandaloneResolution = false;
+    result = result.replace(/\(\s*resolution\s*=\s*Unresolved\s*\)/gi, (match) => {
+      if (foundStandaloneResolution) {
+        return ''; // Remove duplicate standalone clause
       }
+      foundStandaloneResolution = true;
       return match;
     });
 
-    // Clean up empty parentheses and double ANDs
-    result = result.replace(/\(\s*\)/g, '');
-    result = result.replace(/AND\s+AND/g, 'AND');
+    // Clean up resulting empty ANDs and whitespace
+    result = result.replace(/AND\s+AND/gi, 'AND');
     result = result.replace(/^\s*AND\s+/i, '');
     result = result.replace(/\s+AND\s*$/i, '');
-    result = result.trim();
+    result = result.replace(/\s+/g, ' ').trim();
 
     return result;
   }
@@ -2409,28 +2762,68 @@ class JqlBuilderV2UI {
   private renderVisualMode(): HTMLDivElement {
     const container = createElement('div');
 
-    // Quick presets (collapsed by default)
+    // Quick presets (pinned - max 4 shown with swap button)
     const presetsSection = createElement('div', { className: 'cv-section' });
-    const presetsTitle = createElement('div', { className: 'cv-section-title' });
-    presetsTitle.textContent = '⚡ Quick Filters';
-    presetsSection.appendChild(presetsTitle);
+    const presetsTitleRow = createElement('div', { className: 'cv-section-title', style: 'display: flex; justify-content: space-between; align-items: center;' });
+    const titleSpan = createElement('span', { text: '⚡ Quick Filters' });
+    presetsTitleRow.appendChild(titleSpan);
+
+    // Swap button to choose which 4 presets to show
+    const swapBtn = createElement('button', { className: 'cv-pill-btn' });
+    swapBtn.innerHTML = '<span>⚙️</span> Customize';
+    swapBtn.addEventListener('click', () => this.showPresetPicker());
+    presetsTitleRow.appendChild(swapBtn);
+    presetsSection.appendChild(presetsTitleRow);
 
     const presetsGrid = createElement('div', { className: 'cv-presets-grid' });
-    QUICK_PRESETS.slice(0, 4).forEach((preset) => {
+    const allPresets = this.getAllPresets();
+
+    // Show pinned presets (up to 4)
+    this.state.pinnedPresets.slice(0, 4).forEach((presetId) => {
+      const preset = allPresets.find(p => p.id === presetId);
+      if (!preset) return;
+
       const btn = createElement('button', { className: 'cv-preset-btn' });
       const label = createElement('span', { className: 'cv-preset-label' });
       label.appendChild(createElement('span', { className: 'cv-preset-emoji', text: preset.emoji }));
       label.appendChild(document.createTextNode(preset.label));
       btn.appendChild(label);
+      btn.title = preset.description;
       btn.addEventListener('click', () => {
         this.state.selectedPresets.clear();
         this.state.selectedPresets.add(preset.id);
         this.previewEl.value = preset.jql;
+        this.addToRecentFilters(preset.jql, preset.label);
       });
       presetsGrid.appendChild(btn);
     });
+
     presetsSection.appendChild(presetsGrid);
     container.appendChild(presetsSection);
+
+    // Recent Filters section (if any) - limit to 4
+    if (this.state.recentFilters.length > 0) {
+      const recentSection = createElement('div', { className: 'cv-section' });
+      const recentTitle = createElement('div', { className: 'cv-section-title' });
+      recentTitle.textContent = '🕐 Recent Filters';
+      recentSection.appendChild(recentTitle);
+
+      const recentGrid = createElement('div', { className: 'cv-presets-grid' });
+      this.state.recentFilters.slice(0, 4).forEach((recent) => {
+        const btn = createElement('button', { className: 'cv-preset-btn cv-recent-btn' });
+        const label = createElement('span', { className: 'cv-preset-label' });
+        const shortJql = recent.jql.length > 30 ? recent.jql.substring(0, 30) + '...' : recent.jql;
+        label.textContent = recent.label || shortJql;
+        btn.appendChild(label);
+        btn.title = recent.jql;
+        btn.addEventListener('click', () => {
+          this.previewEl.value = recent.jql;
+        });
+        recentGrid.appendChild(btn);
+      });
+      recentSection.appendChild(recentGrid);
+      container.appendChild(recentSection);
+    }
 
     // Filter cards section
     const filtersSection = createElement('div', { className: 'cv-section' });
@@ -2676,41 +3069,395 @@ class JqlBuilderV2UI {
   private renderSortSection(): HTMLDivElement {
     const section = createElement('div', { className: 'cv-sort-section' });
 
-    const label = createElement('span', { className: 'cv-sort-label', text: 'Sort by' });
-
-    const fieldSelect = createElement('select') as HTMLSelectElement;
     const sortFields = [
       { value: 'updated', label: 'Last Updated' },
       { value: 'created', label: 'Created Date' },
       { value: 'priority', label: 'Priority' },
       { value: 'due', label: 'Due Date' },
       { value: 'status', label: 'Status' },
-      { value: 'key', label: 'Issue Key' }
+      { value: 'key', label: 'Issue Key' },
+      { value: 'assignee', label: 'Assignee' },
+      { value: 'reporter', label: 'Reporter' },
+      { value: 'resolution', label: 'Resolution' },
+      { value: 'resolved', label: 'Resolved Date' }
     ];
-    sortFields.forEach((sf) => {
-      const option = new Option(sf.label, sf.value);
-      option.selected = sf.value === this.state.sortField;
-      fieldSelect.appendChild(option);
-    });
-    fieldSelect.addEventListener('change', () => {
-      this.state.sortField = fieldSelect.value;
-      this.updatePreview();
+
+    // Initialize sortEntries if empty
+    if (this.state.sortEntries.length === 0) {
+      this.state.sortEntries = [{ field: this.state.sortField, direction: this.state.sortDirection }];
+    }
+
+    // Render each sort entry
+    this.state.sortEntries.forEach((entry, index) => {
+      const row = createElement('div', { className: 'cv-sort-row' });
+
+      if (index === 0) {
+        row.appendChild(createElement('span', { className: 'cv-sort-label', text: 'Sort by' }));
+      } else {
+        row.appendChild(createElement('span', { className: 'cv-sort-label', text: 'then by' }));
+      }
+
+      const fieldSelect = createElement('select') as HTMLSelectElement;
+      sortFields.forEach((sf) => {
+        const option = new Option(sf.label, sf.value);
+        option.selected = sf.value === entry.field;
+        fieldSelect.appendChild(option);
+      });
+      fieldSelect.addEventListener('change', () => {
+        entry.field = fieldSelect.value;
+        this.syncSortEntriesToLegacy();
+        this.updatePreview();
+      });
+
+      const dirSelect = createElement('select') as HTMLSelectElement;
+      dirSelect.appendChild(new Option('↓ DESC', 'DESC'));
+      dirSelect.appendChild(new Option('↑ ASC', 'ASC'));
+      dirSelect.value = entry.direction;
+      dirSelect.addEventListener('change', () => {
+        entry.direction = dirSelect.value as 'ASC' | 'DESC';
+        this.syncSortEntriesToLegacy();
+        this.updatePreview();
+      });
+
+      row.appendChild(fieldSelect);
+      row.appendChild(dirSelect);
+
+      // Remove button (only if not the first entry)
+      if (index > 0) {
+        const removeBtn = createElement('button', { className: 'cv-remove-sort-btn', text: '✕' });
+        removeBtn.title = 'Remove sort';
+        removeBtn.addEventListener('click', () => {
+          this.state.sortEntries.splice(index, 1);
+          this.syncSortEntriesToLegacy();
+          this.rerenderVisualMode();
+        });
+        row.appendChild(removeBtn);
+      }
+
+      section.appendChild(row);
     });
 
-    const dirSelect = createElement('select') as HTMLSelectElement;
-    dirSelect.appendChild(new Option('Newest first', 'DESC'));
-    dirSelect.appendChild(new Option('Oldest first', 'ASC'));
-    dirSelect.value = this.state.sortDirection;
-    dirSelect.addEventListener('change', () => {
-      this.state.sortDirection = dirSelect.value as 'ASC' | 'DESC';
-      this.updatePreview();
-    });
-
-    section.appendChild(label);
-    section.appendChild(fieldSelect);
-    section.appendChild(dirSelect);
+    // Add another sort button (max 3)
+    if (this.state.sortEntries.length < 3) {
+      const addSortBtn = createElement('button', { className: 'cv-secondary-btn' });
+      addSortBtn.innerHTML = '<span>➕</span> Add secondary sort';
+      addSortBtn.addEventListener('click', () => {
+        this.state.sortEntries.push({ field: 'priority', direction: 'DESC' });
+        this.rerenderVisualMode();
+      });
+      section.appendChild(addSortBtn);
+    }
 
     return section;
+  }
+
+  private syncSortEntriesToLegacy(): void {
+    // Keep legacy sortField/sortDirection in sync with first entry
+    if (this.state.sortEntries.length > 0) {
+      this.state.sortField = this.state.sortEntries[0].field;
+      this.state.sortDirection = this.state.sortEntries[0].direction;
+    }
+  }
+
+  private rerenderVisualMode(): void {
+    // Re-render visual mode content
+    const body = this.panel.querySelector('.cv-body');
+    if (body && this.state.mode === 'visual') {
+      body.innerHTML = '';
+      body.appendChild(this.renderVisualMode());
+    }
+  }
+
+  // ==========================================================================
+  // PRESET PICKER MODAL - Choose which 4 presets to show
+  // ==========================================================================
+
+  private showPresetPicker(): void {
+    // Prevent duplicate modals
+    const existing = this.shadow.querySelector('.cv-modal-overlay');
+    if (existing) {
+      return;
+    }
+
+    const overlay = createElement('div', { className: 'cv-modal-overlay' });
+    overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10001; display: flex; align-items: center; justify-content: center;';
+
+    const modal = createElement('div', { className: 'cv-modal' });
+    modal.style.cssText = 'background: var(--cv-bg); border-radius: 12px; padding: 20px; max-width: 500px; max-height: 70vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.3);';
+
+    const title = createElement('h3', { text: '⚙️ Customize Quick Filters', style: 'margin: 0 0 16px 0;' });
+    modal.appendChild(title);
+
+    const hint = createElement('p', { text: 'Drag to reorder or click to toggle. First 4 will be shown.', style: 'color: var(--cv-text-muted); font-size: 12px; margin-bottom: 12px;' });
+    modal.appendChild(hint);
+
+    const list = createElement('div', { className: 'cv-preset-list' });
+    list.style.cssText = 'display: flex; flex-direction: column; gap: 6px;';
+
+    const allPresets = this.getAllPresets();
+
+    // Show pinned presets first, then the rest
+    const orderedPresets = [
+      ...this.state.pinnedPresets.map(id => allPresets.find(p => p.id === id)).filter(Boolean) as QuickPreset[],
+      ...allPresets.filter(p => !this.state.pinnedPresets.includes(p.id))
+    ];
+
+    orderedPresets.forEach((preset, index) => {
+      const isPinned = this.state.pinnedPresets.includes(preset.id);
+      const row = createElement('div', { className: `cv-preset-picker-row${isPinned ? ' pinned' : ''}` });
+      row.draggable = true;
+      row.dataset.presetId = preset.id;
+
+      // Drag handle (modern 3-line grip)
+      const handle = createElement('div', { className: 'drag-handle' });
+      handle.appendChild(createElement('span'));
+      handle.appendChild(createElement('span'));
+      handle.appendChild(createElement('span'));
+      row.appendChild(handle);
+
+      // Checkbox for pinned
+      const checkbox = createElement('input', { className: 'preset-checkbox', attrs: { type: 'checkbox' } }) as HTMLInputElement;
+      checkbox.checked = isPinned;
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+          if (this.state.pinnedPresets.length < 4) {
+            this.state.pinnedPresets.push(preset.id);
+            row.classList.add('pinned');
+          } else {
+            checkbox.checked = false;
+            this.showToast('Maximum 4 quick filters allowed');
+          }
+        } else {
+          this.state.pinnedPresets = this.state.pinnedPresets.filter(id => id !== preset.id);
+          row.classList.remove('pinned');
+        }
+        this.savePinnedPresets();
+      });
+      row.appendChild(checkbox);
+
+      // Preset info
+      const info = createElement('span', { className: 'preset-info', text: `${preset.emoji} ${preset.label}` });
+      row.appendChild(info);
+
+      // Delete button for custom presets
+      if (preset.isCustom) {
+        const deleteBtn = createElement('button', { className: 'delete-btn', text: '🗑️' });
+        deleteBtn.title = 'Delete custom filter';
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.deleteCustomPreset(preset.id);
+          overlay.remove();
+          this.showPresetPicker(); // Refresh
+        });
+        row.appendChild(deleteBtn);
+      }
+
+      // Drag events with modern visual feedback
+      row.addEventListener('dragstart', (e) => {
+        this.state.draggedPresetId = preset.id;
+        row.classList.add('dragging');
+        // Set drag image
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+        }
+      });
+
+      row.addEventListener('dragend', () => {
+        this.state.draggedPresetId = null;
+        row.classList.remove('dragging');
+        // Remove drag-over from all rows
+        list.querySelectorAll('.cv-preset-picker-row').forEach(r => r.classList.remove('drag-over'));
+      });
+
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer) {
+          e.dataTransfer.dropEffect = 'move';
+        }
+        // Only show indicator if this isn't the dragged item
+        if (this.state.draggedPresetId && this.state.draggedPresetId !== preset.id) {
+          row.classList.add('drag-over');
+        }
+      });
+
+      row.addEventListener('dragleave', (e) => {
+        // Only remove if we're actually leaving (not entering a child)
+        const relatedTarget = e.relatedTarget as HTMLElement;
+        if (!row.contains(relatedTarget)) {
+          row.classList.remove('drag-over');
+        }
+      });
+
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        row.classList.remove('drag-over');
+        if (this.state.draggedPresetId && this.state.draggedPresetId !== preset.id) {
+          this.reorderPinnedPreset(this.state.draggedPresetId, preset.id);
+          overlay.remove();
+          this.showPresetPicker(); // Refresh
+        }
+      });
+
+      list.appendChild(row);
+    });
+
+    modal.appendChild(list);
+
+    // Close button
+    const closeBtn = createElement('button', { text: 'Done', className: 'cv-primary-btn', style: 'margin-top: 16px; width: 100%;' });
+    closeBtn.addEventListener('click', () => {
+      overlay.remove();
+      this.rerenderVisualMode();
+    });
+    modal.appendChild(closeBtn);
+
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+        this.rerenderVisualMode();
+      }
+    });
+
+    this.shadow.appendChild(overlay);
+  }
+
+  private reorderPinnedPreset(draggedId: string, targetId: string): void {
+    // Only reorder within pinned presets
+    if (!this.state.pinnedPresets.includes(draggedId)) return;
+
+    const draggedIndex = this.state.pinnedPresets.indexOf(draggedId);
+    const targetIndex = this.state.pinnedPresets.indexOf(targetId);
+
+    if (draggedIndex === -1) return;
+
+    // Remove dragged item
+    this.state.pinnedPresets.splice(draggedIndex, 1);
+
+    // Insert at target position (or at end if target not pinned)
+    if (targetIndex !== -1) {
+      this.state.pinnedPresets.splice(targetIndex, 0, draggedId);
+    } else {
+      this.state.pinnedPresets.push(draggedId);
+    }
+
+    this.savePinnedPresets();
+  }
+
+  private deleteCustomPreset(presetId: string): void {
+    this.state.customPresets = this.state.customPresets.filter(p => p.id !== presetId);
+    this.state.pinnedPresets = this.state.pinnedPresets.filter(id => id !== presetId);
+    this.saveCustomPresets();
+    this.savePinnedPresets();
+    this.showToast('Custom filter deleted');
+  }
+
+  // ==========================================================================
+  // CREATE PRESET MODAL - Create custom quick filters
+  // ==========================================================================
+
+  private showCreatePresetModal(): void {
+    // Prevent duplicate modals
+    const existing = this.shadow.querySelector('.cv-modal-overlay');
+    if (existing) {
+      return;
+    }
+
+    const overlay = createElement('div', { className: 'cv-modal-overlay' });
+    overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10001; display: flex; align-items: center; justify-content: center;';
+
+    const modal = createElement('div', { className: 'cv-modal' });
+    modal.style.cssText = 'background: var(--cv-bg); border-radius: 12px; padding: 20px; max-width: 450px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.3);';
+
+    const title = createElement('h3', { text: '➕ Create Custom Filter', style: 'margin: 0 0 16px 0;' });
+    modal.appendChild(title);
+
+    // Emoji picker (simple grid of common emojis)
+    const emojiLabel = createElement('label', { text: 'Icon', style: 'display: block; margin-bottom: 4px; font-weight: 500;' });
+    modal.appendChild(emojiLabel);
+    const emojiGrid = createElement('div', { style: 'display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px;' });
+    const emojis = ['📋', '🔥', '🐛', '✅', '🚀', '⭐', '💡', '🎯', '📌', '🔧', '📦', '🎨', '🔍', '📊', '💬', '🏷️'];
+    let selectedEmoji = '📋';
+    emojis.forEach(emoji => {
+      const btn = createElement('button', { text: emoji, style: 'font-size: 18px; padding: 4px 8px; border: 1px solid var(--cv-border); border-radius: 4px; background: var(--cv-bg); cursor: pointer;' });
+      if (emoji === selectedEmoji) btn.style.background = 'var(--cv-accent-bg)';
+      btn.addEventListener('click', () => {
+        selectedEmoji = emoji;
+        emojiGrid.querySelectorAll('button').forEach(b => b.style.background = 'var(--cv-bg)');
+        btn.style.background = 'var(--cv-accent-bg)';
+      });
+      emojiGrid.appendChild(btn);
+    });
+    modal.appendChild(emojiGrid);
+
+    // Title input
+    const titleLabel = createElement('label', { text: 'Title', style: 'display: block; margin-bottom: 4px; font-weight: 500;' });
+    modal.appendChild(titleLabel);
+    const titleInput = createElement('input', { attrs: { type: 'text', placeholder: 'My Custom Filter' }, style: 'width: 100%; padding: 8px; margin-bottom: 12px; border: 1px solid var(--cv-border); border-radius: 6px;' }) as HTMLInputElement;
+    modal.appendChild(titleInput);
+
+    // Description input
+    const descLabel = createElement('label', { text: 'Description', style: 'display: block; margin-bottom: 4px; font-weight: 500;' });
+    modal.appendChild(descLabel);
+    const descInput = createElement('input', { attrs: { type: 'text', placeholder: 'What this filter finds' }, style: 'width: 100%; padding: 8px; margin-bottom: 12px; border: 1px solid var(--cv-border); border-radius: 6px;' }) as HTMLInputElement;
+    modal.appendChild(descInput);
+
+    // JQL input
+    const jqlLabel = createElement('label', { text: 'JQL Query', style: 'display: block; margin-bottom: 4px; font-weight: 500;' });
+    modal.appendChild(jqlLabel);
+    const jqlTextarea = createElement('textarea', { attrs: { placeholder: 'project = AP AND status = "In Progress" ORDER BY updated DESC', rows: '3' }, style: 'width: 100%; padding: 8px; margin-bottom: 12px; border: 1px solid var(--cv-border); border-radius: 6px; font-family: monospace; font-size: 12px;' }) as HTMLTextAreaElement;
+    // Pre-fill with current preview if available
+    if (this.previewEl?.value) {
+      jqlTextarea.value = this.previewEl.value;
+    }
+    modal.appendChild(jqlTextarea);
+
+    // Buttons
+    const btnRow = createElement('div', { style: 'display: flex; gap: 8px;' });
+    const cancelBtn = createElement('button', { text: 'Cancel', style: 'flex: 1; padding: 8px; border: 1px solid var(--cv-border); border-radius: 6px; background: var(--cv-bg); cursor: pointer;' });
+    cancelBtn.addEventListener('click', () => overlay.remove());
+
+    const saveBtn = createElement('button', { text: 'Save Filter', className: 'cv-primary-btn', style: 'flex: 1; padding: 8px; border-radius: 6px;' });
+    saveBtn.addEventListener('click', () => {
+      if (!titleInput.value.trim() || !jqlTextarea.value.trim()) {
+        this.showToast('Please fill in title and JQL query');
+        return;
+      }
+
+      const newPreset: QuickPreset = {
+        id: `custom-${createId()}`,
+        label: titleInput.value.trim(),
+        emoji: selectedEmoji,
+        description: descInput.value.trim() || titleInput.value.trim(),
+        jql: jqlTextarea.value.trim(),
+        category: 'custom',
+        isCustom: true
+      };
+
+      this.state.customPresets.push(newPreset);
+      this.saveCustomPresets();
+
+      // Auto-pin if we have room
+      if (this.state.pinnedPresets.length < 4) {
+        this.state.pinnedPresets.push(newPreset.id);
+        this.savePinnedPresets();
+      }
+
+      this.showToast('Custom filter created!');
+      overlay.remove();
+      this.rerenderVisualMode();
+    });
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(saveBtn);
+    modal.appendChild(btnRow);
+
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+
+    this.shadow.appendChild(overlay);
   }
 
   // ==========================================================================
@@ -2844,8 +3591,8 @@ class JqlBuilderV2UI {
         .slice(0, 20) // Limit to prevent overwhelming
         .map(f => ({
           label: f.displayName || f.value,
-          value: f.cfid ? `cf[${f.cfid}]` : `"${f.value}"`,
-          description: f.cfid ? `Custom field ${f.cfid}` : undefined
+          value: f.value.includes(' ') ? `"${f.value}"` : f.value,
+          description: f.cfid ? 'Custom field' : undefined
         }));
       return [...common, ...custom];
     }
@@ -2994,11 +3741,17 @@ class JqlBuilderV2UI {
     previewLabel.appendChild(createElement('span', { text: 'Generated JQL' }));
 
     const previewActions = createElement('div', { className: 'cv-preview-actions' });
-    const copyBtn = createButton('📋', 'cv-icon-btn');
+    const copyBtn = createElement('button', { className: 'cv-copy-btn' });
+    copyBtn.innerHTML = '<span>📋</span> Copy';
     copyBtn.title = 'Copy to clipboard';
     copyBtn.addEventListener('click', async () => {
       await navigator.clipboard.writeText(this.previewEl.value);
-      this.showToast('Copied to clipboard!');
+      copyBtn.innerHTML = '<span>✓</span> Copied!';
+      copyBtn.classList.add('copied');
+      setTimeout(() => {
+        copyBtn.innerHTML = '<span>📋</span> Copy';
+        copyBtn.classList.remove('copied');
+      }, 2000);
     });
     previewActions.appendChild(copyBtn);
     previewLabel.appendChild(previewActions);
@@ -3020,6 +3773,10 @@ class JqlBuilderV2UI {
       this.state.filters = [];
       this.state.selectedPresets.clear();
       this.state.searchText = '';
+      // Reset sort entries to default (avoid duplicates)
+      this.state.sortEntries = [{ field: 'updated', direction: 'DESC' }];
+      this.state.sortField = 'updated';
+      this.state.sortDirection = 'DESC';
       this.rerender();
     });
 
