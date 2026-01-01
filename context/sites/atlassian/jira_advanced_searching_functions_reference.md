@@ -10,7 +10,7 @@ tags:
 ---
 This page describes information about functions that are used for advanced searching.
 
-A function in JQL appears as a word followed by parentheses, which may contain one or more explicit values or Jira [system](https://confluence.atlassian.com/adminjiraserver/managing-system-fields-1047552725.html) fields. In a clause, a function is preceded by an [operator](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-operators-reference-1488596776.html), which in turn is preceded by a  [field](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html). A function performs a calculation on either specific Jira data or the function's content in parentheses, such that only true results are retrieved by the function, and then again by the clause in which the function is used.
+A function in JQL appears as a word followed by parentheses, which may contain one or more explicit values or Jira [system][1] fields. In a clause, a function is preceded by an [operator][2], which in turn is preceded by a  [field][3]. A function performs a calculation on either specific Jira data or the function's content in parentheses, such that only true results are retrieved by the function, and then again by the clause in which the function is used.
 
 Some Jira apps can add additional functions to the advanced issue search. For example, theScriptRunner for JIRA app extends JQL with such functions as `myProjects() and projectmatch()`.
 
@@ -22,9 +22,14 @@ Unless specified in the search query, note that JQL searches don't return empty 
 
 Search for issues that required approval and have a final decision of approved.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>approved()</code></pre></td></tr><tr><th>Supported fields</th><td>Custom fields of type Approval</td></tr><tr><th>Supported operators</th><td><strong><span>=</span></strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><code>~&nbsp;<strong><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code>, != ,&nbsp;<strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong>!~ ,</strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></strong></code></strong> &gt;, &gt;=, &lt;, &lt;=<br><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li>Find all issues that are approved:<br><code>Approvals = approved()</code></li><li>Find all issues that have been approved by you or are pending your approval:<br><code>Approvals = myApproval() OR Approvals = myPending()</code></li></ul></td></tr></tbody></table>
+| Syntax | `approved()` |
+| --- | --- |
+| Supported fields | Custom fields of type Approval |
+| Supported operators | = |
+| Unsupported operators | `~ , != , !~ ,` >, >=, <, <= / `IS , IS NOT , IN , NOT IN ,` `WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find all issues that are approved: Approvals = approved(); Find all issues that have been approved by you or are pending your approval: Approvals = myApproval() OR Approvals = myPending() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## approver()
 
@@ -32,9 +37,14 @@ Search for issues that required approval and have a final decision of approved.
 
 Search for issues that require or required approval by one or more of the listed users. This uses an `OR` operator, and you must specify the usernames.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>approver(user,user)</code></pre></td></tr><tr><th>Supported fields</th><td><span>Custom fields of type Approval</span></td></tr><tr><th>Supported operators</th><td><strong><span>=</span></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code><strong><code>~&nbsp;<strong><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code>, != ,&nbsp;<strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong>!~ ,</strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></strong></code></strong>&nbsp;&gt; , &gt;= , &lt; , &lt;=&nbsp;<br><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong> </code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><span>Find issues that require or required approval by John Smith:</span><br><code>approval = approver(jsmith)</code></li><li>Find issues that require or required approval by John Smith or Sarah Khan:<code><br><code>approval = approver(jsmith,skhan)</code></code></li></ul></td></tr></tbody></table>
+| Syntax | `approver(user,user)` |
+| --- | --- |
+| Supported fields | Custom fields of type Approval |
+| Supported operators | = |
+| Unsupported operators | `~ , != , !~ , > , >= , < , <= / IS , IS NOT , IN , NOT IN , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues that require or required approval by John Smith: approval = approver(jsmith); Find issues that require or required approval by John Smith or Sarah Khan: approval = approver(jsmith,skhan) |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## breached()
 
@@ -42,9 +52,14 @@ Search for issues that require or required approval by one or more of the listed
 
 Returns issues that whose most recent has missed its goal.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>breached()</code></pre></td></tr><tr><th>Supported fields</th><td><br></td></tr><tr><th>Supported operators</th><td><strong><strong><strong><code>= , !=</code></strong></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code><strong><strong><strong><code><strong><strong><code><strong><code>~ , !~ ,</code></strong><strong><code><strong><strong><code><strong> <code>&gt; , &gt;= , &lt; , &lt;=</code> , </strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong></strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT ,</code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong> <code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code> </strong> </code> </strong> </strong> </strong> </code> </strong> </code> </strong> </code> <br></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues where Time to First Response was breached:<br><code>"Time to First Response" = breached()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `breached()` |
+| --- | --- |
+| Supported fields |  |
+| Supported operators | `= , !=` |
+| Unsupported operators | `~ , !~ , > , >= , < , <= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues where Time to First Response was breached: "Time to First Response" = breached() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## cascadeOption()
 
@@ -54,19 +69,29 @@ The `parentOption`  parameter matches against the first tier of options in the 
 
 The keyword `"none"` can be used to search for issues where either or both of the options have no value.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>cascadeOption(parentOption)</code></pre><pre><code>cascadeOption(parentOption,childOption)</code></pre></td></tr><tr><th>Supported fields</th><td>Custom fields of type "Cascading Select"</td></tr><tr><th>Supported operators</th><td><strong><code>IN , NOT IN</code></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>= , != , ~ , !~ , &gt; , &gt;= , &lt; , &lt;= , <strong><code>IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code> </strong> </code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li>Find issues where a custom field ("Location") has the value "USA" for the first tier and "New York" for the second tier:<br><code>location in cascadeOption("USA","New York")</code></li><li>Find issues where a custom field ("Location") has the value "USA" for the first tier and any value (or no value) for the second tier:<br><code>location in cascadeOption(</code><code>"USA"</code><code>)</code></li><li>Find issues where a custom field ("Location") has the value "USA" for the first tier and no value for the second tier:<br><code>location in cascadeOption(</code><code>"USA"</code><code>,none)</code></li><li>Find issues where a custom field ("Location") has no value for the first tier and no value for the second tier:<br><code>location in cascadeOption(none)</code></li><li>Find issues where a custom field ("Referrer") has the value "none" for the first tier and "none" for the second tier:<br><code>referrer in cascadeOption(</code><code>"\"none\""</code><code>,</code><code>"\"none\""</code><code>)</code></li><li><p>Find issues where a custom field ("Referrer") has the value "none" for the first tier and no value for the second tier:<br><code>referrer in cascadeOption(</code><code>"\"none\""</code><code>,none)</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `cascadeOption(parentOption)` `cascadeOption(parentOption,childOption)` |
+| --- | --- |
+| Supported fields | Custom fields of type "Cascading Select" |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues where a custom field ("Location") has the value "USA" for the first tier and "New York" for the second tier: location in cascadeOption("USA","New York"); Find issues where a custom field ("Location") has the value "USA" for the first tier and any value (or no value) for the second tier: location in cascadeOption( "USA" ); Find issues where a custom field ("Location") has the value "USA" for the first tier and no value for the second tier: location in cascadeOption( "USA" ,none); Find issues where a custom field ("Location") has no value for the first tier and no value for the second tier: location in cascadeOption(none); Find issues where a custom field ("Referrer") has the value "none" for the first tier and "none" for the second tier: referrer in cascadeOption( "\"none\"" , "\"none\"" ); Find issues where a custom field ("Referrer") has the value "none" for the first tier and no value for the second tier: referrer in cascadeOption( "\"none\"" ,none) |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## closedSprints()
 
 Search for issues that are assigned to a completed Sprint.
 
-It's possible for an issue to belong to both a completed Sprint(s) and an incomplete Sprint(s). See also [openSprints()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-openSprints).
+It's possible for an issue to belong to both a completed Sprint(s) and an incomplete Sprint(s). See also [openSprints()][5].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>closedSprints()</code></pre></td></tr><tr><th>Supported fields</th><td>Sprint</td></tr><tr><th>Supported operators</th><td><strong><code>IN , NOT IN</code></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>= , != , ~ , !~ , &gt; , &gt;= , &lt; , &lt;=<br><strong><code>IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong> </code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find all issues that are assigned to a completed sprint:<br><code>sprint in closedSprints()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `closedSprints()` |
+| --- | --- |
+| Supported fields | Sprint |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <= / IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find all issues that are assigned to a completed sprint: sprint in closedSprints() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## completed()
 
@@ -74,9 +99,14 @@ It's possible for an issue to belong to both a completed Sprint(s) and an incomp
 
 Returns issues that have an that has completed at least one cycle.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>completed()</code></pre></td></tr><tr><th>Supported fields</th><td><br></td></tr><tr><th>Supported operators</th><td><strong><strong><strong><code>= , !=</code></strong></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong>=,<code><strong><strong><strong><code><strong><strong><code><strong> <code>~ , !~ ,</code></strong><strong><code><strong><strong><code><strong> <code>&gt; , &gt;= , &lt; , &lt;=</code> , </strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong></strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code> </strong> </code> </strong> </strong> </strong> </code> </strong> </code> </strong> </code> <br></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues where Time to First Response has completed at least one cycle:<br><code>"Time to First Response" = completed()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `completed()` |
+| --- | --- |
+| Supported fields |  |
+| Supported operators | `= , !=` |
+| Unsupported operators | =, `~ , !~ , > , >= , < , <= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues where Time to First Response has completed at least one cycle: "Time to First Response" = completed() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## componentsLeadByUser()
 
@@ -84,17 +114,27 @@ Find issues in components that are led by a specific user. You can optionally sp
 
 If you are not logged in to Jira, a user must be specified.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>componentsLeadByUser()</code></pre><pre><code>componentsLeadByUser(username)</code></pre></td></tr><tr><th>Supported fields</th><td>Component</td></tr><tr><th>Supported operators</th><td><strong><code>IN , NOT IN</code></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>= , != , ~ , !~ , &gt; , &gt;= , &lt; , &lt;= , <strong><code>IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong> </code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find open issues in components that are led by you:<br><code>component in componentsLeadByUser() AND status = Open</code></p></li><li><p>Find open issues in components that are led by Bill:<br><code>component in componentsLeadByUser(bill) AND status = Open</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `componentsLeadByUser()` `componentsLeadByUser(username)` |
+| --- | --- |
+| Supported fields | Component |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find open issues in components that are led by you: component in componentsLeadByUser() AND status = Open; Find open issues in components that are led by Bill: component in componentsLeadByUser(bill) AND status = Open |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## currentLogin()
 
-Perform searches based on the time at which the current user's session began. See also [lastLogin()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-lastLogin).
+Perform searches based on the time at which the current user's session began. See also [lastLogin()][6].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>currentLogin()</code></pre></td></tr><tr><th>Supported fields</th><td>Created, Due, Resolved, Updated, custom fields of type Date/Time</td></tr><tr><th>Supported operators</th><td><strong><strong><code>= , != , <strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong><br><strong><code><strong><code>WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*<br></code></strong></code></strong></strong> <sub><em><code><code>*&nbsp;Only in predicate&nbsp;</code></code></em></sub></td></tr><tr><th>Unsupported operators</th><td><strong><code>~ , !~ , <strong><code>IS , IS NOT , <strong><code>IN , NOT IN</code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues that have been created during my current session:<br><code>created &gt; currentLogin()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `currentLogin()` |
+| --- | --- |
+| Supported fields | Created, Due, Resolved, Updated, custom fields of type Date/Time |
+| Supported operators | `= , != , > , >= , < , <=` / `WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*` `* Only in predicate` |
+| Unsupported operators | `~ , !~ , IS , IS NOT , IN , NOT IN` |
+| Examples | Find issues that have been created during my current session: created > currentLogin() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## currentUser()
 
@@ -102,19 +142,29 @@ Perform searches based on the currently logged-in user.
 
 This function can only be used by logged-in users. If you are creating a saved filter that you expect to be used by anonymous users, don't use this function.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>currentUser()</code></pre></td></tr><tr><th>Supported fields</th><td>Assignee, Reporter, Voter, Watcher, custom fields of type User</td></tr><tr><th>Supported operators</th><td><strong><strong><code>= , != </code></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>~ , !~ , <strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong> , <strong><code>IS , IS NOT , <strong><code>IN , NOT IN , <strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues that are assigned to me:<br><code>assignee = currentUser()</code></p></li><li><p>Find issues that were reported to me but are not assigned to me:</p><pre><code>reporter = currentUser() AND (assignee != currentUser() OR assignee is EMPTY)</code></pre></li></ul></td></tr></tbody></table>
+| Syntax | `currentUser()` |
+| --- | --- |
+| Supported fields | Assignee, Reporter, Voter, Watcher, custom fields of type User |
+| Supported operators | `= , !=` |
+| Unsupported operators | `~ , !~ , > , >= , < , <= , IS , IS NOT , IN , NOT IN , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues that are assigned to me: assignee = currentUser(); Find issues that were reported to me but are not assigned to me: reporter = currentUser() AND (assignee != currentUser() OR assignee is EMPTY) |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## earliestUnreleasedVersion()
 
-Perform searches based on the earliest unreleased version (i.e. next version that is due to be released) of a specified project. See also [unreleasedVersions](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-unreleasedVersions).
+Perform searches based on the earliest unreleased version (i.e. next version that is due to be released) of a specified project. See also [unreleasedVersions][7].
 
 Consider that the "earliest" is determined by the ordering assigned to the versions, not by actual Version Due Dates.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>earliestUnreleasedVersion(project)</code></pre></td></tr><tr><th>Supported fields</th><td>AffectedVersion, FixVersion, custom fields of type Version</td></tr><tr><th>Supported operators</th><td><p><strong><strong><code>= , != , ~ , !~ , &gt; , &gt;= , &lt; , &lt;= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></strong></p></td></tr><tr><th>Unsupported operators</th><td><strong><code>IN , NOT IN</code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues whose FixVersion is the earliest unreleased version of the ABC project:<br><code>fixVersion = earliestUnreleasedVersion(ABC)</code></p></li><li><p>Find issues that relate to the earlist unreleased version of the ABC project:<br><code>affectedVersion = earliestUnreleasedVersion(ABC) or fixVersion = earliestUnreleasedVersion(ABC)</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `earliestUnreleasedVersion(project)` |
+| --- | --- |
+| Supported fields | AffectedVersion, FixVersion, custom fields of type Version |
+| Supported operators | `= , != , ~ , !~ , > , >= , < , <= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Unsupported operators | `IN , NOT IN` |
+| Examples | Find issues whose FixVersion is the earliest unreleased version of the ABC project: fixVersion = earliestUnreleasedVersion(ABC); Find issues that relate to the earlist unreleased version of the ABC project: affectedVersion = earliestUnreleasedVersion(ABC) or fixVersion = earliestUnreleasedVersion(ABC) |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## elapsed()
 
@@ -122,43 +172,68 @@ Consider that the "earliest" is determined by the ordering assigned to the versi
 
 Returns issues whose clock is at a certain point relative to a cycle's start event.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>elapsed()</code></pre></td></tr><tr><th>Supported fields</th><td><br></td></tr><tr><th>Supported operators</th><td><strong><strong><strong><code>= , != , <strong><code><strong><strong><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code> </strong> </code> </strong> </strong> </code> </strong> </code> </strong> </strong> </code> </strong> </strong> </strong> </code> </strong> </code></strong></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code><strong><strong><strong><code><strong><strong><code><strong><code>~</code> , </strong></code></strong></strong></code></strong></strong></strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code> </strong> </code> </strong> </strong> </strong> </code> </strong> </code> </strong> </code> <br></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues that have been waiting for a first response for more than 1 hour:<br><code>"Time to First Response" &gt; elapsed("1h")</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `elapsed()` |
+| --- | --- |
+| Supported fields |  |
+| Supported operators | `= , != , > , >= , < , <=` |
+| Unsupported operators | `~ , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues that have been waiting for a first response for more than 1 hour: "Time to First Response" > elapsed("1h") |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## endOfDay()
 
-Perform searches based on the end of the current day. See also [endOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfWeek), [endOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfMonth), and [endOfYear()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfYear), [startOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfDay), [startOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfWeek), [startOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfMonth), and [startOfYear()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfYear).
+Perform searches based on the end of the current day. See also [endOfWeek()][8], [endOfMonth()][9], and [endOfYear()][10], [startOfDay()][11], [startOfWeek()][12], [startOfMonth()][13], and [startOfYear()][14].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>endOfDay()</code></pre><pre><code>endOfDay("inc")</code></pre><p><em><sub>where <code>inc&nbsp;</code> is an optional increment of <code>(+/-)nn(y|M|w|d|h|m). </code>If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. endOfDay("+1") is the same as endOfDay("+1d"). If the plus/minus (+/-) sign is omitted, plus is assumed.</sub></em></p></td></tr><tr><th>Supported fields</th><td>Created, Due, Resolved, Updated, custom fields of type Date/Time</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><strong><code>= , != , <strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong><br><strong><strong><code><strong><code>WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*<br></code></strong></code></strong></strong> <sub><em><code><code>*&nbsp;</code></code></em></sub></strong> <sub><em><code><code>Only in predicate&nbsp;</code></code></em></sub><strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>~ , !~ , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN </code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues due by the end of today:<br><code>due &lt; endOfDay()</code></p></li><li><p>Find issues due by the end of tomorrow:<br><code>due &lt; endOfDay("+1")</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `endOfDay()` `endOfDay("inc")` where `inc` is an optional increment of `(+/-)nn(y|M|w|d|h|m).` If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. endOfDay("+1") is the same as endOfDay("+1d"). If the plus/minus (+/-) sign is omitted, plus is assumed. |
+| --- | --- |
+| Supported fields | Created, Due, Resolved, Updated, custom fields of type Date/Time |
+| Supported operators | `= , != , > , >= , < , <=` / `WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*` `*` `Only in predicate` |
+| Unsupported operators | `~ , !~ , IS , IS NOT , IN , NOT IN` |
+| Examples | Find issues due by the end of today: due < endOfDay(); Find issues due by the end of tomorrow: due < endOfDay("+1") |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## endOfMonth()
 
-Perform searches based on the end of the current month. See also [endOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfDay), [endOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfWeek), [endOfYear()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfYear), [startOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfDay), [startOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfWeek), [startOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfMonth), and [startOfYear()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfYear).
+Perform searches based on the end of the current month. See also [endOfDay()][15], [endOfWeek()][8], [endOfYear()][10], [startOfDay()][11], [startOfWeek()][12], [startOfMonth()][13], and [startOfYear()][14].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>endOfMonth()</code></pre><pre><code>endOfMonth("inc")</code></pre><p><em><sub>where <code>inc&nbsp;</code> is an optional increment of <code>(+/-)nn(y|M|w|d|h|m). </code>If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. endOfMonth("+1") is the same as endOfMonth("+1M"). If the plus/minus (+/-) sign is omitted, plus is assumed.</sub></em></p></td></tr><tr><th>Supported fields</th><td>Created, Due, Resolved, Updated, custom fields of type Date/Time</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><strong><code>= , != , <strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong><br><strong><strong><code><strong><code>WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*<br></code></strong></code></strong></strong> <sub><em><code><code>*&nbsp;</code></code></em></sub></strong> <sub><em><code><code>Only in predicate&nbsp;</code></code></em></sub><strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>~ , !~ , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN </code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues due by the end of this month:<br><code>due &lt;= endOfMonth()</code></p></li><li><p>Find issues due by the end of next month:<br><code>due &lt;= endOfMonth("+1")</code></p></li><li><p>Find issues due by the 15th of next month:<br><code>due &lt;= endOfMonth("+15d")</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `endOfMonth()` `endOfMonth("inc")` where `inc` is an optional increment of `(+/-)nn(y|M|w|d|h|m).` If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. endOfMonth("+1") is the same as endOfMonth("+1M"). If the plus/minus (+/-) sign is omitted, plus is assumed. |
+| --- | --- |
+| Supported fields | Created, Due, Resolved, Updated, custom fields of type Date/Time |
+| Supported operators | `= , != , > , >= , < , <=` / `WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*` `*` `Only in predicate` |
+| Unsupported operators | `~ , !~ , IS , IS NOT , IN , NOT IN` |
+| Examples | Find issues due by the end of this month: due <= endOfMonth(); Find issues due by the end of next month: due <= endOfMonth("+1"); Find issues due by the 15th of next month: due <= endOfMonth("+15d") |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## endOfWeek()
 
-Perform searches based on the end of the current week. See also [endOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfDay), [endOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfMonth), [endOfYear()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfYear), [startOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfDay), [startOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfWeek), [startOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfMonth), and [startOfYear](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfYear).
+Perform searches based on the end of the current week. See also [endOfDay()][15], [endOfMonth()][9], [endOfYear()][10], [startOfDay()][11], [startOfWeek()][12], [startOfMonth()][13], and [startOfYear][14].
 
 For the `endOfWeek()` function, the result depends upon your locale. For example, in Europe, the first day of the week is generally considered to be Monday, while in the USA, it is considered to be Sunday.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>endOfWeek()</code></pre><pre><code>endOfWeek("inc")</code></pre><p><em><sub>where <code>inc&nbsp;</code> is an optional increment of <code>(+/-)nn(y|M|w|d|h|m). </code>If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. endOfWeek("+1") is the same as endOfWeek("+1w"). If the plus/minus (+/-) sign is omitted, plus is assumed.</sub></em></p></td></tr><tr><th>Supported fields</th><td>Created, Due, Resolved, Updated, custom fields of type Date/Time</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><strong><code>= , != , <strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong><br><strong><strong><code><strong><code>WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*<br></code></strong></code></strong></strong> <sub><em><code><code>*&nbsp;</code></code></em></sub></strong> <sub><em><code><code>Only in predicate&nbsp;</code></code></em></sub><strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>~ , !~ , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN </code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues due by the end of this week:<br><code>due &lt; endOfWeek()</code></p></li><li><p>Find issues due by the end of next week:<br><code>due &lt; endOfWeek("+1")</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `endOfWeek()` `endOfWeek("inc")` where `inc` is an optional increment of `(+/-)nn(y|M|w|d|h|m).` If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. endOfWeek("+1") is the same as endOfWeek("+1w"). If the plus/minus (+/-) sign is omitted, plus is assumed. |
+| --- | --- |
+| Supported fields | Created, Due, Resolved, Updated, custom fields of type Date/Time |
+| Supported operators | `= , != , > , >= , < , <=` / `WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*` `*` `Only in predicate` |
+| Unsupported operators | `~ , !~ , IS , IS NOT , IN , NOT IN` |
+| Examples | Find issues due by the end of this week: due < endOfWeek(); Find issues due by the end of next week: due < endOfWeek("+1") |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## endOfYear()
 
-Perform searches based on the end of the current year. See also [startOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfDay), [startOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfWeek), [startOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfMonth), [endOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfDay), [endOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfWeek), [endOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfMonth), and [endOfYear()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfYear).
+Perform searches based on the end of the current year. See also [startOfDay()][11], [startOfWeek()][12], [startOfMonth()][13], [endOfDay()][15], [endOfWeek()][8], [endOfMonth()][9], and [endOfYear()][10].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>endOfYear()</code></pre><pre><code>endOfYear("inc")</code></pre><p><em><sub>where <code>inc&nbsp;</code> is an optional increment of <code>(+/-)nn(y|M|w|d|h|m). </code>If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. endOfYear("+1") is the same as endOfYear("+1y"). If the plus/minus (+/-) sign is omitted, plus is assumed.</sub></em></p></td></tr><tr><th>Supported fields</th><td>Created, Due, Resolved, Updated, custom fields of type Date/Time</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><strong><code>= , != , <strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong><br><strong><strong><code><strong><code>WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*<br></code></strong></code></strong></strong> <sub><em><code><code>*&nbsp;</code></code></em></sub></strong> <sub><em><code><code>Only in predicate</code></code></em></sub> <strong><sub><em><code><code>&nbsp;</code></code></em></sub><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>~ , !~ , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN </code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues due by the end of this year:<br><code>due &lt; endOfYear()</code></p></li><li><p>Find issues due by the end of March next year:<br><code>due &lt; endOfYear("+3M")</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `endOfYear()` `endOfYear("inc")` where `inc` is an optional increment of `(+/-)nn(y|M|w|d|h|m).` If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. endOfYear("+1") is the same as endOfYear("+1y"). If the plus/minus (+/-) sign is omitted, plus is assumed. |
+| --- | --- |
+| Supported fields | Created, Due, Resolved, Updated, custom fields of type Date/Time |
+| Supported operators | `= , != , > , >= , < , <=` / `WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*` `*` `Only in predicate` |
+| Unsupported operators | `~ , !~ , IS , IS NOT , IN , NOT IN` |
+| Examples | Find issues due by the end of this year: due < endOfYear(); Find issues due by the end of March next year: due < endOfYear("+3M") |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## everbreached()
 
@@ -166,9 +241,14 @@ Perform searches based on the end of the current year. See also [startOfDay()](h
 
 Returns issues that have missed one of their goals.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>elapsed()</code></pre></td></tr><tr><th>Supported fields</th><td><br></td></tr><tr><th>Supported operators</th><td><strong><strong><strong><code>= , !=</code></strong></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code><strong><strong><strong><code><strong><strong><code><strong><code>~<strong> <strong><strong> <code>, <strong><code><strong><strong><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code> , </strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong></strong></code></strong></code></strong></strong></strong></code></strong></code></strong></strong></code></strong></strong></strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code> </strong> </code> </strong> </strong> </strong> </code> </strong> </code> </strong> </code> <br></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues have missed their goal for Time to First Response:<br><code>"Time to First Response" = everbreached()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `elapsed()` |
+| --- | --- |
+| Supported fields |  |
+| Supported operators | `= , !=` |
+| Unsupported operators | `~ , > , >= , < , <= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues have missed their goal for Time to First Response: "Time to First Response" = everbreached() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## futureSprints()
 
@@ -176,9 +256,14 @@ Search for issues that are assigned to a sprint that hasn't been started yet.
 
 It is possible for an issue to belong to both completed and incomplete sprints.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>futureSprints()</code></pre></td></tr><tr><th>Supported fields</th><td>Sprint</td></tr><tr><th>Supported operators</th><td><strong><code>IN , NOT IN</code></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>= , != , ~ , !~ , &gt; , &gt;= , &lt; , &lt;=<br><strong><code>IS , IS NOT, WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find all issues that are assigned to a sprint that hasn't been started yet:<br><code>sprint in futureSprints()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `futureSprints()` |
+| --- | --- |
+| Supported fields | Sprint |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <= / IS , IS NOT, WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find all issues that are assigned to a sprint that hasn't been started yet: sprint in futureSprints() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## issueHistory()
 
@@ -190,9 +275,14 @@ Note that:
 - if you are not logged in to Jira, only issues from your current browser session will be included.
 - issues older than 90 days are deleted daily by the scheduled job.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>issueHistory()</code></pre></td></tr><tr><th>Supported fields</th><td>Issue</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><code><strong><code>IN , NOT IN</code></strong></code></strong></code></strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><strong><code><strong><strong><code>= , != , <strong><code>~ , !~ , </code></strong><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong> <code> , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></strong></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues which I have recently viewed, that are assigned to me:<br><code>issue in issueHistory() AND assignee = currentUser()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `issueHistory()` |
+| --- | --- |
+| Supported fields | Issue |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <=` `, IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues which I have recently viewed, that are assigned to me: issue in issueHistory() AND assignee = currentUser() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## issuesWithRemoteLinksByGlobalId()
 
@@ -200,27 +290,42 @@ Perform searches based on issues that are associated with remote links that have
 
 This function accepts 1 to 100 globalIds. Specifying 0 or more than 100 globalIds will result in errors.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>issuesWithRemoteLinksByGlobalId()</code></pre></td></tr><tr><th>Supported fields</th><td>Issue</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><code><strong><code>IN , NOT IN</code></strong></code></strong></code></strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><strong><code><strong><strong><code>= , != , <strong><code>~ , !~ , </code></strong><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong> <code> , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></strong></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues that are linked to remote links that have globalId "abc":<br><code>issue in issuesWithRemoteLinksByGlobalId(abc)</code></p></li><li><p>Find issues that are linked to remote links that have either globalId "abc" or "def":<br><code>issue in issuesWithRemoteLinksByGlobalId(abc, def)</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `issuesWithRemoteLinksByGlobalId()` |
+| --- | --- |
+| Supported fields | Issue |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <=` `, IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues that are linked to remote links that have globalId "abc": issue in issuesWithRemoteLinksByGlobalId(abc); Find issues that are linked to remote links that have either globalId "abc" or "def": issue in issuesWithRemoteLinksByGlobalId(abc, def) |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## lastLogin()
 
-Perform searches based on the time at which the current user's previous session began. See also [currentLogin()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-currentLogin).
+Perform searches based on the time at which the current user's previous session began. See also [currentLogin()][16].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>lastLogin()</code></pre></td></tr><tr><th>Supported fields</th><td>Created. Due, Resolved, Updated, custom fields of type Date/Time</td></tr><tr><th>Supported operators</th><td><strong><strong><strong><strong><code><strong><strong><code>= , != , <strong><strong><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong></strong></code></strong></strong></code></strong></strong></strong><br><strong><strong><strong><code><strong><code>WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*<br></code></strong></code></strong></strong> <sub><em><code><code>*&nbsp;</code></code></em></sub></strong></strong> <sub><em><code><code>Only in predicate&nbsp;</code></code></em></sub><strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><strong><code><strong><strong><code><strong><code>~ , !~ ,&nbsp;</code></strong></code></strong></strong></code></strong></strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , <strong><strong><code><strong><code><strong><code>IN , NOT IN</code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues that have been created during my last session:<br><code>created &gt; lastLogin()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `lastLogin()` |
+| --- | --- |
+| Supported fields | Created. Due, Resolved, Updated, custom fields of type Date/Time |
+| Supported operators | `= , != , > , >= , < , <=` / `WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*` `*` `Only in predicate` |
+| Unsupported operators | `~ , !~ ,` `IS , IS NOT , IN , NOT IN` |
+| Examples | Find issues that have been created during my last session: created > lastLogin() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## latestReleasedVersion()
 
-Perform searches based on the latest released version (i.e. the most recent version that has been released) of a specified project. See also [releasedVersions()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-releasedVersions).
+Perform searches based on the latest released version (i.e. the most recent version that has been released) of a specified project. See also [releasedVersions()][17].
 
 Consider that the "latest" is determined by the ordering assigned to the versions, not by actual Version Due Dates.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>latestReleasedVersion(project)</code></pre></td></tr><tr><th>Supported fields</th><td>AffectedVersion, FixVersion, custom fields of type Version</td></tr><tr><th>Supported operators</th><td><strong><strong><strong><code><strong><code><strong><code><strong><strong><strong><code><strong><strong><code>= , !=</code></strong></strong></code></strong></strong></strong></code></strong></code></strong></code></strong></strong></strong></td></tr><tr><th>Unsupported operators</th><td><p><strong><strong><strong><code><strong><strong><code><strong><code>~ , !~ , </code></strong><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=&nbsp;</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong></strong></p><p><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , <strong><strong><code><strong><code><strong><code>IN , NOT IN ,</code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></strong></strong></p></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues whose FixVersion is the latest released version of the ABC project:<br><code>fixVersion = latestReleasedVersion(ABC)</code></p></li><li><p>Find issues that relate to the latest released version of the ABC project:<br><code>affectedVersion = latestReleasedVersion(ABC) or fixVersion = latestReleasedVersion(ABC)</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `latestReleasedVersion(project)` |
+| --- | --- |
+| Supported fields | AffectedVersion, FixVersion, custom fields of type Version |
+| Supported operators | `= , !=` |
+| Unsupported operators | `~ , !~ , > , >= , < , <=` `IS , IS NOT , IN , NOT IN ,` `WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues whose FixVersion is the latest released version of the ABC project: fixVersion = latestReleasedVersion(ABC); Find issues that relate to the latest released version of the ABC project: affectedVersion = latestReleasedVersion(ABC) or fixVersion = latestReleasedVersion(ABC) |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## linkedIssues()
 
@@ -228,17 +333,27 @@ Perform searches based on issues that are linked to a specified issue. You can o
 
 Note that LinkType is case-sensitive.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>linkedIssues(issueKey)</code></pre><pre><code>linkedIssues(issueKey,linkType)</code></pre></td></tr><tr><th>Supported fields</th><td>Issue</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><code><strong><code>IN , NOT IN</code></strong></code></strong></code></strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><strong><code><strong><strong><code>= , != , <strong><code>~ , !~ , </code></strong><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong> <code> , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></strong></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues that are linked to a particular issue:<br><code>issue in linkedIssues(ABC-123)</code></p></li><li><p>Find issues that are linked to a particular issue via a particular type of link:<br><code>issue in linkedIssues(ABC-123,"is duplicated by")</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `linkedIssues(issueKey)` `linkedIssues(issueKey,linkType)` |
+| --- | --- |
+| Supported fields | Issue |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <=` `, IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues that are linked to a particular issue: issue in linkedIssues(ABC-123); Find issues that are linked to a particular issue via a particular type of link: issue in linkedIssues(ABC-123,"is duplicated by") |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## membersOf()
 
 Perform searches based on the members of a particular group.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>membersOf(Group)</code></pre></td></tr><tr><th>Supported fields</th><td>Assignee, Reporter, Voter, Watcher, custom fields of type User</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><code><strong><code>IN , NOT IN</code></strong></code></strong></code></strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><strong><code><strong><strong><code>= , != , <strong><code>~ , !~ , </code></strong><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong> <code> , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></strong></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues where the Assignee is a member of the group "Jira-administrators":<br><code>assignee in membersOf("Jira-administrators")</code></p></li><li><p>Search through multiple groups and a specific user:<br><code>reporter in membersOf("Jira-administators") or reporter in membersOf("Jira-core-users") or reporter=jsmith</code></p></li><li><p>Search for a particular group, but exclude a particular member or members:<br><code>assignee in membersOf() and assignee not in ("John Smith","Jill Jones")</code></p></li><li><p>Exclude members of a particular group:<br><code>assignee not in membersOf()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `membersOf(Group)` |
+| --- | --- |
+| Supported fields | Assignee, Reporter, Voter, Watcher, custom fields of type User |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <=` `, IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues where the Assignee is a member of the group "Jira-administrators": assignee in membersOf("Jira-administrators"); Search through multiple groups and a specific user: reporter in membersOf("Jira-administators") or reporter in membersOf("Jira-core-users") or reporter=jsmith; Search for a particular group, but exclude a particular member or members: assignee in membersOf() and assignee not in ("John Smith","Jill Jones"); Exclude members of a particular group: assignee not in membersOf() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## myApproval()
 
@@ -246,9 +361,14 @@ Perform searches based on the members of a particular group.
 
 Search for issues that require approval or have required approval by the current user.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>myApproval()</code></pre></td></tr><tr><th>Supported fields</th><td>Custom fields of type Approval</td></tr><tr><th>Supported operators</th><td><strong><span>=</span></strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><code>~&nbsp;<strong><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code>, != ,&nbsp;<strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong>!~ ,</strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></strong></code></strong> &gt;, &gt;=, &lt;, &lt;=<br><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li>Find all issues that require or have required my approval<br><code>approval = myApproval()</code></li></ul></td></tr></tbody></table>
+| Syntax | `myApproval()` |
+| --- | --- |
+| Supported fields | Custom fields of type Approval |
+| Supported operators | = |
+| Unsupported operators | `~ , != , !~ ,` >, >=, <, <= / `IS , IS NOT , IN , NOT IN ,` `WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find all issues that require or have required my approval approval = myApproval() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## myPending()
 
@@ -256,27 +376,42 @@ Search for issues that require approval or have required approval by the current
 
 Search for issues that require approval by the current user.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>myPending()</code></pre></td></tr><tr><th>Supported fields</th><td>Custom fields of type Approval</td></tr><tr><th>Supported operators</th><td><strong><span>=</span></strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><code>~&nbsp;<strong><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code>, != ,&nbsp;<strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong>!~ ,</strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></strong></code></strong> &gt;, &gt;=, &lt;, &lt;=<br><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li>Find all issues that require my approval<br><code>approval = myPending()</code></li></ul></td></tr></tbody></table>
+| Syntax | `myPending()` |
+| --- | --- |
+| Supported fields | Custom fields of type Approval |
+| Supported operators | = |
+| Unsupported operators | `~ , != , !~ ,` >, >=, <, <= / `IS , IS NOT , IN , NOT IN ,` `WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find all issues that require my approval approval = myPending() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## now()
 
 Perform searches based on the current time.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>now()</code></pre></td></tr><tr><th>Supported fields</th><td>Created. Due, Resolved, Updated, custom fields of type Date/Time</td></tr><tr><th>Supported operators</th><td><strong><strong><strong><strong><code><strong><strong><code>= , != , <strong><strong><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong></strong></code></strong></strong></code></strong></strong></strong><br><strong><strong><strong><code><strong><code>WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*<br></code></strong></code></strong></strong> <sub><em><code><code>*&nbsp;</code></code></em></sub></strong></strong> <sub><em><code><code>Only in predicate&nbsp;</code></code></em></sub><strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><strong><code><strong><strong><code><strong><code>~ , !~ ,&nbsp;</code></strong></code></strong></strong></code></strong></strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , <strong><strong><code><strong><code><strong><code>IN , NOT IN</code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues that are overdue:<br><code>duedate &lt; now() and status not in (closed, resolved)</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `now()` |
+| --- | --- |
+| Supported fields | Created. Due, Resolved, Updated, custom fields of type Date/Time |
+| Supported operators | `= , != , > , >= , < , <=` / `WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*` `*` `Only in predicate` |
+| Unsupported operators | `~ , !~ ,` `IS , IS NOT , IN , NOT IN` |
+| Examples | Find issues that are overdue: duedate < now() and status not in (closed, resolved) |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## openSprints()
 
 Search for issues that are assigned to a Sprint that has not yet been completed.
 
-It's possible for an issue to belong to both a completed Sprint(s) and an incomplete Sprint(s). See also [closedSprints()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-closedSprints).
+It's possible for an issue to belong to both a completed Sprint(s) and an incomplete Sprint(s). See also [closedSprints()][18].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>openSprints()</code></pre></td></tr><tr><th>Supported fields</th><td>Sprint</td></tr><tr><th>Supported operators</th><td><strong><code>IN , NOT IN</code></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>= , != , ~ , !~ , &gt; , &gt;= , &lt; , &lt;=<br><strong><code>IS , IS NOT, WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong> </code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find all issues that are assigned to a sprint that has not yet been completed:<br><code>sprint in openSprints()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `openSprints()` |
+| --- | --- |
+| Supported fields | Sprint |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <= / IS , IS NOT, WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find all issues that are assigned to a sprint that has not yet been completed: sprint in openSprints() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## outdated()
 
@@ -284,9 +419,14 @@ It's possible for an issue to belong to both a completed Sprint(s) and an incomp
 
 Returns issues whose SLAs are out of date because someone has changed the SLA in the settings. After the site reindexes and recalculates the SLAs, the function shouldn't return any issues. Use this function if a reindex is taking a long time or if you've deferred the reindex because you're making a lot of changes.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>outdated()</code></pre></td></tr><tr><th>Supported fields</th><td><br></td></tr><tr><th>Supported operators</th><td><strong><code>= , !=</code></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>~ , !~ , &gt; , &gt;= , &lt; , &lt;= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED           <br></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues where SLAs are out of date:<br><code>"Time to First Response"</code> <code>= outdated()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `outdated()` |
+| --- | --- |
+| Supported fields |  |
+| Supported operators | `= , !=` |
+| Unsupported operators | `~ , !~ , > , >= , < , <= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues where SLAs are out of date: "Time to First Response" = outdated() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## paused()
 
@@ -294,11 +434,16 @@ Returns issues whose SLAs are out of date because someone has changed the SLA in
 
 Returns issues that have an SLA that is paused due to a condition.
 
-To find issues that are paused because they are outside calendar hours, use [withincalendarhours()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-withincalendarhours).
+To find issues that are paused because they are outside calendar hours, use [withincalendarhours()][19].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>paused()</code></pre></td></tr><tr><th>Supported fields</th><td><br></td></tr><tr><th>Supported operators</th><td><strong><strong><strong><code>= , !=</code></strong></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code><strong><strong><strong><code><strong><strong><code><strong><code>~ , !~ ,</code> </strong><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code> , </strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong></strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code> </strong> </code> </strong> </strong> </strong> </code> </strong> </code> </strong> </code> <br></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues where Time to First Response is paused:<br><code>"Time to First Response" = paused()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `paused()` |
+| --- | --- |
+| Supported fields |  |
+| Supported operators | `= , !=` |
+| Unsupported operators | `~ , !~ , > , >= , < , <= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues where Time to First Response is paused: "Time to First Response" = paused() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## pending()
 
@@ -306,9 +451,14 @@ To find issues that are paused because they are outside calendar hours, use [wit
 
 Search for issues that require approval.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>pending()</code></pre></td></tr><tr><th>Supported fields</th><td>Custom fields of type Approval</td></tr><tr><th>Supported operators</th><td><strong>=</strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><code>~&nbsp;<strong><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code>, != ,&nbsp;<strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong>!~ ,</strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></strong></code></strong> &gt;, &gt;=, &lt;, &lt;=<br><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li>Find all issues that require approval:<br><code>approval = pending()</code></li></ul></td></tr></tbody></table>
+| Syntax | `pending()` |
+| --- | --- |
+| Supported fields | Custom fields of type Approval |
+| Supported operators | = |
+| Unsupported operators | `~ , != , !~ ,` >, >=, <, <= / `IS , IS NOT , IN , NOT IN ,` `WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find all issues that require approval: approval = pending() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## pendingBy()
 
@@ -316,9 +466,14 @@ Search for issues that require approval.
 
 Search for issues that require approval by one or more of the listed users. This uses an `OR` operator, and you must specify the username s.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>pendingBy(user1,user2)</code></pre></td></tr><tr><th>Supported fields</th><td>Custom fields of type Approval</td></tr><tr><th>Supported operators</th><td><strong>=</strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><code>~&nbsp;<strong><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code>, != ,&nbsp;<strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong>!~ ,</strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></strong></code></strong> &gt;, &gt;=, &lt;, &lt;=<br><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li>Find issues that require approval by John Smith:<br><code>approval = pendingBy(jsmith)</code></li><li>Find issues that require by John Smith or Sarah Khan:<code><br><code>approval = pendingBy(jsmith,skhan)</code></code></li></ul></td></tr></tbody></table>
+| Syntax | `pendingBy(user1,user2)` |
+| --- | --- |
+| Supported fields | Custom fields of type Approval |
+| Supported operators | = |
+| Unsupported operators | `~ , != , !~ ,` >, >=, <, <= / `IS , IS NOT , IN , NOT IN ,` `WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues that require approval by John Smith: approval = pendingBy(jsmith); Find issues that require by John Smith or Sarah Khan: approval = pendingBy(jsmith,skhan) |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## projectsLeadByUser()
 
@@ -326,33 +481,53 @@ Find issues in projects that are led by a specific user. You can optionally spec
 
 If you are not logged in to Jira, a user must be specified.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>projectsLeadByUser()</code></pre><pre><code>projectsLeadByUser(username)</code></pre></td></tr><tr><th>Supported fields</th><td>Project</td></tr><tr><th>Supported operators</th><td><strong><code>IN , NOT IN</code></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>= , != , ~ , !~ , &gt; , &gt;= , &lt; , &lt;=<br><strong><code>IS , IS NOT, WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong> </code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find open issues in projects that are led by you:<br><code>project in projectsLeadByUser() AND status = Open</code></p></li><li><p>Find open issues in projects that are led by Bill:<br><code>project in projectsLeadByUser(bill) AND status = Open</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `projectsLeadByUser()` `projectsLeadByUser(username)` |
+| --- | --- |
+| Supported fields | Project |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <= / IS , IS NOT, WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find open issues in projects that are led by you: project in projectsLeadByUser() AND status = Open; Find open issues in projects that are led by Bill: project in projectsLeadByUser(bill) AND status = Open |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## projectsWhereUserHasPermission()
 
 Find issues in projects where you have a specific permission. Note, this function operates at the project level. This means that if a permission (e.g. "Edit Issues") is granted to the reporter of issues in a project, then you may see some issues returned where you are not the reporter, and therefore don't have the permission specified. Also note, this function is only available if you are logged in to Jira.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>projectsWhereUserHasPermission(permission)</code></pre><p>For the <code>permission</code> parameter, you can specify any of the permissions described on.</p></td></tr><tr><th>Supported fields</th><td>Project</td></tr><tr><th>Supported operators</th><td><strong><code>IN , NOT IN</code></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>= , != , ~ , !~ , &gt; , &gt;= , &lt; , &lt;=<br><strong><code>IS , IS NOT, WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong> </code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find open issues in projects where you have the "Resolve Issues" permission:<br><code>project in projectsWhereUserHasPermission("Resolve Issues") AND status = Open</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `projectsWhereUserHasPermission(permission)` For the `permission` parameter, you can specify any of the permissions described on. |
+| --- | --- |
+| Supported fields | Project |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <= / IS , IS NOT, WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find open issues in projects where you have the "Resolve Issues" permission: project in projectsWhereUserHasPermission("Resolve Issues") AND status = Open |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## projectsWhereUserHasRole()
 
 Find issues in projects where you have a specific role. Note, this function is only available if you are logged in to Jira.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>projectsWhereUserHasRole(rolename)</code></pre></td></tr><tr><th>Supported fields</th><td>Project</td></tr><tr><th>Supported operators</th><td><strong><code>IN , NOT IN</code></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>= , != , ~ , !~ , &gt; , &gt;= , &lt; , &lt;=<br><strong><code>IS , IS NOT, WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong> </code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find open issues in projects where you have the "Developers" role:<br><code>project in projectsWhereUserHasRole("Developers") AND status = Open</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `projectsWhereUserHasRole(rolename)` |
+| --- | --- |
+| Supported fields | Project |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <= / IS , IS NOT, WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find open issues in projects where you have the "Developers" role: project in projectsWhereUserHasRole("Developers") AND status = Open |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## releasedVersions()
 
-Perform searches based on the released versions (i.e. versions that your Jira administrator has released) of a specified project. You can also search on the released versions of all projects, by omitting the *project*  parameter. See also  [latestReleasedVersion](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-latestReleasedVersion) ().
+Perform searches based on the released versions (i.e. versions that your Jira administrator has released) of a specified project. You can also search on the released versions of all projects, by omitting the *project*  parameter. See also  [latestReleasedVersion][20] ().
 
-<table><tbody><tr><th>Syntax</th><td><pre><code>releasedVersions()</code></pre><pre><code>releasedVersions(project)</code></pre></td></tr><tr><th>Supported fields</th><td>AffectedVersion, FixVersion, custom fields of type Version</td></tr><tr><th>Supported operators</th><td><strong><strong><code>IN , NOT IN</code></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code><strong><strong><code>= , != , </code></strong></strong>~ , !~ , <strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong> <strong><code><strong><code><strong><code><strong><code>IS , IS NOT</code></strong></code></strong> , <strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues whose FixVersion is a released version of the ABC project:<br><code>fixVersion in releasedVersions(ABC)</code></p></li><li><p>Find issues that relate to released versions of the ABC project:<br><code>(affectedVersion in releasedVersions(ABC)) or (fixVersion in releasedVersions(ABC))</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `releasedVersions()` `releasedVersions(project)` |
+| --- | --- |
+| Supported fields | AffectedVersion, FixVersion, custom fields of type Version |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <= IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues whose FixVersion is a released version of the ABC project: fixVersion in releasedVersions(ABC); Find issues that relate to released versions of the ABC project: (affectedVersion in releasedVersions(ABC)) or (fixVersion in releasedVersions(ABC)) |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## remaining()
 
@@ -360,9 +535,14 @@ Perform searches based on the released versions (i.e. versions that your Jira ad
 
 Returns issues whose clock is at a certain point relative to the goal.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>remaining()</code></pre></td></tr><tr><th>Supported fields</th><td><br></td></tr><tr><th>Supported operators</th><td><strong><strong><strong><code>= , !=, <strong><code><strong><strong><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code> </strong> </code> </strong> </strong> </code> </strong> </code> </strong> </strong> </code> </strong> </strong> </strong> </code> </strong> </code></strong></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code><strong><strong><strong><code><strong><strong><code><strong><code>~</code> ,</strong></code></strong></strong></code></strong></strong></strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong> <code>IS , IS NOT ,</code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong> <code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code> </strong> </code> </strong> </strong> </strong> </code> </strong> </code> </strong> </code> <br></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues that will breach Time to Resolution in the next two hours:<br><code>"Time to Resolution" &lt; remaining("2h")</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `remaining()` |
+| --- | --- |
+| Supported fields |  |
+| Supported operators | `= , !=, > , >= , < , <=` |
+| Unsupported operators | `~ , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues that will breach Time to Resolution in the next two hours: "Time to Resolution" < remaining("2h") |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## running()
 
@@ -370,69 +550,109 @@ Returns issues whose clock is at a certain point relative to the goal.
 
 Returns issues that have an SLA that is running, regardless of the calendar.
 
-To find issues that are running based on calendar hours, use [withincalendarhours()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-withincalendarhours).
+To find issues that are running based on calendar hours, use [withincalendarhours()][19].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>running()</code></pre></td></tr><tr><th>Supported fields</th><td><br></td></tr><tr><th>Supported operators</th><td><strong><strong><strong><code>= , !=</code></strong></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code><strong><strong><strong><code><strong><strong><code><strong> <code>~ , !~ ,</code> </strong><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;= ,</code> </strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong></strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT ,</code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong> <code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code> </strong> </code> </strong> </strong> </strong> </code> </strong> </code> </strong> </code> <br></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues where Time to First Response is running:<br><code>"Time to First Response" = running()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `running()` |
+| --- | --- |
+| Supported fields |  |
+| Supported operators | `= , !=` |
+| Unsupported operators | `~ , !~ , > , >= , < , <= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues where Time to First Response is running: "Time to First Response" = running() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## standardIssueTypes()
 
-Perform searches based on "standard" Issue Types, that is, search for issues that are not sub-tasks. See also [subtaskIssueTypes()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-subtaskIssueTypes).
+Perform searches based on "standard" Issue Types, that is, search for issues that are not sub-tasks. See also [subtaskIssueTypes()][21].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>standardIssueTypes()</code></pre></td></tr><tr><th>Supported fields</th><td>Type</td></tr><tr><th>Supported operators</th><td><strong><strong><code>IN , NOT IN</code></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code><strong><strong><code>= , != , </code></strong></strong>~ , !~ , <strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong> <strong><code><strong><code><strong><code><strong><code>IS , IS NOT</code></strong></code></strong> , <strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues that are not subtasks (i.e. issues whose Issue Type is a standard issue type, not a subtask issue type):<br><code>issuetype in standardIssueTypes()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `standardIssueTypes()` |
+| --- | --- |
+| Supported fields | Type |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <= IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues that are not subtasks (i.e. issues whose Issue Type is a standard issue type, not a subtask issue type): issuetype in standardIssueTypes() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## startOfDay()
 
-Perform searches based on the start of the current day. See also [startOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfWeek), [startOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfMonth), [startOfYear()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfYear), [endOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfDay), [endOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfWeek), [endOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfMonth), and [endOfYear()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfYear).
+Perform searches based on the start of the current day. See also [startOfWeek()][12], [startOfMonth()][13], [startOfYear()][14], [endOfDay()][15], [endOfWeek()][8], [endOfMonth()][9], and [endOfYear()][10].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>startOfDay()</code></pre><pre><code>startOfDay("inc")</code></pre><p><em><sub>where <code>inc&nbsp;</code> is an optional increment of <code>(+/-)nn(y|M|w|d|h|m). </code>If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. startOfDay("+1") is the same as startOfDay("+1d"). If the plus/minus (+/-) sign is omitted, plus is assumed.</sub></em></p></td></tr><tr><th>Supported fields</th><td>Created, Due, Resolved, Updated, custom fields of type Date/Time</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><strong><code>= , != , <strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong><br><strong><strong><code><strong><code>WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*<br></code></strong></code></strong></strong> <sub><em><code><code>*&nbsp;</code></code></em></sub></strong> <sub><em><code><code>Only in predicate</code></code></em></sub> <strong><sub><em><code><code>&nbsp;</code></code></em></sub><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>~ , !~ , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN </code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find new issues created since the start of today:<br><code>created &gt; startOfDay()</code></p></li><li><p>Find new issues created since the start of yesterday:<br><code>created &gt; startOfDay("-1")</code></p></li><li><p>Find new issues created in the last three days:<br><code>created &gt; startOfDay("-3d")</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `startOfDay()` `startOfDay("inc")` where `inc` is an optional increment of `(+/-)nn(y|M|w|d|h|m).` If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. startOfDay("+1") is the same as startOfDay("+1d"). If the plus/minus (+/-) sign is omitted, plus is assumed. |
+| --- | --- |
+| Supported fields | Created, Due, Resolved, Updated, custom fields of type Date/Time |
+| Supported operators | `= , != , > , >= , < , <=` / `WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*` `*` `Only in predicate` |
+| Unsupported operators | `~ , !~ , IS , IS NOT , IN , NOT IN` |
+| Examples | Find new issues created since the start of today: created > startOfDay(); Find new issues created since the start of yesterday: created > startOfDay("-1"); Find new issues created in the last three days: created > startOfDay("-3d") |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## startOfMonth()
 
-Perform searches based on the start of the current month. See also [startOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfDay), [startOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfWeek), [startOfYear()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfYear), [endOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfDay), [endOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfWeek), [endOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfMonth), and [endOfYear()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfYear).
+Perform searches based on the start of the current month. See also [startOfDay()][11], [startOfWeek()][12], [startOfYear()][14], [endOfDay()][15], [endOfWeek()][8], [endOfMonth()][9], and [endOfYear()][10].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>startOfMonth()</code></pre><pre><code>startOfMonth("inc")</code></pre><p><em><sub>where <code>inc&nbsp;</code> is an optional increment of <code>(+/-)nn(y|M|w|d|h|m). </code>If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. startOfMonth("+1") is the same as startOfMonth("+1M"). If the plus/minus (+/-) sign is omitted, plus is assumed.</sub></em></p></td></tr><tr><th>Supported fields</th><td>Created, Due, Resolved, Updated, custom fields of type Date/Time</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><strong><code>= , != , <strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong><br><strong><strong><code><strong><code>WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*<br></code></strong></code></strong></strong> <sub><em><code><code>*&nbsp;</code></code></em></sub></strong> <sub><em><code><code>Only in predicate</code></code></em></sub> <strong><sub><em><code><code>&nbsp;</code></code></em></sub><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>~ , !~ , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN </code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find new issues created since the start of this month:<br><code>created &gt; startOfMonth()</code></p></li><li><p>Find new issues created since the start of last month:<br><code>created &gt; startOfMonth("-1")</code></p></li><li><p>Find new issues created since the 15th of this month:<br><code>created &gt; startOfMonth("+14d")</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `startOfMonth()` `startOfMonth("inc")` where `inc` is an optional increment of `(+/-)nn(y|M|w|d|h|m).` If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. startOfMonth("+1") is the same as startOfMonth("+1M"). If the plus/minus (+/-) sign is omitted, plus is assumed. |
+| --- | --- |
+| Supported fields | Created, Due, Resolved, Updated, custom fields of type Date/Time |
+| Supported operators | `= , != , > , >= , < , <=` / `WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*` `*` `Only in predicate` |
+| Unsupported operators | `~ , !~ , IS , IS NOT , IN , NOT IN` |
+| Examples | Find new issues created since the start of this month: created > startOfMonth(); Find new issues created since the start of last month: created > startOfMonth("-1"); Find new issues created since the 15th of this month: created > startOfMonth("+14d") |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## startOfWeek()
 
-Perform searches based on the start of the current week. See also [startOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfDay), [startOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfMonth), [startOfYear()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfYear), [endOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfDay), [endOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfWeek), [endOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfMonth), and [endOfYear()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfYear).
+Perform searches based on the start of the current week. See also [startOfDay()][11], [startOfMonth()][13], [startOfYear()][14], [endOfDay()][15], [endOfWeek()][8], [endOfMonth()][9], and [endOfYear()][10].
 
 For the startOfWeek() function, the result depends upon your locale. For example, in Europe, the first day of the week is generally considered to be Monday, while in the USA, it is considered to be Sunday.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>startOfWeek()</code></pre><pre><code>startOfWeek("inc")</code></pre><p><em><sub>where <code>inc&nbsp;</code> is an optional increment of <code>(+/-)nn(y|M|w|d|h|m). </code>If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. startOfWeek("+1") is the same as startOfWeek("+1w"). If the plus/minus (+/-) sign is omitted, plus is assumed.</sub></em></p></td></tr><tr><th>Supported fields</th><td>Created, Due, Resolved, Updated, custom fields of type Date/Time</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><strong><code>= , != , <strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong><br><strong><strong><code><strong><code>WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*<br></code></strong></code></strong></strong> <sub><em><code><code>*&nbsp;</code></code></em></sub></strong> <sub><em><code><code>Only in predicate&nbsp;</code></code></em></sub><strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>~ , !~ , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN </code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find new issues since the start of this week:<br><code>created &gt; startOfWeek()</code></p></li><li><p>Find new issues since the start of last week:<br><code>created &gt; startOfWeek("-1")</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `startOfWeek()` `startOfWeek("inc")` where `inc` is an optional increment of `(+/-)nn(y|M|w|d|h|m).` If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. startOfWeek("+1") is the same as startOfWeek("+1w"). If the plus/minus (+/-) sign is omitted, plus is assumed. |
+| --- | --- |
+| Supported fields | Created, Due, Resolved, Updated, custom fields of type Date/Time |
+| Supported operators | `= , != , > , >= , < , <=` / `WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*` `*` `Only in predicate` |
+| Unsupported operators | `~ , !~ , IS , IS NOT , IN , NOT IN` |
+| Examples | Find new issues since the start of this week: created > startOfWeek(); Find new issues since the start of last week: created > startOfWeek("-1") |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## startOfYear()
 
-Perform searches based on the start of the current year. See also [startOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfDay), [startOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfWeek), [startOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfMonth), [endOfDay()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfDay), [endOfWeek()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfWeek), [endOfMonth()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfMonth), and [endOfYear](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfYear).
+Perform searches based on the start of the current year. See also [startOfDay()][11], [startOfWeek()][12], [startOfMonth()][13], [endOfDay()][15], [endOfWeek()][8], [endOfMonth()][9], and [endOfYear][10].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>startOfYear()</code></pre><pre><code>startOfYear("inc")</code></pre><p><em><sub>where <code>inc&nbsp;</code> is an optional increment of <code>(+/-)nn(y|M|w|d|h|m). </code>If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. endOfYear("+1") is the same as endOfYear("+1y"). If the plus/minus (+/-) sign is omitted, plus is assumed.</sub></em></p></td></tr><tr><th>Supported fields</th><td>Created, Due, Resolved, Updated, custom fields of type Date/Time</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><strong><code>= , != , <strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong><br><strong><strong><code><strong><code>WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*<br></code></strong></code></strong></strong> <sub><em><code><code>*</code></code></em></sub></strong> <sub><em><code><code>&nbsp;Only in predicate&nbsp;</code></code></em></sub><strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code>~ , !~ , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong>IN , NOT IN </code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find new issues since the start of this year:<br><code>created &gt; startOfYear()</code></p></li><li><p>Find new issues since the start of last year:<br><code>created &gt; startOfYear("-1")</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `startOfYear()` `startOfYear("inc")` where `inc` is an optional increment of `(+/-)nn(y|M|w|d|h|m).` If the time unit qualifier is omitted, it defaults to the natural period of the function, e.g. endOfYear("+1") is the same as endOfYear("+1y"). If the plus/minus (+/-) sign is omitted, plus is assumed. |
+| --- | --- |
+| Supported fields | Created, Due, Resolved, Updated, custom fields of type Date/Time |
+| Supported operators | `= , != , > , >= , < , <=` / `WAS* , WAS IN* , WAS NOT* , WAS NOT IN* , CHANGED*` `*` `Only in predicate` |
+| Unsupported operators | `~ , !~ , IS , IS NOT , IN , NOT IN` |
+| Examples | Find new issues since the start of this year: created > startOfYear(); Find new issues since the start of last year: created > startOfYear("-1") |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## subtaskIssueTypes()
 
-Perform searches based on issues that are sub-tasks. See also [standardIssueTypes()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-standardIssueTypes).
+Perform searches based on issues that are sub-tasks. See also [standardIssueTypes()][22].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>subtaskIssueTypes()</code></pre></td></tr><tr><th>Supported fields</th><td>Type</td></tr><tr><th>Supported operators</th><td><strong><strong><code>IN , NOT IN</code></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code><strong><strong><code>= , != , </code></strong></strong>~ , !~ , <strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong> , <strong><code><strong><code><strong><code><strong><code>IS , IS NOT</code></strong></code></strong> , <strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues that are subtasks (i.e. issues whose Issue Type is a subtask issue type):<br><code>issuetype in subtaskIssueTypes()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `subtaskIssueTypes()` |
+| --- | --- |
+| Supported fields | Type |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues that are subtasks (i.e. issues whose Issue Type is a subtask issue type): issuetype in subtaskIssueTypes() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## unreleasedVersions()
 
-Perform searches based on the unreleased versions (i.e. versions that your Jira administrator has not yet released) of a specified project. You can also search on the unreleased versions of all projects, by omitting the `project`  parameter. See also  [earliestUnreleasedVersion()](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-earliestUnreleasedVersion).
+Perform searches based on the unreleased versions (i.e. versions that your Jira administrator has not yet released) of a specified project. You can also search on the unreleased versions of all projects, by omitting the `project`  parameter. See also  [earliestUnreleasedVersion()][23].
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>unreleasedVersions()</code></pre><pre><code>unreleasedVersions(project)</code></pre></td></tr><tr><th>Supported fields</th><td>AffectedVersion, FixVersion, custom fields of type Version</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><code><strong><code>IN , NOT IN</code></strong></code></strong></code></strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><strong><code><strong><strong><code>= , != , <strong><code>~ , !~ , </code></strong><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong> <code> , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></strong></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues whose FixVersion is an unreleased version of the ABC project:<br><code>fixVersion in unreleasedVersions(ABC)</code></p></li><li><p>Find issues that relate to unreleased versions of the ABC project:<br><code>affectedVersion in unreleasedVersions(ABC)</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `unreleasedVersions()` `unreleasedVersions(project)` |
+| --- | --- |
+| Supported fields | AffectedVersion, FixVersion, custom fields of type Version |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <=` `, IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues whose FixVersion is an unreleased version of the ABC project: fixVersion in unreleasedVersions(ABC); Find issues that relate to unreleased versions of the ABC project: affectedVersion in unreleasedVersions(ABC) |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## updatedBy()
 
@@ -445,29 +665,44 @@ For the time range, use one of the following formats:
 
 Or use `"w"` (weeks), or `"d"` (days) to specify a date relative to the current time. Unlike some other functions, `updatedBy` doesn't support values smaller then a day, and will always round them up to 1 day.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>updatedBy(user)</code></pre><pre><code>updatedBy(user, dateFrom)</code></pre><pre><code>updatedBy(user, dateFrom, dateTo)</code></pre></td></tr><tr><th>Supported fields</th><td><code>Issuekey</code>, and its aliases (<code>id</code>, <code>issue</code>, <code>key</code>)</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IN , NOT IN</code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code><strong><code>=, ~&nbsp;<strong><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code>, != ,&nbsp;<strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong>!~ ,</strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></strong></strong></code></strong>&nbsp;&gt; , &gt;= , &lt; , &lt;=&nbsp;<br><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT</code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong> ,&nbsp;</code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><strong><code><strong><code><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></code></strong></code></strong></strong> </code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li>Find issues that were updated by John Smith:<br><code>issuekey IN updatedBy(jsmith)</code></li><li>Find issues that were updated by John Smith within the last 8 days:<code><br><code><span>issuekey IN updatedBy(jsmith, "-8d")</span><br></code></code></li><li><span>Find issues updated between June and September 2018:</span><br><span><code><span>issuekey IN updatedBy(jsmith, "2018/06/01", <span>"2018/08/31"</span>)</span></code><br></span></li><li><span><span><span>If you try to find issues updated in the last hour, like in the following example, the time will be rounded up to 1 day, as smaller values aren't supported: </span></span><code><span><br><span><code>issuekey IN updatedBy(jsmith, "-1h")</code></span><br></span></code></span></li></ul></td></tr></tbody></table>
+| Syntax | `updatedBy(user)` `updatedBy(user, dateFrom)` `updatedBy(user, dateFrom, dateTo)` |
+| --- | --- |
+| Supported fields | `Issuekey` , and its aliases ( `id` , `issue` , `key` ) |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `=, ~ , != , !~ , > , >= , < , <= / IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues that were updated by John Smith: issuekey IN updatedBy(jsmith); Find issues that were updated by John Smith within the last 8 days: issuekey IN updatedBy(jsmith, "-8d"); Find issues updated between June and September 2018: issuekey IN updatedBy(jsmith, "2018/06/01", "2018/08/31" ); If you try to find issues updated in the last hour, like in the following example, the time will be rounded up to 1 day, as smaller values aren't supported: issuekey IN updatedBy(jsmith, "-1h") |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## votedIssues()
 
-Perform searches based on issues for which you have voted. Also, see the [Voter](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html#Advancedsearchingfieldsreference-voter) field.
+Perform searches based on issues for which you have voted. Also, see the [Voter][24] field.
 
 This function can only be used by logged-in users.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>votedIssues()</code></pre></td></tr><tr><th>Supported fields</th><td>Issue</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><code><strong><code>IN , NOT IN</code></strong></code></strong></code></strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><strong><code><strong><strong><code>= , != , <strong><code>~ , !~ , </code></strong><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong> <code> , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></strong></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues that you have voted for:<br><code>issue in votedIssues()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `votedIssues()` |
+| --- | --- |
+| Supported fields | Issue |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <=` `, IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues that you have voted for: issue in votedIssues() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## watchedIssues()
 
-Perform searches based on issues that you are watching. Also, see the [Watcher](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html#Advancedsearchingfieldsreference-watcher) field.
+Perform searches based on issues that you are watching. Also, see the [Watcher][25] field.
 
 This function can only be used by logged-in users.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>watchedIssues()</code></pre></td></tr><tr><th>Supported fields</th><td>Issue</td></tr><tr><th>Supported operators</th><td><strong><strong><code><strong><code><strong><code>IN , NOT IN</code></strong></code></strong></code></strong><br></strong></td></tr><tr><th>Unsupported operators</th><td><strong><strong><strong><code><strong><strong><code>= , != , <strong><code>~ , !~ , </code></strong><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code></strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong> <code> , <strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code></strong></code></strong></strong></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues that you are watching:<br><code>issue in watchedIssues()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `watchedIssues()` |
+| --- | --- |
+| Supported fields | Issue |
+| Supported operators | `IN , NOT IN` |
+| Unsupported operators | `= , != , ~ , !~ , > , >= , < , <=` `, IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues that you are watching: issue in watchedIssues() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 ## withinCalendarHours()
 
@@ -477,9 +712,14 @@ Returns issues that have an SLA that is running according to the calendar.
 
 For example, say your project has two SLAs that count Time to First Response. Some issues with this use a 9am-1pm calendar, and others use a 9am-5pm calendar. If an agent starts work at 3pm, they probably want to work on issues from the 9am-5pm agreement first. They can use withincalendarhours() to find all the issues where Time to First Response is running at 3pm.
 
-<table><colgroup><col> <col></colgroup><tbody><tr><th>Syntax</th><td><pre><code>withinCalendarHours()</code></pre></td></tr><tr><th>Supported fields</th><td><br></td></tr><tr><th>Supported operators</th><td><strong><strong><strong><code><strong><strong><code>= , !=</code> </strong> </strong> </code></strong></strong></strong></td></tr><tr><th>Unsupported operators</th><td><strong><code><strong><code><strong><code><strong><strong><strong><code><strong><strong><strong><code><strong><strong><code><strong><code>~ , !~ ,</code> </strong><strong><code><strong><strong><code><strong><code>&gt; , &gt;= , &lt; , &lt;=</code> , </strong></code></strong></strong></code></strong></code></strong></strong></code></strong></strong></strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code><strong><code>IS , IS NOT , </code></strong></code></strong></code></strong></code></strong></code></strong><strong><strong><strong><code><strong><code>WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED</code> </strong><br></code></strong></strong></strong></code></strong></code></strong></code></code></strong></strong></strong></code></strong></code></strong></code></strong></td></tr><tr><th colspan="1">Examples</th><td colspan="1"><ul><li><p>Find issues where Time to First Response is within calendar hours:<br><code>"Time to First Response" = withinCalendarHours()</code></p></li></ul></td></tr></tbody></table>
+| Syntax | `withinCalendarHours()` |
+| --- | --- |
+| Supported fields |  |
+| Supported operators | `= , !=` |
+| Unsupported operators | `~ , !~ , > , >= , < , <= , IS , IS NOT , WAS , WAS IN , WAS NOT , WAS NOT IN , CHANGED` |
+| Examples | Find issues where Time to First Response is within calendar hours: "Time to First Response" = withinCalendarHours() |
 
-**<sup><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top">^ top of page</a></sup>**
+**[^ top of page][4]**
 
 Last modified on Oct 12, 2023
 
@@ -487,4 +727,32 @@ Was this helpful?
 
 Yes
 
-Powered by [Confluence](http://www.atlassian.com/) and [Scroll Viewport](https://www.k15t.com/go/scroll-viewport).
+Powered by [Confluence][26] and [Scroll Viewport][27].
+
+[1]: https://confluence.atlassian.com/adminjiraserver/managing-system-fields-1047552725.html
+[2]: https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-operators-reference-1488596776.html
+[3]: https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html
+[4]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-top
+[5]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-openSprints
+[6]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-lastLogin
+[7]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-unreleasedVersions
+[8]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfWeek
+[9]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfMonth
+[10]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfYear
+[11]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfDay
+[12]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfWeek
+[13]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfMonth
+[14]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-startOfYear
+[15]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-endOfDay
+[16]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-currentLogin
+[17]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-releasedVersions
+[18]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-closedSprints
+[19]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-withincalendarhours
+[20]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-latestReleasedVersion
+[21]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-subtaskIssueTypes
+[22]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-standardIssueTypes
+[23]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingfunctionsreference-earliestUnreleasedVersion
+[24]: https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html#Advancedsearchingfieldsreference-voter
+[25]: https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html#Advancedsearchingfieldsreference-watcher
+[26]: http://www.atlassian.com/
+[27]: https://www.k15t.com/go/scroll-viewport

@@ -10,18 +10,18 @@ tags:
 ---
 The advanced search allows you to build structured queries using the Jira Query Language (JQL) to search for issues. You can specify criteria that can't be defined in the quick or basic searches. For example, you can use the `ORDER BY` clause to sort Jira issues either in descending or ascending order or narrow down your search results for the desired date range.
 
-Learn more about searching in Jira from [JQL: The most flexible way to search Jira (on the Atlassian blog)](https://blogs.atlassian.com/2013/01/jql-the-most-flexible-way-to-search-jira-14/)
+Learn more about searching in Jira from [JQL: The most flexible way to search Jira (on the Atlassian blog)][4]
 
 Before using the advanced search, consider the following:
 
-- If you don't have complex search criteria, you may want to use [quick search](https://confluence.atlassian.com/servicemanagementserver103/quick-searching-1488596750.html) instead.
-- If you're not comfortable with the Jira Query Language (JQL), you may want to use [basic search](https://confluence.atlassian.com/servicemanagementserver103/basic-searching-1488596727.html) instead.
+- If you don't have complex search criteria, you may want to use [quick search][5] instead.
+- If you're not comfortable with the Jira Query Language (JQL), you may want to use [basic search][6] instead.
 
 Note that JQL isn't a database query language, even though it uses SQL-like syntax.
 
 The following is the e xample of an advanced search query in Jira that returns all issues for the **Teams in the space** project.
 
-![](https://confluence.atlassian.com/servicemanagementserver103/files/1488596757/1488596772/1/1716561582585/Advanced_search+%284%29.png)
+![][1]
 
 1. **JQL query** that refines the search results.
 2. A list of Jira **issues** that match the search criteria.
@@ -29,17 +29,17 @@ The following is the e xample of an advanced search query in Jira that returns a
 ## Using advanced search
 
 1. Select **Issues** from the top navigation bar, then **Search for issues**.  
-	![](https://confluence.atlassian.com/servicemanagementserver103/files/1488596757/1488596770/1/1716561582504/Search_for_issues2.png)  
+	![][2]  
 	- If there are existing search criteria, select the **New search** button to reset the search criteria.
 	- If the basic search is shown instead of the advanced search, select **Advanced**  (next to the **Search** button).  
-		![](https://confluence.atlassian.com/servicemanagementserver103/files/1488596757/1488596771/1/1716561582547/Advanced_search+%282%29.png)
-		If you can't switch to an advanced search, check out the [following](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearching-switch_search) section.
+		![][3]
+		If you can't switch to an advanced search, check out the [following][7] section.
 2. Enter your JQL query. As you type, Jira will offer a list of "auto-complete" suggestions based on the context of your query. Note that auto-complete suggestions only include the first 15 matches, displayed alphabetically, so you may need to enter more text if you can't find a match.  
-	[Why aren't the auto-complete suggestions being shown?](https://confluence.atlassian.com/servicemanagementserver103/#)
+	[Why aren't the auto-complete suggestions being shown?][8]
 	If you don’t see auto-complete suggestions, this might happen because of the following:
 	- Your administrator may have disabled the "JQL Auto-complete" feature for your Jira instance.
 	- Auto-complete suggestions aren't offered for function parameters.
-	- Auto-complete suggestions aren't offered for all fields. Check the [fields](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearching-fields) reference to see which fields support auto-complete.
+	- Auto-complete suggestions aren't offered for all fields. Check the [fields][9] reference to see which fields support auto-complete.
 3. Press Enter or select **Search** to run your query. Your search results will display in the issue navigator.
 
   
@@ -48,7 +48,7 @@ Unless specified in the search query, note that JQL searches don't return empty 
 
 In general, a query created using basic search will be able to be translated to advanced search and back again. However, sometimes a query created using an advanced search may not be able to be translated into a basic search. Expand the following section for details.
 
-[Why can't I switch between basic and advanced search?](https://confluence.atlassian.com/servicemanagementserver103/#)
+[Why can't I switch between basic and advanced search?][8]
 
 You might not be able to switch between two searches if:
 
@@ -113,7 +113,7 @@ A JQL query that will find any issues that are created in the `Test` project and
 project = "Test" AND text ~ "pre-landing report"
 ```
 
-For more information on fields, operators, keywords and functions, see the [Reference section](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearching-reference).
+For more information on fields, operators, keywords and functions, see the [Reference section][10].
 
 ### Precedence in JQL queries
 
@@ -169,13 +169,15 @@ If you used parentheses like in the following example, they wouldn’t have any 
 
 JQL has a list of reserved characters:
 
-<table><colgroup><col> <col> <col> <col> <col> <col> <col> <col> <col> <col> <col> <col> <col> <col> <col> <col></colgroup><tbody><tr><td><code><strong>space&nbsp;(" ")</strong></code></td><td><code><strong>+</strong></code></td><td><code><strong>.</strong></code></td><td><code><strong>,</strong></code></td><td colspan="1"><code><strong>;</strong></code></td><td colspan="1"><code><strong>?</strong></code></td><td colspan="1"><code><strong>|</strong></code></td><td colspan="1"><code><strong>*</strong></code></td><td colspan="1"><code><strong>/</strong></code></td><td colspan="1"><code><strong>%</strong></code></td><td colspan="1"><code><strong>^</strong></code></td><td colspan="1"><code><strong>$</strong></code></td><td colspan="1"><code><strong>#</strong></code></td><td colspan="1"><code><strong>@</strong></code></td><td colspan="1"><code><strong>[</strong></code></td><td colspan="1"><code><strong>]</strong></code></td></tr></tbody></table>
+|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `space (" ")` | `+` | `.` | `,` | `;` | `?` | `|` | `*` |  | `%` | `^` | `$` | `#` | `@` | `[` | `]` |
 
 If you wish to use these characters in queries, you need to:
 
 - Surround them with quote-marks. You can use either single quotation marks (`'`) or double quotation marks (`"`).  
 	and
-- If you are searching a **text field** and the character is on the list of  [special characters in text searches](https://confluence.atlassian.com/servicemanagementserver103/search-syntax-for-text-fields-1488596778.html), precede them with two backslashes. This will let you run the query that contains a reserved character, but the character itself will be ignored in your query. For more information, see **Special characters** in [Search syntax for text fields](https://confluence.atlassian.com/servicemanagementserver103/search-syntax-for-text-fields-1488596778.html).
+- If you are searching a **text field** and the character is on the list of  [special characters in text searches][12], precede them with two backslashes. This will let you run the query that contains a reserved character, but the character itself will be ignored in your query. For more information, see **Special characters** in [Search syntax for text fields][12].
 
 For example:
 
@@ -190,7 +192,7 @@ For example:
 
 JQL also has a list of reserved words. These words need to be surrounded by quotation marks (single or double) if you wish to use them in queries.
 
-[Expand to see the list of reserved words](https://confluence.atlassian.com/servicemanagementserver103/#)
+[Expand to see the list of reserved words][8]
 
 "abort", "access", "add", "after", "alias", "all", "alter", "and", "any", "as", "asc", "audit", "avg", "before", "begin", "between", "boolean", "break", "by", "byte", "catch", "cf", "char", "character", "check", "checkpoint", "collate", "collation", "column", "commit", "connect", "continue", "count", "create", "current", "date", "decimal", "declare", "decrement", "default", "defaults", "define", "delete", "delimiter", "desc", "difference", "distinct", "divide", "do", "double", "drop", "else", "empty", "encoding", "end", "equals", "escape", "exclusive", "exec", "execute", "exists", "explain", "false", "fetch", "file", "field", "first", "float", "for", "from", "function", "go", "goto", "grant", "greater", "group", "having", "identified", "if", "immediate", "in", "increment", "index", "initial", "inner", "inout", "input", "insert", "int", "integer", "intersect", "intersection", "into", "is", "isempty", "isnull", "join", "last", "left", "less", "like", "limit", "lock", "long", "max", "min", "minus", "mode", "modify", "modulo", "more", "multiply", "next", "noaudit", "not", "notin", "nowait", "null", "number", "object", "of", "on", "option", "or", "order", "outer", "output", "power", "previous", "prior", "privileges", "public", "raise", "raw", "remainder", "rename", "resource", "return", "returns", "revoke", "right", "row", "rowid", "rownum", "rows", "select", "session", "set", "share", "size", "sqrt", "start", "strict", "string", "subtract", "sum", "synonym", "table", "then", "to", "trans", "transaction", "trigger", "true", "uid", "union", "unique", "update", "user", "validate", "values", "view", "when", "whenever", "where", "while", "with"
 
@@ -202,7 +204,7 @@ If you’re a Jira admin, note that this list is hard coded in the `JqlStringSup
 
 You can use Lucene's text-searching features when performing searches on the following fields by using the `CONTAINS` operator.
 
-When searching for text fields, you can also use single and multiple character [wildcard searches](https://confluence.atlassian.com/servicemanagementserver103/search-syntax-for-text-fields-1488596778.html#Searchsyntaxfortextfields-wildcards). For more information, see [Search syntax for text fields](https://confluence.atlassian.com/servicemanagementserver103/search-syntax-for-text-fields-1488596778.html).
+When searching for text fields, you can also use single and multiple character [wildcard searches][13]. For more information, see [Search syntax for text fields][12].
 
 ### Differences between day and time search
 
@@ -222,21 +224,26 @@ Let's assume that you updated an issue's status to "Closed" yesterday at 3 PM. Y
 
 Here you can find a brief overview of Jira fields, operators, keywords, and functions used to compose JQL queries. For detailed description and examples of their usage for advance searching, check the links from the **Reference** column.
 
-<table><colgroup><col> <col> <col></colgroup><tbody><tr><th colspan="1"><br></th><th colspan="1">Description</th><th colspan="1">Reference</th></tr><tr><th colspan="1">Fields</th><td colspan="1">A field in JQL is a word that represents a Jira field (or a custom field that has already been defined in Jira). <span>You can perform an advanced search on your Jira fields to look for issues created on, before, or after a particular date (or date range) and time.</span></td><td colspan="1"><p><a href="https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html"><span>To view a detailed information about fields and how to use them for advanced searching, check out</span></a> <a href="https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html">Fields reference page</a>.</p><div><a href="https://confluence.atlassian.com/servicemanagementserver103/#"><span>Show list of fields</span></a><div><ul><li><code>affectedVersion</code></li><li><code>approvals</code></li><li><code>assignee</code></li><li><code>attachments</code></li><li><code>category</code></li><li><code>comment</code></li><li><code>component</code></li><li><code>created</code></li><li><code>creator</code></li><li><code>customFieldName</code></li><li><code>"Customer Request Type"</code></li><li><code>description</code></li><li><code>due</code></li><li><code>environment</code></li><li><code>"epic link"</code></li><li><code>filter</code></li><li><code>fixVersion</code></li><li><code>issueKey</code></li><li><code>Issue link type</code></li><li><code>labels</code></li><li><code>lastViewed</code></li><li><code>level</code></li><li><code>originalEstimate</code></li><li><code>parent</code></li><li><code>priority</code></li><li><code>project</code></li><li><code>remainingEstimate</code></li><li><code>reporter</code></li><li><code>request-channel-type</code></li><li><code>request-last-activity-time</code></li><li><code>resolution</code></li><li><code>resolved</code></li><li><code>sprint</code></li><li><code>status</code></li><li><code>summary</code></li><li><code>text</code></li><li><code>timeSpent</code></li><li><code>type</code></li><li><code>updated</code></li><li><code>voter</code></li><li><code>votes</code></li><li><code>watcher</code></li><li><code>watchers</code></li><li><code>worklogAuthor</code></li><li><code>WorklogComment</code></li><li><code>WorklogDate</code></li><li><code>WorkRatio</code></li></ul></div></div></td></tr><tr><th>Operators</th><td colspan="1">An operator in JQL is one or more symbols or words that compare the value of a field on its left with one or more values (or functions) on its right, such that only true results are retrieved by the clause. Some operators may use the NOT keyword.</td><td><p>To view a detailed information <span>about operators and how to use them for advanced searching, check out </span><a href="https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-operators-reference-1488596776.html">Operators reference page</a>.</p><div><a href="https://confluence.atlassian.com/servicemanagementserver103/#"><span>Show list of operators</span></a><div><ul><li><code>EQUALS: =</code></li><li><code>NOT EQUALS: !=</code></li><li><code>GREATER THAN: &gt;</code></li><li><code>GREATER THAN EQUALS: &gt;=</code></li><li><code>LESS THAN: &lt;</code></li><li><code>LESS THAN EQUALS: &lt;=</code></li><li><code>IN</code></li><li><code>NOT IN</code></li><li><code>CONTAINS: ~</code></li><li><code>DOES NOT CONTAIN: !~</code></li><li><code>IS</code></li><li><code>IS NOT</code></li><li><code>WAS</code></li><li><code>WAS IN</code></li><li><code>WAS NOT IN</code></li><li><code>WAS NOT</code></li><li><code>CHANGED</code></li></ul></div></div></td></tr><tr><th colspan="1">Keywords</th><td colspan="1"><p>A keyword in JQL is a word or phrase that does (or is) any of the following:</p><ul><li>joins two or more clauses together to form a complex JQL query.</li><li>alters the logic of one or more clauses.</li><li>alters the logic of operators.</li><li>has an explicit definition in a JQL query.</li><li>performs a specific function that alters the results of a JQL query.</li></ul></td><td colspan="1"><p>To view a detailed information <span>about keywords and how to use them for advanced searching, check out </span><a href="https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-keywords-reference-1488596775.html">Keywords reference page</a>.</p><div><a href="https://confluence.atlassian.com/servicemanagementserver103/#"><span>Show list of keywords</span></a><div><ul><li><code>AND</code></li><li><code>OR</code></li><li><code>NOT</code></li><li><code>EMPTY</code></li><li><code>NULL</code></li><li><code>ORDER BY</code></li></ul></div></div></td></tr><tr><th>Functions</th><td colspan="1"><p>A function in JQL appears as a word followed by parentheses, which may contain one or more explicit values or Jira fields.</p><p>A function performs a calculation on either specific Jira data or the function's content in parentheses, such that only true results are retrieved by the function, and then again by the clause in which the function is used.</p></td><td><p>To view a detailed information <span>about functions and how to use them for advanced searching, check out </span><a href="https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-functions-reference-1488596777.html">Functions reference page</a>.</p></td></tr></tbody></table>
+|  | Description | Reference |
+| --- | --- | --- |
+| Fields | A field in JQL is a word that represents a Jira field (or a custom field that has already been defined in Jira). You can perform an advanced search on your Jira fields to look for issues created on, before, or after a particular date (or date range) and time. | To view a detailed information about fields and how to use them for advanced searching, check out Fields reference page . Show list of fields affectedVersion; approvals; assignee; attachments; category; comment; component; created; creator; customFieldName; "Customer Request Type"; description; due; environment; "epic link"; filter; fixVersion; issueKey; Issue link type; labels; lastViewed; level; originalEstimate; parent; priority; project; remainingEstimate; reporter; request-channel-type; request-last-activity-time; resolution; resolved; sprint; status; summary; text; timeSpent; type; updated; voter; votes; watcher; watchers; worklogAuthor; WorklogComment; WorklogDate; WorkRatio |
+| Operators | An operator in JQL is one or more symbols or words that compare the value of a field on its left with one or more values (or functions) on its right, such that only true results are retrieved by the clause. Some operators may use the NOT keyword. | To view a detailed information about operators and how to use them for advanced searching, check out Operators reference page . Show list of operators EQUALS: =; NOT EQUALS: !=; GREATER THAN: >; GREATER THAN EQUALS: >=; LESS THAN: <; LESS THAN EQUALS: <=; IN; NOT IN; CONTAINS: ~; DOES NOT CONTAIN: !~; IS; IS NOT; WAS; WAS IN; WAS NOT IN; WAS NOT; CHANGED |
+| Keywords | A keyword in JQL is a word or phrase that does (or is) any of the following: joins two or more clauses together to form a complex JQL query.; alters the logic of one or more clauses.; alters the logic of operators.; has an explicit definition in a JQL query.; performs a specific function that alters the results of a JQL query. | To view a detailed information about keywords and how to use them for advanced searching, check out Keywords reference page . Show list of keywords AND; OR; NOT; EMPTY; NULL; ORDER BY |
+| Functions | A function in JQL appears as a word followed by parentheses, which may contain one or more explicit values or Jira fields. A function performs a calculation on either specific Jira data or the function's content in parentheses, such that only true results are retrieved by the function, and then again by the clause in which the function is used. | To view a detailed information about functions and how to use them for advanced searching, check out Functions reference page . |
 
 ## Running a saved search
 
-You can find saved searches (also known as [Saving your search as a filter](https://confluence.atlassian.com/servicemanagementserver103/saving-your-search-as-a-filter-1488596780.html)) in the left-side panel, when using advanced search. If the left panel is not showing, hover your mouse over the left side of the screen to display it.
+You can find saved searches (also known as [Saving your search as a filter][14]) in the left-side panel, when using advanced search. If the left panel is not showing, hover your mouse over the left side of the screen to display it.
 
 To run a filter, such as **New\_issues**, select the filter name. The JQL for the advanced search will be set, and the search results will be displayed.
 
-![](https://confluence.atlassian.com/servicemanagementserver103/files/1488596757/1488596773/1/1716561582622/Saved_search3.png)
+![][11]
 
 1. A **search saved as a filter**, which returns issues based on the criteria specified in a JQL query.
 2. **JQL query** that specifies search criteria.
 3. **Issues** that match the search criteria.
 
-If you want to delete a saved search, see [Deleting a filter](https://confluence.atlassian.com/servicemanagementserver103/saving-your-search-as-a-filter-1488596780.html#Savingyoursearchasafilter-delete_filter).
+If you want to delete a saved search, see [Deleting a filter][15].
 
 ## Notes
 
@@ -248,4 +255,22 @@ Was this helpful?
 
 Yes
 
-Powered by [Confluence](http://www.atlassian.com/) and [Scroll Viewport](https://www.k15t.com/go/scroll-viewport).
+Powered by [Confluence][16] and [Scroll Viewport][17].
+
+[1]: https://confluence.atlassian.com/servicemanagementserver103/files/1488596757/1488596772/1/1716561582585/Advanced_search+%284%29.png
+[2]: https://confluence.atlassian.com/servicemanagementserver103/files/1488596757/1488596770/1/1716561582504/Search_for_issues2.png
+[3]: https://confluence.atlassian.com/servicemanagementserver103/files/1488596757/1488596771/1/1716561582547/Advanced_search+%282%29.png
+[4]: https://blogs.atlassian.com/2013/01/jql-the-most-flexible-way-to-search-jira-14/
+[5]: https://confluence.atlassian.com/servicemanagementserver103/quick-searching-1488596750.html
+[6]: https://confluence.atlassian.com/servicemanagementserver103/basic-searching-1488596727.html
+[7]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearching-switch_search
+[8]: https://confluence.atlassian.com/servicemanagementserver103/#
+[9]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearching-fields
+[10]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearching-reference
+[11]: https://confluence.atlassian.com/servicemanagementserver103/files/1488596757/1488596773/1/1716561582622/Saved_search3.png
+[12]: https://confluence.atlassian.com/servicemanagementserver103/search-syntax-for-text-fields-1488596778.html
+[13]: https://confluence.atlassian.com/servicemanagementserver103/search-syntax-for-text-fields-1488596778.html#Searchsyntaxfortextfields-wildcards
+[14]: https://confluence.atlassian.com/servicemanagementserver103/saving-your-search-as-a-filter-1488596780.html
+[15]: https://confluence.atlassian.com/servicemanagementserver103/saving-your-search-as-a-filter-1488596780.html#Savingyoursearchasafilter-delete_filter
+[16]: http://www.atlassian.com/
+[17]: https://www.k15t.com/go/scroll-viewport

@@ -10,15 +10,15 @@ tags:
 ---
 This page describes information about operators that are used for advanced searching.
 
-An operator in JQL is one or more symbols or words that compare the value of a [field](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html) on its left with one or more values or  [functions](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-functions-reference-1488596777.html) on its right. So, only valid results are retrieved by the clause. Some operators may use the [NOT](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-NOT) keyword.
+An operator in JQL is one or more symbols or words that compare the value of a [field][1] on its left with one or more values or  [functions][2] on its right. So, only valid results are retrieved by the clause. Some operators may use the [NOT][3] keyword.
 
 ## EQUALS: =
 
 The `=` operator is used to search for issues where the value of a specified field exactly matches a specified value.
 
-To find issues where the value of a specified field exactly matches multiple values, use multiple EQUALS (`=`) statements with the [AND](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-AND) keyword.
+To find issues where the value of a specified field exactly matches multiple values, use multiple EQUALS (`=`) statements with the [AND][4] keyword.
 
-The operator can't be used with text fields. See the [CONTAINS](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-CONTAINS) operator.
+The operator can't be used with text fields. See the [CONTAINS][5] operator.
 
 ###### Examples
 
@@ -31,15 +31,15 @@ The operator can't be used with text fields. See the [CONTAINS](https://confluen
 	reporter = "John Smith"
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## NOT EQUALS:!=
 
 The `!=` operator is used to search for issues where the value of a specified field doesn't match a specified value.
 
-- The operator can't be used with text fields. See the [DOES NOT MATCH](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-DOES_NOT_MATCH) (`!~`) operator instead.
+- The operator can't be used with text fields. See the [DOES NOT MATCH][7] (`!~`) operator instead.
 - `field != value` is the same as `NOT field = value`.
-- `field != EMPTY`  is the same as  `field` `[IS_NOT](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-IS_NOT) EMPTY`.
+- `field != EMPTY`  is the same as  `field` `[IS_NOT][8] EMPTY`.
 - The operator won't match a field that has no value (an empty field). For example,`component != fred` will only match issues that have a component and this component isn't "fred".To find issues that have a component other than "fred" or have no component, you should type `component != fred or component is empty`.
 
 ###### Examples
@@ -73,7 +73,7 @@ The `!=` operator is used to search for issues where the value of a specified fi
 	assignee != null
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## GREATER THAN: >
 
@@ -81,7 +81,7 @@ The `>` operator is used to search for issues where the value of a specified fie
 
 The operator can only be used with fields that support ordering and can't be used with text fields. For example, date fields and version fields.
 
-To see a field's supported operators, check the individual [field reference](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html).
+To see a field's supported operators, check the individual [field reference][1].
 
 ###### Examples
 
@@ -98,7 +98,7 @@ To see a field's supported operators, check the individual [field reference](htt
 	priority > normal
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## GREATER THAN EQUALS: >=
 
@@ -106,7 +106,7 @@ The `>=` operator is used to search for issues where the value of a specified fi
 
 The operator can only be used with fields that support ordering and can't be used with text fields. For example, date fields and version fields.
 
-To see a field's supported operators, check the individual [field reference](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html).
+To see a field's supported operators, check the individual [field reference][1].
 
 ###### Examples
 
@@ -123,7 +123,7 @@ To see a field's supported operators, check the individual [field reference](htt
 	created >= "-5d"
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## LESS THAN: <
 
@@ -131,7 +131,7 @@ The `<` operator is used to search for issues where the value of a specified fie
 
 The operator can only be used with fields that support ordering and can't be used with text fields. For example, date fields and version fields.
 
-To see a field's supported operators, check the individual [field reference](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html).
+To see a field's supported operators, check the individual [field reference][1].
 
 ###### Examples
 
@@ -143,7 +143,7 @@ votes < 4
 
   
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## LESS THAN EQUALS: <=
 
@@ -151,7 +151,7 @@ The `<=` operator is used to search for issues where the value of a specified fi
 
 The operator can only be used with fields that support ordering and can't be used with text fields. For example, date fields and version fields.
 
-To see a field's supported operators, check the individual [field reference](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html).
+To see a field's supported operators, check the individual [field reference][1].
 
 ###### Examples
 
@@ -164,13 +164,13 @@ To see a field's supported operators, check the individual [field reference](htt
 	updated <= "-4w 2d"
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## IN
 
 The `IN` operator is used to search for issues where the value of a specified field is one of multiple specified values. The values are specified as a comma-separated list, surrounded by parentheses.
 
-Using `IN` is equivalent to using multiple `[EQUALS](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-EQUALS)(=)` statements, but is shorter and more convenient. That is, `reporter IN (tom, jane, harry)` is the same as `reporter = "tom" [OR](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-OR) reporter = "jane" [OR](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-OR) reporter = "harry"`.
+Using `IN` is equivalent to using multiple `[EQUALS][9](=)` statements, but is shorter and more convenient. That is, `reporter IN (tom, jane, harry)` is the same as `reporter = "tom" [OR][10] reporter = "jane" [OR][10] reporter = "harry"`.
 
 ###### Examples
 
@@ -187,13 +187,13 @@ Using `IN` is equivalent to using multiple `[EQUALS](https://confluence.atlassia
 	affectedVersion in ("3.14", "4.2")
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## NOT IN
 
 The `NOT IN` operator is used to search for issues where the value of a specified field isn't one of multiple specified values.
 
-Using `NOT IN`  is equivalent to using multiple  `[NOT_EQUALS](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-NOT_EQUALS)(!=)` statements, but is shorter and more convenient. That is, `reporter NOT IN (tom, jane, harry)` is the same as `reporter != "tom" [AND](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-AND) reporter != "jane" [AND](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-AND) reporter != "harry"`.
+Using `NOT IN`  is equivalent to using multiple  `[NOT_EQUALS][11](!=)` statements, but is shorter and more convenient. That is, `reporter NOT IN (tom, jane, harry)` is the same as `reporter != "tom" [AND][4] reporter != "jane" [AND][4] reporter != "harry"`.
 
 Also, the `NOT IN` operator won't match a field that has no value (a field is empty). For example,`assignee not in (jack,jill)` will only match issues that have an assignee and this assignee isn't "jack" or "jill".
 
@@ -218,7 +218,7 @@ To find issues that are assigned to someone other than "jack" or "jill" or are u
 	FixVersion not in (A, B, C, D) or FixVersion is empty
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 The IN and NOT IN operators allow using up to 3000 operands.
 
@@ -228,7 +228,7 @@ When the number of operands exceeds the allowed limit, the GET search fails beca
 
 The `~` operator is used to search for issues where the value of a specified field matches a specified value: either an exact or fuzzy match. See examples below.
 
-Use it only with version and text [fields](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html).
+Use it only with version and text [fields][1].
 
 Text fields:
 
@@ -251,7 +251,7 @@ The JQL field "text", as in `text ~ "some words",`searches for an issue's summar
 
 If you have many text custom fields, you can improve performance of your queries by searching for specific fields. For example:`Summary ~ "some words" OR Description ~ "some words"`.
 
-When using the ~ operator, the value on the right side of the operator can be specified by using [Jira text-search syntax](https://confluence.atlassian.com/servicemanagementserver103/search-syntax-for-text-fields-1488596778.html).
+When using the ~ operator, the value on the right side of the operator can be specified by using [Jira text-search syntax][12].
 
 ###### Examples
 
@@ -271,7 +271,7 @@ When using the ~ operator, the value on the right side of the operator can be sp
 	```
 	summary ~ "issue collector"
 	```
-- Find all issues where the summary contains the exact phrase "full screen". Also, see [Search syntax for text fields](https://confluence.atlassian.com/servicemanagementserver103/search-syntax-for-text-fields-1488596778.html) for details on how to escape quotation marks and other special characters.
+- Find all issues where the summary contains the exact phrase "full screen". Also, see [Search syntax for text fields][12] for details on how to escape quotation marks and other special characters.
 	```
 	summary ~ "\"full screen\""
 	```
@@ -288,13 +288,13 @@ When using the ~ operator, the value on the right side of the operator can be sp
 	fixVersion ~ "*9"
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## DOES NOT CONTAIN:!~
 
 The `!~` operator is used to search for issues where the value of a specified field doesn't match a specified value.
 
-Use it only with version and text [fields](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html).
+Use it only with version and text [fields][1].
 
 Text fields:
 
@@ -317,7 +317,7 @@ The JQL field "text", as in `text !~ "some words",`searches for an issue's summa
 
 If you have many text custom fields, you can improve performance of your queries by searching for specific fields. For example:`Summary !~ "some words" OR Description !~ "some words"`.
 
-When using the`!~` operator, the value on the right side of the operator can be specified by using [Jira text-search syntax](https://confluence.atlassian.com/servicemanagementserver103/search-syntax-for-text-fields-1488596778.html).
+When using the`!~` operator, the value on the right side of the operator can be specified by using [Jira text-search syntax][12].
 
 ###### Examples
 
@@ -338,13 +338,13 @@ When using the`!~` operator, the value on the right side of the operator can be 
 	fixVersion !~ "9.*"
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## IS
 
-The `IS` operator can only be used with the [EMPTY](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-EMPTY)  or  [NULL](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-NULL) keywords. That is, it's used to search for issues where the specified field has no value.
+The `IS` operator can only be used with the [EMPTY][13]  or  [NULL][14] keywords. That is, it's used to search for issues where the specified field has no value.
 
-Not all fields are compatible with this operator. For more details, see the individual [field reference](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html).
+Not all fields are compatible with this operator. For more details, see the individual [field reference][1].
 
 ###### Examples
 
@@ -357,13 +357,13 @@ Not all fields are compatible with this operator. For more details, see the indi
 	fixVersion is null
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## IS NOT
 
-The `IS NOT`  operator can only be used with the [EMPTY](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-EMPTY)  or  [NULL](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-NULL) keywords. That is, it's used to search for issues where a specified field has a value.
+The `IS NOT`  operator can only be used with the [EMPTY][13]  or  [NULL][14] keywords. That is, it's used to search for issues where a specified field has a value.
 
-Not all fields are compatible with this operator. For more details, see the individual [field reference](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html).
+Not all fields are compatible with this operator. For more details, see the individual [field reference][1].
 
 ###### Examples
 
@@ -376,7 +376,7 @@ Not all fields are compatible with this operator. For more details, see the indi
 	votes is not null
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## WAS
 
@@ -394,7 +394,7 @@ The `WAS` operator will match the value name (for example, "Resolved") that was 
 
 The operator will also match the value ID associated with the value name. For example, it will match "4" as well as "Resolved".
 
-The operator can be used only with the following [fields](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html):Assignee,Fix Version,Priority,Reporter,Resolution, and Status.
+The operator can be used only with the following [fields][1]:Assignee,Fix Version,Priority,Reporter,Resolution, and Status.
 
 ###### Examples
 
@@ -411,7 +411,7 @@ The operator can be used only with the following [fields](https://confluence.atl
 	status WAS "Resolved" BY jsmith DURING ("2010/01/01","2011/01/01")
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## WAS IN
 
@@ -429,9 +429,9 @@ The `WAS IN` operator will match the value name (for example, "Resolved") that w
 
 The operator will also match the value ID associated with the value name. For example, it will match "4" as well as "Resolved".
 
-Using `WAS IN`  is equivalent to using multiple  `[WAS](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-WAS)` statements, but is shorter and more convenient. That is, `status WAS IN ("Resolved","Closed")` is the same as `status WAS "Resolved" [OR](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-OR) status WAS "Closed"`.
+Using `WAS IN`  is equivalent to using multiple  `[WAS][15]` statements, but is shorter and more convenient. That is, `status WAS IN ("Resolved","Closed")` is the same as `status WAS "Resolved" [OR][10] status WAS "Closed"`.
 
-The operator can be used only with the following [fields](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html):Assignee,Fix Version,Priority,Reporter,Resolution, and Status.
+The operator can be used only with the following [fields][1]:Assignee,Fix Version,Priority,Reporter,Resolution, and Status.
 
 ###### Examples
 
@@ -440,7 +440,7 @@ The operator can be used only with the following [fields](https://confluence.atl
 	status WAS IN ("Resolved","In Progress")
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## WAS NOT IN
 
@@ -454,9 +454,9 @@ In a search query, with this operator, you can use the following:
 - `DURING ("date1","date2")`
 - `ON "date"`
 
-Using `WAS NOT IN`  is equivalent to using multiple  `[WAS_NOT](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-WAS_NOT)` statements, but is shorter and more convenient. That is, `status WAS NOT IN ("Resolved","In Progress")` is the same as `status WAS NOT "Resolved" [AND](https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-AND) status WAS NOT "In Progress"`.
+Using `WAS NOT IN`  is equivalent to using multiple  `[WAS_NOT][16]` statements, but is shorter and more convenient. That is, `status WAS NOT IN ("Resolved","In Progress")` is the same as `status WAS NOT "Resolved" [AND][4] status WAS NOT "In Progress"`.
 
-The operator can be used only with the following [fields](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html):Assignee,Fix Version,Priority,Reporter,Resolution, and Status.
+The operator can be used only with the following [fields][1]:Assignee,Fix Version,Priority,Reporter,Resolution, and Status.
 
 ###### Examples
 
@@ -469,7 +469,7 @@ The operator can be used only with the following [fields](https://confluence.atl
 	status WAS NOT IN ("Resolved","In Progress") BEFORE "2011/02/20"
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 The WAS IN and WAS NOT IN operators allow using up to 3000 operands.
 
@@ -491,7 +491,7 @@ The `WAS NOT` operator will match the value name (for example, "Resolved") that 
 
 The operator will also match the value ID associated with the value name. For example, it will match "4" as well as "Resolved".
 
-The operator can be used only with the following [fields](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html):Assignee,Fix Version,Priority,Reporter,Resolution, and Status.
+The operator can be used only with the following [fields][1]:Assignee,Fix Version,Priority,Reporter,Resolution, and Status.
 
 ###### Examples
 
@@ -504,7 +504,7 @@ The operator can be used only with the following [fields](https://confluence.atl
 	status WAS NOT "In Progress" BEFORE "2011/02/20"
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 ## CHANGED
 
@@ -534,7 +534,7 @@ In a search query, with this operator, you can use the following:
 	TO "newvalue"
 	```
 
-The operator can be used only with the following [fields](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html):Assignee,Fix Version,Priority,Reporter,Resolution, and Status.
+The operator can be used only with the following [fields][1]:Assignee,Fix Version,Priority,Reporter,Resolution, and Status.
 
 ###### Examples
 
@@ -551,7 +551,7 @@ The operator can be used only with the following [fields](https://confluence.atl
 	priority CHANGED BY freddo BEFORE endOfWeek() AFTER startOfWeek()
 	```
 
-<sup><strong><a href="https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators">^top of page</a></strong></sup>
+**[^top of page][6]**
 
 Last modified on Mar 8, 2023
 
@@ -559,4 +559,23 @@ Was this helpful?
 
 Yes
 
-Powered by [Confluence](http://www.atlassian.com/) and [Scroll Viewport](https://www.k15t.com/go/scroll-viewport).
+Powered by [Confluence][17] and [Scroll Viewport][18].
+
+[1]: https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html
+[2]: https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-functions-reference-1488596777.html
+[3]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-NOT
+[4]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-AND
+[5]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-CONTAINS
+[6]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-operators
+[7]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-DOES_NOT_MATCH
+[8]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-IS_NOT
+[9]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-EQUALS
+[10]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-OR
+[11]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-NOT_EQUALS
+[12]: https://confluence.atlassian.com/servicemanagementserver103/search-syntax-for-text-fields-1488596778.html
+[13]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-EMPTY
+[14]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-NULL
+[15]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-WAS
+[16]: https://confluence.atlassian.com/servicemanagementserver103/#Advancedsearchingoperatorsreference-WAS_NOT
+[17]: http://www.atlassian.com/
+[18]: https://www.k15t.com/go/scroll-viewport

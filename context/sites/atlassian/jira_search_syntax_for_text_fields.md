@@ -10,9 +10,9 @@ tags:
 ---
 This page provides information on the syntax for searching text fields, which can be done in the quick search, basic search, and advanced search.
 
-Text searches can be done in the advanced search when the [CONTAINS (~) operator](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-operators-reference-1488596776.html#Advancedsearchingoperatorsreference-CONTAINS) is used, e.g. `summary~"windows*"`. It can also be done in quick search and basic search when searching on supported fields.
+Text searches can be done in the advanced search when the [CONTAINS (~) operator][1] is used, e.g. `summary~"windows*"`. It can also be done in quick search and basic search when searching on supported fields.
 
-*Acknowledgments: Jira uses Apache Lucene for text indexing, which provides a rich query language. Much of the information on this page is derived from the [Query Parser Syntax](https://lucene.apache.org/core/2_9_4/queryparsersyntax.html) page of the Lucene documentation.*
+*Acknowledgments: Jira uses Apache Lucene for text indexing, which provides a rich query language. Much of the information on this page is derived from the [Query Parser Syntax][2] page of the Lucene documentation.*
 
 ## Query terms
 
@@ -30,13 +30,13 @@ Multiple terms can be combined together with Boolean operators to form a more co
 
 Jira supports modifying query terms to provide a wide range of searching options.
 
-[Exact searches (phrases)](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-exactexactsearchesExactsearches\(phrases\)) | [Wildcard searches:? and \*](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-wildcardsWildcardsearches:?and*) | [Fuzzy searches: ~](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-fuzzyFuzzysearches:~) | [Prefix and Suffix search](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-prefsufPrefixandSuffixsearch) | [Proximity searches](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-Proximitysearches)
+[Exact searches (phrases)][3]) | [Wildcard searches:? and \*][4] | [Fuzzy searches: ~][5] | [Prefix and Suffix search][6] | [Proximity searches][7]
 
 ### Exact searches (phrases)
 
 To find exact matches for **phrases**, for example *Jira Software*, you need to enclose the whole phrase in quote-marks ("). Otherwise, the search will return all issues that contain both words in no particular order - this would include *Jira Software*, but also *Jira is the best software!.*
 
-If you’re using advanced search, you need to additionally escape each of the quote-marks with a backslash (\\). For details, see the examples below or find your field in [Advanced search - field reference](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html).
+If you’re using advanced search, you need to additionally escape each of the quote-marks with a backslash (\\). For details, see the examples below or find your field in [Advanced search - field reference][8].
 
 **Examples**
 
@@ -161,7 +161,7 @@ Boolean operators allow terms to be combined through logic operators. Jira suppo
 
 Boolean operators must be ALL CAPS.
 
-[AND](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-AND) | [OR](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-OR) | [Required term: +](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-Requiredterm:+) | [NOT](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-NOT) | [Excluded term: -](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-Excludedterm:-)
+[AND][9] | [OR][10] | [Required term: +][11] | [NOT][12] | [Excluded term: -][13]
 
 ### AND
 
@@ -249,7 +249,7 @@ Do not use the grouping character '(' at the start of a search query, as this wi
 
 Special characters aren’t stored in the index, which means you can’t search for them. The index only keeps text and numbers, so searching for `"\\[Jira Software\\]"` and `"Jira Software"` will have the same effect — escaped special characters (`[]`) won’t be included in the search.
 
-In previous Jira versions, you could use special characters to combine two separate terms into a phrase, for example `"Jira+Software"` or `"Jira/Software"`. This doesn’t apply to Jira 8.x. If you’d like to search for phrases, see [Exact searches (phrases)](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-exactsearches).
+In previous Jira versions, you could use special characters to combine two separate terms into a phrase, for example `"Jira+Software"` or `"Jira/Software"`. This doesn’t apply to Jira 8.x. If you’d like to search for phrases, see [Exact searches (phrases)][14].
 
 ## Reserved words
 
@@ -263,7 +263,7 @@ Your Jira administrator can make Jira index these reserved words (so that Jira w
 
 ## Word stemming
 
-Since Jira cannot search for issues containing parts of words (see [below](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-limitations)), word 'stemming' allows you to retrieve issues from a search based on the 'root' (or 'stem') forms of words instead of requiring an exact match with specific forms of these words. The number of issues retrieved from a search based on a stemmed word is typically larger, since any other issues containing words that are stemmed back to the same root will also be retrieved in the search results.
+Since Jira cannot search for issues containing parts of words (see [below][15]), word 'stemming' allows you to retrieve issues from a search based on the 'root' (or 'stem') forms of words instead of requiring an exact match with specific forms of these words. The number of issues retrieved from a search based on a stemmed word is typically larger, since any other issues containing words that are stemmed back to the same root will also be retrieved in the search results.
 
 For example, if you search for issues using the query term 'customize' on the Summary field, Jira stems this word to its root form 'custom', and will retrieve all issues whose Summary field also contains any word that can be stemmed back to 'custom'. Hence, the following query:
 
@@ -291,18 +291,18 @@ Please note that the following limitations apply to Jira's search:
 
 ### Whole words only
 
-Jira cannot search for issues containing parts of words but on whole words only. The exception to this are words which are [stemmed](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-stemming).
+Jira cannot search for issues containing parts of words but on whole words only. The exception to this are words which are [stemmed][16].
 
-This limitation can also be overcome using [fuzzy searches](https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-fuzzy).
+This limitation can also be overcome using [fuzzy searches][17].
 
 ## Next steps
 
 Read the following related topics:
 
-- [Searching for issues](https://confluence.atlassian.com/servicemanagementserver103/searching-for-issues-1488596697.html)
-- [Quick searching](https://confluence.atlassian.com/servicemanagementserver103/quick-searching-1488596750.html)
-- [Basic searching](https://confluence.atlassian.com/servicemanagementserver103/basic-searching-1488596727.html)
-- [Advanced searching](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-1488596757.html)
+- [Searching for issues][18]
+- [Quick searching][19]
+- [Basic searching][20]
+- [Advanced searching][21]
 
 Last modified on Sep 19, 2023
 
@@ -310,4 +310,28 @@ Was this helpful?
 
 Yes
 
-Powered by [Confluence](http://www.atlassian.com/) and [Scroll Viewport](https://www.k15t.com/go/scroll-viewport).
+Powered by [Confluence][22] and [Scroll Viewport][23].
+
+[1]: https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-operators-reference-1488596776.html#Advancedsearchingoperatorsreference-CONTAINS
+[2]: https://lucene.apache.org/core/2_9_4/queryparsersyntax.html
+[3]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-exactexactsearchesExactsearches\(phrases\
+[4]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-wildcardsWildcardsearches:?and*
+[5]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-fuzzyFuzzysearches:~
+[6]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-prefsufPrefixandSuffixsearch
+[7]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-Proximitysearches
+[8]: https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-fields-reference-1488596774.html
+[9]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-AND
+[10]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-OR
+[11]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-Requiredterm:+
+[12]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-NOT
+[13]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-Excludedterm:-
+[14]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-exactsearches
+[15]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-limitations
+[16]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-stemming
+[17]: https://confluence.atlassian.com/servicemanagementserver103/#Searchsyntaxfortextfields-fuzzy
+[18]: https://confluence.atlassian.com/servicemanagementserver103/searching-for-issues-1488596697.html
+[19]: https://confluence.atlassian.com/servicemanagementserver103/quick-searching-1488596750.html
+[20]: https://confluence.atlassian.com/servicemanagementserver103/basic-searching-1488596727.html
+[21]: https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-1488596757.html
+[22]: http://www.atlassian.com/
+[23]: https://www.k15t.com/go/scroll-viewport

@@ -16,7 +16,10 @@ A cron expression gives you more control over the frequency, compared to the def
 
 A cron expression is a string of fields separated by spaces. The following table displays the fields of a cron expression, *in the order that they must be specified (from left to right)*:
 
-<table><tbody><tr><th colspan="1"><br></th><th>Second</th><th colspan="1">Minute</th><th colspan="1">Hour</th><th>Day-of-month</th><th>Month</th><th>Day-of-week</th><th colspan="1">Year (optional)</th></tr><tr><th colspan="1">Allowed values</th><td><code>0-59</code></td><td colspan="1"><code>0-59</code></td><td colspan="1"><code>0-23</code></td><td><code>1-31</code></td><td><code>1-12 or JAN-DEC</code></td><td><code>1-7 or SUN-SAT</code></td><td colspan="1"><code>1970-2099</code></td></tr><tr><th colspan="1">Allowed special<br>characters</th><td colspan="1"><strong>, - * /</strong></td><td colspan="1"><strong>, - * /</strong></td><td colspan="1"><strong>, - * /</strong></td><td colspan="1"><strong>, - * /? L W C</strong></td><td colspan="1"><strong>, - * /</strong></td><td colspan="1"><strong>, - * /? L C #</strong></td><td colspan="1"><strong>, - * /</strong></td></tr></tbody></table>
+|  | Second | Minute | Hour | Day-of-month | Month | Day-of-week | Year (optional) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Allowed values | `0-59` | `0-59` | `0-23` | `1-31` | `1-12 or JAN-DEC` | `1-7 or SUN-SAT` | `1970-2099` |
+| Allowed special / characters | , - * | , - * | , - * | , - * /? L W C | , - * | , - * /? L C # | , - * |
 
 Note, cron expressions are not case-sensitive.
 
@@ -30,7 +33,7 @@ This literally translates to 0 second, 15 minute, 8 hour, any day of the month, 
 
 In plain English, this represents 8:15am on every Monday during January of 2014. Note, the? character means "no particular value". In this example, we've set the Day-of-month to no particular value. We don't need to specify it, as we've specified a Day-of-week value. Read more about special characters in the next section.
 
-More examples of cron expressions are explained in the [Examples section](https://confluence.atlassian.com/servicemanagementserver103/#Constructingcronexpressions-examples) at the bottom of this page.
+More examples of cron expressions are explained in the [Examples section][1] at the bottom of this page.
 
 ## Special characters
 
@@ -70,4 +73,8 @@ Was this helpful?
 
 Yes
 
-Powered by [Confluence](http://www.atlassian.com/) and [Scroll Viewport](https://www.k15t.com/go/scroll-viewport).
+Powered by [Confluence][2] and [Scroll Viewport][3].
+
+[1]: https://confluence.atlassian.com/servicemanagementserver103/#Constructingcronexpressions-examples
+[2]: http://www.atlassian.com/
+[3]: https://www.k15t.com/go/scroll-viewport

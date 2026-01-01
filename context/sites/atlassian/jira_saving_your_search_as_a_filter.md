@@ -8,16 +8,16 @@ description:
 tags:
   - "clippings"
 ---
-Jira's powerful [issue search](https://confluence.atlassian.com/servicemanagementserver103/searching-for-issues-1488596697.html)  functionality is enhanced by the ability to save searches, called  *filters* in Jira, for later use. You can do the following with Jira filters:
+Jira's powerful [issue search][3]  functionality is enhanced by the ability to save searches, called  *filters* in Jira, for later use. You can do the following with Jira filters:
 
 - Share and email search results with your colleagues, as well as people outside of your organization
-- Create lists of [favorite filters](https://confluence.atlassian.com/servicemanagementserver103/#Savingyoursearchasafilter-favorite_filters)
-- Have search results [emailed to you](https://confluence.atlassian.com/servicemanagementserver103/working-with-search-results-1488596842.html) according to your preferred schedule
+- Create lists of [favorite filters][4]
+- Have search results [emailed to you][5] according to your preferred schedule
 - View and export the search results in various formats (RSS, Excel, etc)
 - Display the search results in a report format
-- Display the search results in a [dashboard gadget](https://confluence.atlassian.com/servicemanagementserver103/adding-and-customizing-gadgets-1488597070.html)
+- Display the search results in a [dashboard gadget][6]
 
-*Screenshot: Issue filter results in detail view* *![](https://confluence.atlassian.com/servicemanagementserver103/files/1488596780/1488596781/1/1649875414412/SaveSearchAsFilter.png)*
+*Screenshot: Issue filter results in detail view* *![][1]*
 
 ## Saving a search as a filter
 
@@ -41,7 +41,7 @@ Your new filter will be added to your favorite filters and shared, according to 
 
 Click **Issues > Manage filters** to manage your filters.
 
-![Manage filters page, with a list of saved filters.](https://confluence.atlassian.com/servicemanagementserver103/files/1488596780/1488596793/1/1649859490527/manage_filters.png)
+![Manage filters page, with a list of saved filters.][2]
 
 Manage filters page, with a list of saved filters.
 
@@ -59,7 +59,7 @@ You can find and run any filters that you have created or that have been shared 
 
 ### Updating a filter
 
-You can update the name, description, sharing, favorite of any filters that you created, or have permission to edit. If you want to edit a filter for which you only have the *view* permission, either [clone](https://confluence.atlassian.com/servicemanagementserver103/#Savingyoursearchasafilter-clone) (aka copy) the shared filter, or ask your Jira administrator to [change the filter's ownership](https://confluence.atlassian.com/servicemanagementserver103/#Savingyoursearchasafilter-otheruserssharedfilters).
+You can update the name, description, sharing, favorite of any filters that you created, or have permission to edit. If you want to edit a filter for which you only have the *view* permission, either [clone][7] (aka copy) the shared filter, or ask your Jira administrator to [change the filter's ownership][8].
 
 Update the filter's details:
 
@@ -98,12 +98,12 @@ Filters that you've created or that have been shared by others can be added to y
 
 ### Sharing a filter
 
-Filters that you have created or have permission to edit can be shared with other users, user groups, projects, and project roles. They can also be shared globally. You can choose whether you want to share the filter with the permission to edit, or only to view. Any filter that is shared is visible to users who have the 'Jira Administrators' global permission. See [Managing other users' shared filters](https://confluence.atlassian.com/servicemanagementserver103/#Savingyoursearchasafilter-otheruserssharedfilters) below.
+Filters that you have created or have permission to edit can be shared with other users, user groups, projects, and project roles. They can also be shared globally. You can choose whether you want to share the filter with the permission to edit, or only to view. Any filter that is shared is visible to users who have the 'Jira Administrators' global permission. See [Managing other users' shared filters][8] below.
 
 1. Click the **My** tab on the 'Manage Filters' page.
 2. Locate the filter you wish to share, click the **cog icon** > **Edit**.
 3. Update the **Add Viewers** and **Add Editors** fields by selecting the user, group, project, or project role that you want to share the filter with, and clicking **Add**. Note that you can only share filters with groups/roles of which you are a member.
-	[Why can't I see the filter's sharing configuration?](https://confluence.atlassian.com/servicemanagementserver103/#)
+	[Why can't I see the filter's sharing configuration?][9]
 	*You need the Create Shared Object global permission to configure sharing for a filter. Contact your Jira administrator to obtain this permission.*
 4. Click **Save** to save your changes.
 
@@ -133,25 +133,25 @@ When the results of a saved filter are exported to Excel, the column order and c
 
 ### Subscribing to a filter
 
-See [Working with search results](https://confluence.atlassian.com/servicemanagementserver103/working-with-search-results-1488596842.html).
+See [Working with search results][5].
 
 ## Managing other user's shared filters
 
-A **shared filter**  is a filter whose creator has shared that filter with other users. Refer to  [Sharing a filter](https://confluence.atlassian.com/servicemanagementserver103/#Savingyoursearchasafilter-sharing_filters) above for details. When a shared filter is created by a user, that user:
+A **shared filter**  is a filter whose creator has shared that filter with other users. Refer to  [Sharing a filter][10] above for details. When a shared filter is created by a user, that user:
 
 - Initially 'owns' the shared filter.
 - Being the owner, can edit and modify the shared filter.
 
-If you have the **Jira Administrators**  global permission, you can manage shared filters that were created by other users. For instructions, see  [Managing shared filters](https://confluence.atlassian.com/adminjiraserver073/managing-shared-filters-861254012.html).
+If you have the **Jira Administrators**  global permission, you can manage shared filters that were created by other users. For instructions, see  [Managing shared filters][11].
 
 ## Next steps
 
 Read the following related topics:
 
-- [Searching for issues](https://confluence.atlassian.com/servicemanagementserver103/searching-for-issues-1488596697.html)
-- [Basic searching](https://confluence.atlassian.com/servicemanagementserver103/basic-searching-1488596727.html)
-- [Advanced searching](https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-1488596757.html)
-- [Working with search results](https://confluence.atlassian.com/servicemanagementserver103/working-with-search-results-1488596842.html)
+- [Searching for issues][3]
+- [Basic searching][12]
+- [Advanced searching][13]
+- [Working with search results][5]
 
 Last modified on Jul 26, 2022
 
@@ -159,4 +159,20 @@ Was this helpful?
 
 Yes
 
-Powered by [Confluence](http://www.atlassian.com/) and [Scroll Viewport](https://www.k15t.com/go/scroll-viewport).
+Powered by [Confluence][14] and [Scroll Viewport][15].
+
+[1]: https://confluence.atlassian.com/servicemanagementserver103/files/1488596780/1488596781/1/1649875414412/SaveSearchAsFilter.png
+[2]: https://confluence.atlassian.com/servicemanagementserver103/files/1488596780/1488596793/1/1649859490527/manage_filters.png
+[3]: https://confluence.atlassian.com/servicemanagementserver103/searching-for-issues-1488596697.html
+[4]: https://confluence.atlassian.com/servicemanagementserver103/#Savingyoursearchasafilter-favorite_filters
+[5]: https://confluence.atlassian.com/servicemanagementserver103/working-with-search-results-1488596842.html
+[6]: https://confluence.atlassian.com/servicemanagementserver103/adding-and-customizing-gadgets-1488597070.html
+[7]: https://confluence.atlassian.com/servicemanagementserver103/#Savingyoursearchasafilter-clone
+[8]: https://confluence.atlassian.com/servicemanagementserver103/#Savingyoursearchasafilter-otheruserssharedfilters
+[9]: https://confluence.atlassian.com/servicemanagementserver103/#
+[10]: https://confluence.atlassian.com/servicemanagementserver103/#Savingyoursearchasafilter-sharing_filters
+[11]: https://confluence.atlassian.com/adminjiraserver073/managing-shared-filters-861254012.html
+[12]: https://confluence.atlassian.com/servicemanagementserver103/basic-searching-1488596727.html
+[13]: https://confluence.atlassian.com/servicemanagementserver103/advanced-searching-1488596757.html
+[14]: http://www.atlassian.com/
+[15]: https://www.k15t.com/go/scroll-viewport
