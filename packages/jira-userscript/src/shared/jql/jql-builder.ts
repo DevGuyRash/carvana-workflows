@@ -161,48 +161,50 @@ export interface JqlBuildOptions {
   autoQuote?: boolean;
 }
 
+const EMPTY_RESERVED_WORDS = new Set<string>();
+
+type InternalBuildOptions = {
+  autoQuote: boolean;
+  reservedWords: Set<string>;
+};
+
 export const buildJql = (state: JqlBuilderState, opts: JqlBuildOptions = {}): string => {
   const autoQuote = opts.autoQuote ?? true;
-  const reservedWords = (opts.reservedWords ?? []).map(word => word.toLowerCase());
-  const query = buildGroup(state.root, { autoQuote, reservedWords });
-  const orderBy = buildOrderBy(state.sorts, { autoQuote, reservedWords });
+  const reservedWords = opts.reservedWords?.length
+    ? new Set(opts.reservedWords.map(word => word.toLowerCase()))
+    : EMPTY_RESERVED_WORDS;
+  const options = { autoQuote, reservedWords };
+  const query = buildGroup(state.root, options);
+  const orderBy = buildOrderBy(state.sorts);
   if (!query) return orderBy;
   if (!orderBy) return query;
   return `${query} ${orderBy}`.trim();
 };
 
-const buildOrderBy = (
-  sorts: JqlSortState[],
-  options: { autoQuote: boolean; reservedWords: string[] }
-): string => {
-  const items = sorts
-    .map(sort => {
-      const field = sort.field?.trim();
-      if (!field) return '';
-      return `${field} ${sort.direction}`;
-    })
-    .filter(Boolean);
-  if (!items.length) return '';
-  return `ORDER BY ${items.join(', ')}`;
+const buildOrderBy = (sorts: JqlSortState[]): string => {
+  const items: string[] = [];
+  for (const sort of sorts) {
+    const field = sort.field?.trim();
+    if (!field) continue;
+    items.push(`${field} ${sort.direction}`);
+  }
+  return items.length ? `ORDER BY ${items.join(', ')}` : '';
 };
 
-const buildGroup = (
-  group: JqlGroupState,
-  options: { autoQuote: boolean; reservedWords: string[] }
-): string => {
+const buildGroup = (group: JqlGroupState, options: InternalBuildOptions): string => {
   const pieces: string[] = [];
-  group.children.forEach((child, index) => {
+  for (const child of group.children) {
     const fragment = buildNode(child, options);
-    if (!fragment) return;
-    if (index > 0) {
+    if (!fragment) continue;
+    if (pieces.length) {
       const joiner = child.joiner ?? group.mode;
       pieces.push(joiner);
     }
     pieces.push(fragment);
-  });
+  }
   if (!pieces.length) return '';
   const joined = pieces.join(' ');
-  const needsWrap = group.children.length > 1;
+  const needsWrap = pieces.length > 1;
   let value = needsWrap ? `(${joined})` : joined;
   if (group.not) {
     value = `NOT (${value})`;
@@ -210,20 +212,14 @@ const buildGroup = (
   return value;
 };
 
-const buildNode = (
-  node: JqlNodeState,
-  options: { autoQuote: boolean; reservedWords: string[] }
-): string => {
+const buildNode = (node: JqlNodeState, options: InternalBuildOptions): string => {
   if (node.kind === 'group') {
     return buildGroup(node, options);
   }
   return buildClause(node, options);
 };
 
-const buildClause = (
-  clause: JqlClauseState,
-  options: { autoQuote: boolean; reservedWords: string[] }
-): string => {
+const buildClause = (clause: JqlClauseState, options: InternalBuildOptions): string => {
   const field = clause.field?.trim();
   if (!field) return '';
   const operator = resolveOperatorDef(clause.operatorKey);
@@ -262,7 +258,7 @@ const buildClause = (
 const buildHistory = (
   history: JqlHistoryState,
   mode: JqlOperatorHistoryMode | undefined,
-  options: { autoQuote: boolean; reservedWords: string[] }
+  options: InternalBuildOptions
 ): string => {
   if (!mode) return '';
   const parts: string[] = [];
@@ -280,7 +276,7 @@ const buildHistory = (
 
 const formatHistoryValue = (
   raw: string,
-  options: { autoQuote: boolean; reservedWords: string[] }
+  options: InternalBuildOptions
 ): string => {
   const value = raw.trim();
   if (!value) return value;
@@ -289,21 +285,23 @@ const formatHistoryValue = (
 
 const formatListValue = (
   value: JqlValueState,
-  options: { autoQuote: boolean; reservedWords: string[] }
+  options: InternalBuildOptions
 ): string => {
   if (value.mode === 'function') {
     return value.text.trim();
   }
-  const list = value.list
-    .map(item => formatListItem(item, value.listMode, options))
-    .filter(Boolean);
+  const list: string[] = [];
+  for (const item of value.list) {
+    const formatted = formatListItem(item, value.listMode, options);
+    if (formatted) list.push(formatted);
+  }
   return list.length ? `(${list.join(', ')})` : '';
 };
 
 const formatListItem = (
   raw: string,
   listMode: 'text' | 'raw',
-  options: { autoQuote: boolean; reservedWords: string[] }
+  options: InternalBuildOptions
 ): string => {
   const value = raw.trim();
   if (!value) return '';
@@ -313,7 +311,7 @@ const formatListItem = (
 
 const formatValue = (
   value: JqlValueState,
-  options: { autoQuote: boolean; reservedWords: string[] },
+  options: InternalBuildOptions,
   mode: JqlOperatorValueMode
 ): string => {
   if (mode === 'none') return '';
@@ -391,22 +389,43 @@ const escapeLucene = (
   input: string,
   options: { allowWildcards: boolean; allowFuzzy: boolean; allowBoost: boolean }
 ): string => {
-  const specials = ['+', '-', '&', '|', '!', '(', ')', '{', '}', '[', ']', '^', '~', '*', '?', ':'];
-  const allow = new Set<string>();
-  if (options.allowWildcards) {
-    allow.add('*');
-    allow.add('?');
+  let out = '';
+  let mutated = false;
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    const isWildcard = char === '*' || char === '?';
+    const isAllowed =
+      (options.allowWildcards && isWildcard) ||
+      (options.allowFuzzy && char === '~') ||
+      (options.allowBoost && char === '^');
+    const isSpecial =
+      char === '+' ||
+      char === '-' ||
+      char === '&' ||
+      char === '|' ||
+      char === '!' ||
+      char === '(' ||
+      char === ')' ||
+      char === '{' ||
+      char === '}' ||
+      char === '[' ||
+      char === ']' ||
+      char === '^' ||
+      char === '~' ||
+      char === '*' ||
+      char === '?' ||
+      char === ':';
+    if (isSpecial && !isAllowed) {
+      if (!mutated) {
+        out = input.slice(0, i);
+        mutated = true;
+      }
+      out += `\\${char}`;
+      continue;
+    }
+    if (mutated) out += char;
   }
-  if (options.allowFuzzy) allow.add('~');
-  if (options.allowBoost) allow.add('^');
-
-  let out = input;
-  for (const char of specials) {
-    if (allow.has(char)) continue;
-    const escaped = `\\${char}`;
-    out = out.split(char).join(escaped);
-  }
-  return out;
+  return mutated ? out : input;
 };
 
 const wrapJqlString = (value: string): string => {
@@ -416,13 +435,13 @@ const wrapJqlString = (value: string): string => {
 
 const quoteIfNeeded = (
   raw: string,
-  options: { autoQuote: boolean; reservedWords: string[] }
+  options: InternalBuildOptions
 ): string => {
   if (!options.autoQuote) return raw;
   if (raw.startsWith('"') && raw.endsWith('"')) return raw;
   if (looksLikeFunction(raw)) return raw;
   const lower = raw.toLowerCase();
-  const isReserved = options.reservedWords.includes(lower);
+  const isReserved = options.reservedWords.has(lower);
   const simple = /^[a-z0-9_\-\.]+$/i.test(raw);
   if (simple && !isReserved) return raw;
   const escaped = raw.replace(/"/g, '\\"');

@@ -1,23 +1,8 @@
 import type { Store } from '@cv/core';
+import { JQL_FUNCTION_DOCS_BY_NAME } from './jql-data';
 import {
-  JQL_FUNCTION_DOCS_BY_NAME,
-  JQL_OPERATOR_DEFS,
-  operatorKeyFromToken,
-  type JqlJoiner
-} from './jql-data';
-import {
-  buildJql,
-  createClauseState,
-  createDefaultBuilderState,
-  createDefaultValueState,
-  ensureOperatorDefaults,
   resolveOperatorDef,
-  type JqlBuilderState,
-  type JqlClauseState,
-  type JqlGroupState,
-  type JqlNodeState,
   type JqlSortState,
-  type JqlValueState
 } from './jql-builder';
 
 // ============================================================================
@@ -25,10 +10,7 @@ import {
 // ============================================================================
 
 const ROOT_ID = 'cv-jql-builder-root';
-const STATE_KEY = 'jira.jql.builder:state';
-const SETTINGS_KEY = 'jira.jql.builder:settings';
 const CUSTOM_PRESETS_KEY = 'jira.jql.builder:customPresets';
-const PRESET_ORDER_KEY = 'jira.jql.builder:presetOrder';
 const PINNED_PRESETS_KEY = 'jira.jql.builder:pinnedPresets';
 const RECENT_FILTERS_KEY = 'jira.jql.builder:recentFilters';
 const AUTO_CACHE_KEY = '__cvJqlAutocompleteData';
@@ -720,6 +702,29 @@ const FRIENDLY_FIELDS: FriendlyField[] = [
   }
 ];
 
+const FRIENDLY_FIELDS_BY_ID = new Map<string, FriendlyField>(
+  FRIENDLY_FIELDS.map((field) => [field.id, field])
+);
+
+const FRIENDLY_FIELDS_BY_CATEGORY: Record<string, FriendlyField[]> = (() => {
+  const out: Record<string, FriendlyField[]> = {};
+  for (const field of FRIENDLY_FIELDS) {
+    if (!out[field.category]) out[field.category] = [];
+    out[field.category].push(field);
+  }
+  return out;
+})();
+
+const FRIENDLY_FIELDS_BY_CATEGORY_ENTRIES = Object.entries(FRIENDLY_FIELDS_BY_CATEGORY);
+
+const FRIENDLY_FIELD_CATEGORY_LABELS: Record<string, string> = {
+  who: '👤 Who',
+  what: '📝 What',
+  status: '🚦 Status',
+  where: '📁 Where',
+  when: '📅 When'
+};
+
 // ============================================================================
 // FRIENDLY OPERATORS - Human-readable comparison labels
 // ============================================================================
@@ -745,6 +750,158 @@ const FRIENDLY_OPERATORS: FriendlyOperator[] = [
   { key: 'less-than', label: 'is before', forTypes: ['date'] },
   { key: 'greater-than', label: 'is greater than', forTypes: ['number'] },
   { key: 'less-than', label: 'is less than', forTypes: ['number'] }
+];
+
+const FRIENDLY_OPERATORS_BY_TYPE: Record<string, FriendlyOperator[]> = (() => {
+  const out: Record<string, FriendlyOperator[]> = {};
+  for (const op of FRIENDLY_OPERATORS) {
+    for (const type of op.forTypes) {
+      if (!out[type]) out[type] = [];
+      out[type].push(op);
+    }
+  }
+  return out;
+})();
+
+const SORT_FIELDS = [
+  { value: 'updated', label: 'Last Updated' },
+  { value: 'created', label: 'Created Date' },
+  { value: 'priority', label: 'Priority' },
+  { value: 'due', label: 'Due Date' },
+  { value: 'status', label: 'Status' },
+  { value: 'key', label: 'Issue Key' },
+  { value: 'assignee', label: 'Assignee' },
+  { value: 'reporter', label: 'Reporter' },
+  { value: 'resolution', label: 'Resolution' },
+  { value: 'resolved', label: 'Resolved Date' }
+];
+
+const QUICK_SEARCH_EXAMPLES = [
+  'my open issues',
+  'high priority bugs',
+  'updated today',
+  'unassigned tasks',
+  'created this week',
+  'overdue issues',
+  'blocked items',
+  'epic stories'
+];
+
+const OPERATOR_ITEMS = [
+  { label: '=', value: ' = ', description: 'Equals' },
+  { label: '!=', value: ' != ', description: 'Not equals' },
+  { label: '~', value: ' ~ ', description: 'Contains text' },
+  { label: '!~', value: ' !~ ', description: 'Does not contain' },
+  { label: '>', value: ' > ', description: 'Greater than' },
+  { label: '>=', value: ' >= ', description: 'Greater than or equal' },
+  { label: '<', value: ' < ', description: 'Less than' },
+  { label: '<=', value: ' <= ', description: 'Less than or equal' },
+  { label: 'IN', value: ' IN ()', description: 'In list of values' },
+  { label: 'NOT IN', value: ' NOT IN ()', description: 'Not in list of values' },
+  { label: 'IS', value: ' IS ', description: 'Is (for EMPTY/NULL)' },
+  { label: 'IS NOT', value: ' IS NOT ', description: 'Is not (for EMPTY/NULL)' },
+  { label: 'IS EMPTY', value: ' IS EMPTY', description: 'Field has no value' },
+  { label: 'IS NOT EMPTY', value: ' IS NOT EMPTY', description: 'Field has a value' },
+  { label: 'WAS', value: ' WAS ', description: 'Was previously' },
+  { label: 'WAS NOT', value: ' WAS NOT ', description: 'Was not previously' },
+  { label: 'CHANGED', value: ' CHANGED', description: 'Value changed' },
+  { label: 'AND', value: ' AND ', description: 'Both conditions' },
+  { label: 'OR', value: ' OR ', description: 'Either condition' },
+  { label: 'NOT', value: 'NOT ', description: 'Negate condition' },
+  { label: '( )', value: '()', description: 'Group conditions' }
+];
+
+const FUNCTION_ITEMS = [
+  { label: 'currentUser()', value: 'currentUser()', description: 'Currently logged in user' },
+  { label: 'now()', value: 'now()', description: 'Current date/time' },
+  { label: 'startOfDay()', value: 'startOfDay()', description: 'Start of today' },
+  { label: 'endOfDay()', value: 'endOfDay()', description: 'End of today' },
+  { label: 'startOfWeek()', value: 'startOfWeek()', description: 'Start of this week' },
+  { label: 'endOfWeek()', value: 'endOfWeek()', description: 'End of this week' },
+  { label: 'startOfMonth()', value: 'startOfMonth()', description: 'Start of this month' },
+  { label: 'endOfMonth()', value: 'endOfMonth()', description: 'End of this month' },
+  { label: 'startOfYear()', value: 'startOfYear()', description: 'Start of this year' },
+  { label: 'endOfYear()', value: 'endOfYear()', description: 'End of this year' },
+  { label: 'membersOf()', value: 'membersOf("")', description: 'Members of a group' },
+  { label: 'linkedIssues()', value: 'linkedIssues()', description: 'Linked issues' },
+  { label: 'votedIssues()', value: 'votedIssues()', description: 'Issues you voted for' },
+  { label: 'watchedIssues()', value: 'watchedIssues()', description: 'Issues you watch' },
+  { label: 'issueHistory()', value: 'issueHistory()', description: 'Recently viewed issues' },
+  { label: 'openSprints()', value: 'openSprints()', description: 'Active sprints' },
+  { label: 'closedSprints()', value: 'closedSprints()', description: 'Completed sprints' },
+  { label: 'futureSprints()', value: 'futureSprints()', description: 'Upcoming sprints' },
+  { label: 'latestReleasedVersion()', value: 'latestReleasedVersion(PROJECT)', description: 'Latest released version' },
+  { label: 'unreleasedVersions()', value: 'unreleasedVersions(PROJECT)', description: 'Unreleased versions' },
+  { label: 'updatedBy()', value: 'updatedBy()', description: 'Updated by specific user' },
+  { label: 'currentLogin()', value: 'currentLogin()', description: 'Current session start' },
+  { label: 'lastLogin()', value: 'lastLogin()', description: 'Previous session start' }
+];
+
+const COMMON_FIELD_ITEMS = [
+  { label: 'project', value: 'project', description: 'Project key or name' },
+  { label: 'status', value: 'status', description: 'Issue status' },
+  { label: 'assignee', value: 'assignee', description: 'Assigned user' },
+  { label: 'reporter', value: 'reporter', description: 'Issue reporter' },
+  { label: 'priority', value: 'priority', description: 'Issue priority' },
+  { label: 'issuetype', value: 'issuetype', description: 'Type of issue' },
+  { label: 'created', value: 'created', description: 'Creation date' },
+  { label: 'updated', value: 'updated', description: 'Last update date' },
+  { label: 'due', value: 'due', description: 'Due date' },
+  { label: 'resolved', value: 'resolved', description: 'Resolution date' },
+  { label: 'resolution', value: 'resolution', description: 'Resolution type' },
+  { label: 'labels', value: 'labels', description: 'Issue labels' },
+  { label: 'summary', value: 'summary', description: 'Issue title' },
+  { label: 'description', value: 'description', description: 'Issue description' },
+  { label: 'text', value: 'text', description: 'Full text search' },
+  { label: 'component', value: 'component', description: 'Project component' },
+  { label: 'fixVersion', value: 'fixVersion', description: 'Fix version' },
+  { label: 'affectedVersion', value: 'affectedVersion', description: 'Affected version' },
+  { label: 'sprint', value: 'sprint', description: 'Sprint name' },
+  { label: 'watcher', value: 'watcher', description: 'Issue watchers' },
+  { label: 'voter', value: 'voter', description: 'Issue voters' },
+  { label: 'comment', value: 'comment', description: 'Comment text' },
+  { label: 'key', value: 'key', description: 'Issue key (e.g., PROJ-123)' },
+  { label: 'id', value: 'id', description: 'Issue ID number' },
+  { label: 'parent', value: 'parent', description: 'Parent issue key' }
+];
+
+const COMMON_FIELD_VALUE_SET = new Set(COMMON_FIELD_ITEMS.map((item) => item.value.toLowerCase()));
+
+const TIME_ITEMS = [
+  { label: '-1d', value: '-1d', description: '1 day ago' },
+  { label: '-2d', value: '-2d', description: '2 days ago' },
+  { label: '-3d', value: '-3d', description: '3 days ago' },
+  { label: '-7d', value: '-7d', description: '1 week ago' },
+  { label: '-14d', value: '-14d', description: '2 weeks ago' },
+  { label: '-30d', value: '-30d', description: '1 month ago' },
+  { label: '-90d', value: '-90d', description: '3 months ago' },
+  { label: '-1w', value: '-1w', description: '1 week ago' },
+  { label: '-2w', value: '-2w', description: '2 weeks ago' },
+  { label: '-1m', value: '-1m', description: '1 month ago' },
+  { label: '-3m', value: '-3m', description: '3 months ago' },
+  { label: '-6m', value: '-6m', description: '6 months ago' },
+  { label: '-1y', value: '-1y', description: '1 year ago' },
+  { label: '+1d', value: '+1d', description: '1 day from now' },
+  { label: '+7d', value: '+7d', description: '1 week from now' },
+  { label: '+1w', value: '+1w', description: '1 week from now' },
+  { label: '+1m', value: '+1m', description: '1 month from now' },
+  { label: '"2024-01-01"', value: '"2024-01-01"', description: 'Specific date' },
+  { label: '"2024-12-31"', value: '"2024-12-31"', description: 'Specific date' }
+];
+
+const KEYWORD_ITEMS = [
+  { label: 'EMPTY', value: 'EMPTY', description: 'No value' },
+  { label: 'NULL', value: 'NULL', description: 'Null value' },
+  { label: 'ORDER BY', value: ' ORDER BY ', description: 'Sort results' },
+  { label: 'ASC', value: ' ASC', description: 'Ascending order' },
+  { label: 'DESC', value: ' DESC', description: 'Descending order' },
+  { label: 'FROM', value: ' FROM ', description: 'History: from value' },
+  { label: 'TO', value: ' TO ', description: 'History: to value' },
+  { label: 'BY', value: ' BY ', description: 'History: by user' },
+  { label: 'AFTER', value: ' AFTER ', description: 'After date' },
+  { label: 'BEFORE', value: ' BEFORE ', description: 'Before date' },
+  { label: 'ON', value: ' ON ', description: 'On date' },
+  { label: 'DURING', value: ' DURING ', description: 'During period' }
 ];
 
 // ============================================================================
@@ -915,11 +1072,13 @@ const createId = (): string =>
     ? crypto.randomUUID()
     : `cv-${Math.random().toString(16).slice(2)}`;
 
-const decodeHtml = (value: string): string => {
+const decodeHtml = (() => {
   const textarea = document.createElement('textarea');
-  textarea.innerHTML = value;
-  return textarea.value;
-};
+  return (value: string): string => {
+    textarea.innerHTML = value;
+    return textarea.value;
+  };
+})();
 
 const normalizeSearch = (value: string): string => value.toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -987,14 +1146,18 @@ const getAutocompleteData = async (
       visibleFunctionNames?: Array<any>;
       jqlReservedWords?: string[];
     };
-    const fields = (data.visibleFieldNames ?? []).map((entry) => {
+    const fields: JqlFieldSuggestion[] = [];
+    for (const entry of data.visibleFieldNames ?? []) {
       const displayName = decodeHtml(String(entry.displayName ?? entry.value ?? ''));
       const value = String(entry.value ?? displayName);
       const operators = Array.isArray(entry.operators) ? entry.operators.map(String) : [];
       const types = Array.isArray(entry.types) ? entry.types.map(String) : [];
       const cfid = entry.cfid ? String(entry.cfid) : undefined;
-      const matchTokens = [displayName, value, cfid ?? ''].filter(Boolean).map(normalizeSearch);
-      return {
+      const matchTokens: string[] = [];
+      if (displayName) matchTokens.push(normalizeSearch(displayName));
+      if (value) matchTokens.push(normalizeSearch(value));
+      if (cfid) matchTokens.push(normalizeSearch(cfid));
+      fields.push({
         value,
         displayName,
         displayLabel: displayName,
@@ -1004,20 +1167,21 @@ const getAutocompleteData = async (
         cfid,
         searchKey: normalizeSearch(`${displayName} ${value} ${cfid ?? ''}`),
         matchTokens
-      };
-    });
-    const functions = (data.visibleFunctionNames ?? []).map((entry) => {
+      });
+    }
+    const functions: JqlFunctionSuggestion[] = [];
+    for (const entry of data.visibleFunctionNames ?? []) {
       const displayName = decodeHtml(String(entry.displayName ?? entry.value ?? ''));
       const nameKey = displayName.toLowerCase();
       const doc = JQL_FUNCTION_DOCS_BY_NAME.get(nameKey);
-      return {
+      functions.push({
         value: String(entry.value ?? displayName),
         displayName,
         isList: Boolean(entry.isList),
         description: doc?.description,
         searchKey: normalizeSearch(`${displayName} ${doc?.description ?? ''}`)
-      };
-    });
+      });
+    }
     const reservedWords = (data.jqlReservedWords ?? []).map((word) => word.toUpperCase());
     const out: JqlAutocompleteData = {
       fields,
@@ -1038,15 +1202,33 @@ const getAutocompleteData = async (
   }
 };
 
+const ORDER_BY_SPLIT = /\s+ORDER\s+BY\s+/i;
+
 // ============================================================================
 // JQL BUILDER FROM V2 STATE
 // ============================================================================
+
+const buildOrderByFromState = (state: V2State): string => {
+  if (state.sortEntries && state.sortEntries.length > 0) {
+    const sortParts: string[] = [];
+    for (const entry of state.sortEntries) {
+      if (!entry.field) continue;
+      sortParts.push(`${entry.field} ${entry.direction}`);
+    }
+    if (sortParts.length) {
+      return `ORDER BY ${sortParts.join(', ')}`;
+    }
+  } else if (state.sortField) {
+    return `ORDER BY ${state.sortField} ${state.sortDirection}`;
+  }
+  return '';
+};
 
 const buildJqlFromV2State = (state: V2State): string => {
   const clauses: string[] = [];
 
   for (const filter of state.filters) {
-    const field = FRIENDLY_FIELDS.find((f) => f.id === filter.fieldId);
+    const field = FRIENDLY_FIELDS_BY_ID.get(filter.fieldId);
     if (!field) continue;
 
     const operator = resolveOperatorDef(filter.operatorKey);
@@ -1059,8 +1241,11 @@ const buildJqlFromV2State = (state: V2State): string => {
       clause = `${field.jqlField} IS NOT EMPTY`;
     } else if (filter.operatorKey === 'in' || filter.operatorKey === 'not-in') {
       const values = filter.values.length > 0 ? filter.values : [filter.value];
-      const formatted = values.map((v) => formatValueForJql(v, field.valueType)).join(', ');
-      clause = `${field.jqlField} ${operator.operator} (${formatted})`;
+      const formattedValues: string[] = [];
+      for (const raw of values) {
+        formattedValues.push(formatValueForJql(raw, field.valueType));
+      }
+      clause = `${field.jqlField} ${operator.operator} (${formattedValues.join(', ')})`;
     } else {
       const formatted = formatValueForJql(filter.value, field.valueType);
       clause = `${field.jqlField} ${operator.operator} ${formatted}`;
@@ -1074,28 +1259,29 @@ const buildJqlFromV2State = (state: V2State): string => {
   }
 
   let jql = clauses.join(' AND ');
-
-  // Add sorting - support multiple sort entries
-  if (state.sortEntries && state.sortEntries.length > 0) {
-    const sortParts = state.sortEntries.map(e => `${e.field} ${e.direction}`);
-    jql += ` ORDER BY ${sortParts.join(', ')}`;
-  } else if (state.sortField) {
-    // Fallback to legacy single sort
-    jql += ` ORDER BY ${state.sortField} ${state.sortDirection}`;
+  const orderBy = buildOrderByFromState(state);
+  if (orderBy) {
+    jql = jql ? `${jql} ${orderBy}` : orderBy;
   }
-
   return jql;
 };
 
 const formatValueForJql = (value: string, valueType: FriendlyField['valueType']): string => {
   if (!value) return '""';
+  const lower = value.trim().toLowerCase();
 
   // Handle special user values
   if (valueType === 'user') {
-    if (value.toLowerCase().includes('me') || value.toLowerCase().includes('current')) {
+    if (
+      lower === 'me' ||
+      lower === 'me (current user)' ||
+      lower.includes('current user') ||
+      lower === 'currentuser()' ||
+      lower === 'currentuser'
+    ) {
       return 'currentUser()';
     }
-    if (value.toLowerCase() === 'unassigned' || value.toLowerCase() === 'empty') {
+    if (lower === 'unassigned' || lower === 'empty') {
       return 'EMPTY';
     }
   }
@@ -1204,7 +1390,9 @@ class JqlBuilderV2UI {
   }
 
   private getAllPresets(): QuickPreset[] {
-    return [...QUICK_PRESETS, ...this.state.customPresets];
+    return this.state.customPresets.length > 0
+      ? QUICK_PRESETS.concat(this.state.customPresets)
+      : QUICK_PRESETS;
   }
 
   mount(): void {
@@ -2369,17 +2557,7 @@ class JqlBuilderV2UI {
 
     // Quick examples
     const examples = createElement('div', { className: 'cv-quick-search-examples' });
-    const exampleQueries = [
-      'my open issues',
-      'high priority bugs',
-      'updated today',
-      'unassigned tasks',
-      'created this week',
-      'overdue issues',
-      'blocked items',
-      'epic stories'
-    ];
-    exampleQueries.forEach((text) => {
+    QUICK_SEARCH_EXAMPLES.forEach((text) => {
       const btn = createButton(text, 'cv-quick-example');
       btn.addEventListener('click', () => {
         input.value = text;
@@ -2405,15 +2583,16 @@ class JqlBuilderV2UI {
     }
 
     // Parse each preset's JQL and combine clauses
+    const presetsById = new Map(this.getAllPresets().map((preset) => [preset.id, preset]));
     const clauses: string[] = [];
     let orderBy = '';
 
     for (const presetId of selected) {
-      const preset = QUICK_PRESETS.find(p => p.id === presetId);
+      const preset = presetsById.get(presetId);
       if (!preset) continue;
 
       // Extract ORDER BY if present
-      const parts = preset.jql.split(/\s+ORDER\s+BY\s+/i);
+      const parts = preset.jql.split(ORDER_BY_SPLIT);
       const mainClause = parts[0].trim();
       if (parts[1] && !orderBy) {
         orderBy = parts[1].trim();
@@ -2777,10 +2956,11 @@ class JqlBuilderV2UI {
 
     const presetsGrid = createElement('div', { className: 'cv-presets-grid' });
     const allPresets = this.getAllPresets();
+    const presetsById = new Map(allPresets.map(preset => [preset.id, preset]));
 
     // Show pinned presets (up to 4)
     this.state.pinnedPresets.slice(0, 4).forEach((presetId) => {
-      const preset = allPresets.find(p => p.id === presetId);
+      const preset = presetsById.get(presetId);
       if (!preset) return;
 
       const btn = createElement('button', { className: 'cv-preset-btn' });
@@ -2872,30 +3052,17 @@ class JqlBuilderV2UI {
 
   private renderFilterCard(filter: FilterCard, index: number): HTMLDivElement {
     const card = createElement('div', { className: 'cv-filter-card' });
-    const field = FRIENDLY_FIELDS.find((f) => f.id === filter.fieldId) ?? FRIENDLY_FIELDS[0];
+    const field = FRIENDLY_FIELDS_BY_ID.get(filter.fieldId) ?? FRIENDLY_FIELDS[0];
 
     // Field selector
     const fieldWrap = createElement('div', { className: 'cv-filter-field' });
     const emoji = createElement('span', { className: 'cv-filter-field-emoji', text: field.emoji });
     const fieldSelect = createElement('select', { className: 'cv-filter-field-select' }) as HTMLSelectElement;
 
-    // Group fields by category
-    const categories: Record<string, FriendlyField[]> = {};
-    FRIENDLY_FIELDS.forEach((f) => {
-      if (!categories[f.category]) categories[f.category] = [];
-      categories[f.category].push(f);
-    });
-
-    const categoryLabels: Record<string, string> = {
-      who: '👤 Who',
-      what: '📝 What',
-      status: '🚦 Status',
-      where: '📁 Where',
-      when: '📅 When'
-    };
-
-    Object.entries(categories).forEach(([cat, fields]) => {
-      const optgroup = createElement('optgroup', { attrs: { label: categoryLabels[cat] ?? cat } }) as HTMLOptGroupElement;
+    FRIENDLY_FIELDS_BY_CATEGORY_ENTRIES.forEach(([cat, fields]) => {
+      const optgroup = createElement('optgroup', {
+        attrs: { label: FRIENDLY_FIELD_CATEGORY_LABELS[cat] ?? cat }
+      }) as HTMLOptGroupElement;
       fields.forEach((f) => {
         const option = new Option(f.label, f.id);
         option.selected = f.id === filter.fieldId;
@@ -2906,7 +3073,7 @@ class JqlBuilderV2UI {
 
     fieldSelect.addEventListener('change', () => {
       filter.fieldId = fieldSelect.value;
-      const newField = FRIENDLY_FIELDS.find((f) => f.id === filter.fieldId);
+      const newField = FRIENDLY_FIELDS_BY_ID.get(filter.fieldId);
       if (newField) {
         filter.operatorKey = newField.defaultOperator;
       }
@@ -2920,7 +3087,7 @@ class JqlBuilderV2UI {
     const opWrap = createElement('div', { className: 'cv-filter-operator' });
     const opSelect = createElement('select') as HTMLSelectElement;
 
-    const validOps = FRIENDLY_OPERATORS.filter((op) => op.forTypes.includes(field.valueType));
+    const validOps = FRIENDLY_OPERATORS_BY_TYPE[field.valueType] ?? FRIENDLY_OPERATORS;
     validOps.forEach((op) => {
       const option = new Option(op.label, op.key);
       option.selected = op.key === filter.operatorKey;
@@ -3069,19 +3236,6 @@ class JqlBuilderV2UI {
   private renderSortSection(): HTMLDivElement {
     const section = createElement('div', { className: 'cv-sort-section' });
 
-    const sortFields = [
-      { value: 'updated', label: 'Last Updated' },
-      { value: 'created', label: 'Created Date' },
-      { value: 'priority', label: 'Priority' },
-      { value: 'due', label: 'Due Date' },
-      { value: 'status', label: 'Status' },
-      { value: 'key', label: 'Issue Key' },
-      { value: 'assignee', label: 'Assignee' },
-      { value: 'reporter', label: 'Reporter' },
-      { value: 'resolution', label: 'Resolution' },
-      { value: 'resolved', label: 'Resolved Date' }
-    ];
-
     // Initialize sortEntries if empty
     if (this.state.sortEntries.length === 0) {
       this.state.sortEntries = [{ field: this.state.sortField, direction: this.state.sortDirection }];
@@ -3098,7 +3252,7 @@ class JqlBuilderV2UI {
       }
 
       const fieldSelect = createElement('select') as HTMLSelectElement;
-      sortFields.forEach((sf) => {
+      SORT_FIELDS.forEach((sf) => {
         const option = new Option(sf.label, sf.value);
         option.selected = sf.value === entry.field;
         fieldSelect.appendChild(option);
@@ -3195,10 +3349,13 @@ class JqlBuilderV2UI {
     list.style.cssText = 'display: flex; flex-direction: column; gap: 6px;';
 
     const allPresets = this.getAllPresets();
+    const presetsById = new Map(allPresets.map(preset => [preset.id, preset]));
 
     // Show pinned presets first, then the rest
     const orderedPresets = [
-      ...this.state.pinnedPresets.map(id => allPresets.find(p => p.id === id)).filter(Boolean) as QuickPreset[],
+      ...this.state.pinnedPresets
+        .map((id) => presetsById.get(id))
+        .filter(Boolean) as QuickPreset[],
       ...allPresets.filter(p => !this.state.pinnedPresets.includes(p.id))
     ];
 
@@ -3555,144 +3712,36 @@ class JqlBuilderV2UI {
 
   private getFieldItems(): Array<{ label: string; value: string; description?: string }> {
     // Common fields first, then from autocomplete data
-    const common = [
-      { label: 'project', value: 'project', description: 'Project key or name' },
-      { label: 'status', value: 'status', description: 'Issue status' },
-      { label: 'assignee', value: 'assignee', description: 'Assigned user' },
-      { label: 'reporter', value: 'reporter', description: 'Issue reporter' },
-      { label: 'priority', value: 'priority', description: 'Issue priority' },
-      { label: 'issuetype', value: 'issuetype', description: 'Type of issue' },
-      { label: 'created', value: 'created', description: 'Creation date' },
-      { label: 'updated', value: 'updated', description: 'Last update date' },
-      { label: 'due', value: 'due', description: 'Due date' },
-      { label: 'resolved', value: 'resolved', description: 'Resolution date' },
-      { label: 'resolution', value: 'resolution', description: 'Resolution type' },
-      { label: 'labels', value: 'labels', description: 'Issue labels' },
-      { label: 'summary', value: 'summary', description: 'Issue title' },
-      { label: 'description', value: 'description', description: 'Issue description' },
-      { label: 'text', value: 'text', description: 'Full text search' },
-      { label: 'component', value: 'component', description: 'Project component' },
-      { label: 'fixVersion', value: 'fixVersion', description: 'Fix version' },
-      { label: 'affectedVersion', value: 'affectedVersion', description: 'Affected version' },
-      { label: 'sprint', value: 'sprint', description: 'Sprint name' },
-      { label: 'watcher', value: 'watcher', description: 'Issue watchers' },
-      { label: 'voter', value: 'voter', description: 'Issue voters' },
-      { label: 'comment', value: 'comment', description: 'Comment text' },
-      { label: 'key', value: 'key', description: 'Issue key (e.g., PROJ-123)' },
-      { label: 'id', value: 'id', description: 'Issue ID number' },
-      { label: 'parent', value: 'parent', description: 'Parent issue key' }
-    ];
-
     // Add custom fields from autocomplete if available
     if (this.data.fields.length > 0) {
-      const seen = new Set(common.map(c => c.value.toLowerCase()));
       const custom = this.data.fields
-        .filter(f => !seen.has(f.value.toLowerCase()))
+        .filter(f => !COMMON_FIELD_VALUE_SET.has(f.value.toLowerCase()))
         .slice(0, 20) // Limit to prevent overwhelming
         .map(f => ({
           label: f.displayName || f.value,
           value: f.value.includes(' ') ? `"${f.value}"` : f.value,
           description: f.cfid ? 'Custom field' : undefined
         }));
-      return [...common, ...custom];
+      return COMMON_FIELD_ITEMS.concat(custom);
     }
 
-    return common;
+    return COMMON_FIELD_ITEMS;
   }
 
   private getOperatorItems(): Array<{ label: string; value: string; description?: string }> {
-    return [
-      { label: '=', value: ' = ', description: 'Equals' },
-      { label: '!=', value: ' != ', description: 'Not equals' },
-      { label: '~', value: ' ~ ', description: 'Contains text' },
-      { label: '!~', value: ' !~ ', description: 'Does not contain' },
-      { label: '>', value: ' > ', description: 'Greater than' },
-      { label: '>=', value: ' >= ', description: 'Greater than or equal' },
-      { label: '<', value: ' < ', description: 'Less than' },
-      { label: '<=', value: ' <= ', description: 'Less than or equal' },
-      { label: 'IN', value: ' IN ()', description: 'In list of values' },
-      { label: 'NOT IN', value: ' NOT IN ()', description: 'Not in list of values' },
-      { label: 'IS', value: ' IS ', description: 'Is (for EMPTY/NULL)' },
-      { label: 'IS NOT', value: ' IS NOT ', description: 'Is not (for EMPTY/NULL)' },
-      { label: 'IS EMPTY', value: ' IS EMPTY', description: 'Field has no value' },
-      { label: 'IS NOT EMPTY', value: ' IS NOT EMPTY', description: 'Field has a value' },
-      { label: 'WAS', value: ' WAS ', description: 'Was previously' },
-      { label: 'WAS NOT', value: ' WAS NOT ', description: 'Was not previously' },
-      { label: 'CHANGED', value: ' CHANGED', description: 'Value changed' },
-      { label: 'AND', value: ' AND ', description: 'Both conditions' },
-      { label: 'OR', value: ' OR ', description: 'Either condition' },
-      { label: 'NOT', value: 'NOT ', description: 'Negate condition' },
-      { label: '( )', value: '()', description: 'Group conditions' }
-    ];
+    return OPERATOR_ITEMS;
   }
 
   private getFunctionItems(): Array<{ label: string; value: string; description?: string }> {
-    return [
-      { label: 'currentUser()', value: 'currentUser()', description: 'Currently logged in user' },
-      { label: 'now()', value: 'now()', description: 'Current date/time' },
-      { label: 'startOfDay()', value: 'startOfDay()', description: 'Start of today' },
-      { label: 'endOfDay()', value: 'endOfDay()', description: 'End of today' },
-      { label: 'startOfWeek()', value: 'startOfWeek()', description: 'Start of this week' },
-      { label: 'endOfWeek()', value: 'endOfWeek()', description: 'End of this week' },
-      { label: 'startOfMonth()', value: 'startOfMonth()', description: 'Start of this month' },
-      { label: 'endOfMonth()', value: 'endOfMonth()', description: 'End of this month' },
-      { label: 'startOfYear()', value: 'startOfYear()', description: 'Start of this year' },
-      { label: 'endOfYear()', value: 'endOfYear()', description: 'End of this year' },
-      { label: 'membersOf()', value: 'membersOf("")', description: 'Members of a group' },
-      { label: 'linkedIssues()', value: 'linkedIssues()', description: 'Linked issues' },
-      { label: 'votedIssues()', value: 'votedIssues()', description: 'Issues you voted for' },
-      { label: 'watchedIssues()', value: 'watchedIssues()', description: 'Issues you watch' },
-      { label: 'issueHistory()', value: 'issueHistory()', description: 'Recently viewed issues' },
-      { label: 'openSprints()', value: 'openSprints()', description: 'Active sprints' },
-      { label: 'closedSprints()', value: 'closedSprints()', description: 'Completed sprints' },
-      { label: 'futureSprints()', value: 'futureSprints()', description: 'Upcoming sprints' },
-      { label: 'latestReleasedVersion()', value: 'latestReleasedVersion(PROJECT)', description: 'Latest released version' },
-      { label: 'unreleasedVersions()', value: 'unreleasedVersions(PROJECT)', description: 'Unreleased versions' },
-      { label: 'updatedBy()', value: 'updatedBy()', description: 'Updated by specific user' },
-      { label: 'currentLogin()', value: 'currentLogin()', description: 'Current session start' },
-      { label: 'lastLogin()', value: 'lastLogin()', description: 'Previous session start' }
-    ];
+    return FUNCTION_ITEMS;
   }
 
   private getTimeItems(): Array<{ label: string; value: string; description?: string }> {
-    return [
-      { label: '-1d', value: '-1d', description: '1 day ago' },
-      { label: '-2d', value: '-2d', description: '2 days ago' },
-      { label: '-3d', value: '-3d', description: '3 days ago' },
-      { label: '-7d', value: '-7d', description: '1 week ago' },
-      { label: '-14d', value: '-14d', description: '2 weeks ago' },
-      { label: '-30d', value: '-30d', description: '1 month ago' },
-      { label: '-90d', value: '-90d', description: '3 months ago' },
-      { label: '-1w', value: '-1w', description: '1 week ago' },
-      { label: '-2w', value: '-2w', description: '2 weeks ago' },
-      { label: '-1m', value: '-1m', description: '1 month ago' },
-      { label: '-3m', value: '-3m', description: '3 months ago' },
-      { label: '-6m', value: '-6m', description: '6 months ago' },
-      { label: '-1y', value: '-1y', description: '1 year ago' },
-      { label: '+1d', value: '+1d', description: '1 day from now' },
-      { label: '+7d', value: '+7d', description: '1 week from now' },
-      { label: '+1w', value: '+1w', description: '1 week from now' },
-      { label: '+1m', value: '+1m', description: '1 month from now' },
-      { label: '"2024-01-01"', value: '"2024-01-01"', description: 'Specific date' },
-      { label: '"2024-12-31"', value: '"2024-12-31"', description: 'Specific date' }
-    ];
+    return TIME_ITEMS;
   }
 
   private getKeywordItems(): Array<{ label: string; value: string; description?: string }> {
-    return [
-      { label: 'EMPTY', value: 'EMPTY', description: 'No value' },
-      { label: 'NULL', value: 'NULL', description: 'Null value' },
-      { label: 'ORDER BY', value: ' ORDER BY ', description: 'Sort results' },
-      { label: 'ASC', value: ' ASC', description: 'Ascending order' },
-      { label: 'DESC', value: ' DESC', description: 'Descending order' },
-      { label: 'FROM', value: ' FROM ', description: 'History: from value' },
-      { label: 'TO', value: ' TO ', description: 'History: to value' },
-      { label: 'BY', value: ' BY ', description: 'History: by user' },
-      { label: 'AFTER', value: ' AFTER ', description: 'After date' },
-      { label: 'BEFORE', value: ' BEFORE ', description: 'Before date' },
-      { label: 'ON', value: ' ON ', description: 'On date' },
-      { label: 'DURING', value: ' DURING ', description: 'During period' }
-    ];
+    return KEYWORD_ITEMS;
   }
 
   private insertAtCursor(text: string): void {
