@@ -1,5 +1,11 @@
 import type { Store } from '@cv/core';
-import { JQL_FUNCTION_DOCS_BY_NAME } from './jql-data';
+import {
+  JQL_FUNCTION_DOCS,
+  JQL_FUNCTION_DOCS_BY_NAME,
+  JQL_KEYWORDS,
+  JQL_OPERATOR_DEFS,
+  operatorKeyFromToken
+} from './jql-data';
 import {
   resolveOperatorDef,
   type JqlSortState,
@@ -10,6 +16,8 @@ import {
 // ============================================================================
 
 const ROOT_ID = 'cv-jql-builder-root';
+const BUILDER_GLOBAL_KEY = '__cvJqlBuilderV2';
+const SWITCHER_HOOK_KEY = '__cvJqlBuilderSwitcherHook';
 const CUSTOM_PRESETS_KEY = 'jira.jql.builder:customPresets';
 const PINNED_PRESETS_KEY = 'jira.jql.builder:pinnedPresets';
 const RECENT_FILTERS_KEY = 'jira.jql.builder:recentFilters';
@@ -17,7 +25,7 @@ const AUTO_CACHE_KEY = '__cvJqlAutocompleteData';
 const AUTO_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 // ============================================================================
-// QUICK PRESETS - One-click common queries for ADHD-friendly quick access
+// QUICK PRESETS - One-click common queries for quick access
 // ============================================================================
 
 interface QuickPreset {
@@ -314,16 +322,33 @@ const QUICK_PRESETS: QuickPreset[] = [
 // FRIENDLY FIELD DEFINITIONS - Human-readable field categories
 // ============================================================================
 
+type FriendlyFieldCategory =
+  | 'who'
+  | 'what'
+  | 'when'
+  | 'where'
+  | 'status'
+  | 'custom-people'    // Custom fields for users/people
+  | 'custom-dates'     // Custom date/time fields
+  | 'custom-numbers'   // Custom numeric fields
+  | 'custom-select'    // Custom dropdowns, checkboxes, radio buttons
+  | 'custom-text'      // Custom text fields
+  | 'custom-other'     // Other custom fields
+  | 'other';
+
 interface FriendlyField {
   id: string;
   label: string;
   emoji: string;
   description: string;
   jqlField: string;
-  category: 'who' | 'what' | 'when' | 'where' | 'status';
+  category: FriendlyFieldCategory;
   defaultOperator: string;
   valueType: 'user' | 'status' | 'priority' | 'text' | 'date' | 'project' | 'type' | 'list' | 'number';
   commonValues?: string[];
+  operatorKeys?: string[];
+  isCustom?: boolean;
+  rawName?: string;
 }
 
 const FRIENDLY_FIELDS: FriendlyField[] = [
@@ -702,66 +727,117 @@ const FRIENDLY_FIELDS: FriendlyField[] = [
   }
 ];
 
-const FRIENDLY_FIELDS_BY_ID = new Map<string, FriendlyField>(
-  FRIENDLY_FIELDS.map((field) => [field.id, field])
-);
-
-const FRIENDLY_FIELDS_BY_CATEGORY: Record<string, FriendlyField[]> = (() => {
-  const out: Record<string, FriendlyField[]> = {};
-  for (const field of FRIENDLY_FIELDS) {
-    if (!out[field.category]) out[field.category] = [];
-    out[field.category].push(field);
-  }
-  return out;
-})();
-
-const FRIENDLY_FIELDS_BY_CATEGORY_ENTRIES = Object.entries(FRIENDLY_FIELDS_BY_CATEGORY);
-
-const FRIENDLY_FIELD_CATEGORY_LABELS: Record<string, string> = {
+const FRIENDLY_FIELD_CATEGORY_LABELS: Record<FriendlyFieldCategory, string> = {
   who: '👤 Who',
   what: '📝 What',
   status: '🚦 Status',
   where: '📁 Where',
-  when: '📅 When'
+  when: '📅 When',
+  'custom-people': '👥 Custom: People',
+  'custom-dates': '📆 Custom: Dates',
+  'custom-numbers': '🔢 Custom: Numbers',
+  'custom-select': '☑️ Custom: Selection',
+  'custom-text': '📄 Custom: Text',
+  'custom-other': '🧩 Custom: Other',
+  other: '🔧 Other Fields'
 };
 
-// ============================================================================
-// FRIENDLY OPERATORS - Human-readable comparison labels
-// ============================================================================
-
-interface FriendlyOperator {
-  key: string;
-  label: string;
-  forTypes: FriendlyField['valueType'][];
-}
-
-const FRIENDLY_OPERATORS: FriendlyOperator[] = [
-  { key: 'equals', label: 'is', forTypes: ['user', 'status', 'priority', 'project', 'type', 'text', 'list', 'number'] },
-  { key: 'not-equals', label: 'is not', forTypes: ['user', 'status', 'priority', 'project', 'type', 'text', 'list', 'number'] },
-  { key: 'in', label: 'is any of', forTypes: ['user', 'status', 'priority', 'project', 'type', 'list'] },
-  { key: 'not-in', label: 'is none of', forTypes: ['user', 'status', 'priority', 'project', 'type', 'list'] },
-  { key: 'contains', label: 'contains', forTypes: ['text'] },
-  { key: 'not-contains', label: 'does not contain', forTypes: ['text'] },
-  { key: 'is-empty', label: 'is empty', forTypes: ['user', 'status', 'priority', 'project', 'type', 'text', 'list', 'date', 'number'] },
-  { key: 'is-not-empty', label: 'has a value', forTypes: ['user', 'status', 'priority', 'project', 'type', 'text', 'list', 'date', 'number'] },
-  { key: 'greater-than-equals', label: 'is on or after', forTypes: ['date'] },
-  { key: 'less-than-equals', label: 'is on or before', forTypes: ['date'] },
-  { key: 'greater-than', label: 'is after', forTypes: ['date'] },
-  { key: 'less-than', label: 'is before', forTypes: ['date'] },
-  { key: 'greater-than', label: 'is greater than', forTypes: ['number'] },
-  { key: 'less-than', label: 'is less than', forTypes: ['number'] }
+const FIELD_CATEGORY_ORDER: FriendlyFieldCategory[] = [
+  'who',
+  'what',
+  'status',
+  'where',
+  'when',
+  'custom-people',
+  'custom-dates',
+  'custom-numbers',
+  'custom-select',
+  'custom-text',
+  'custom-other',
+  'other'
 ];
 
-const FRIENDLY_OPERATORS_BY_TYPE: Record<string, FriendlyOperator[]> = (() => {
-  const out: Record<string, FriendlyOperator[]> = {};
-  for (const op of FRIENDLY_OPERATORS) {
-    for (const type of op.forTypes) {
-      if (!out[type]) out[type] = [];
-      out[type].push(op);
-    }
+const DEFAULT_OPERATOR_BY_VALUE_TYPE: Record<FriendlyField['valueType'], string> = {
+  user: 'equals',
+  status: 'equals',
+  priority: 'equals',
+  text: 'contains',
+  date: 'greater-than-equals',
+  project: 'equals',
+  type: 'equals',
+  list: 'in',
+  number: 'greater-than'
+};
+
+const FIELD_TOKEN_CLEANUP = /\s*-\s*cf\[\d+\]\s*$/i;
+const FIELD_TOKEN_CLEANUP_PARENS = /\s*\(cf\[\d+\]\)\s*$/i;
+
+const normalizeFieldKey = (value: string): string =>
+  value.replace(/^"+|"+$/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+const stripCfSuffix = (value: string): string =>
+  value.replace(FIELD_TOKEN_CLEANUP, '').replace(FIELD_TOKEN_CLEANUP_PARENS, '').trim();
+
+const isCfToken = (value: string): boolean => /^cf\[\d+\]$/i.test(value.trim());
+
+const buildReservedWordSet = (data: JqlAutocompleteData): Set<string> => {
+  const set = new Set<string>();
+  for (const word of JQL_KEYWORDS) set.add(word.toUpperCase());
+  for (const word of data.reservedWords ?? []) set.add(word.toUpperCase());
+  return set;
+};
+
+const formatFieldToken = (value: string, reservedWords: Set<string>): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (/^cf\[\d+\]$/i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) return trimmed;
+  const needsQuotes =
+    reservedWords.has(trimmed.toUpperCase()) ||
+    /[^A-Za-z0-9_.]/.test(trimmed);
+  if (!needsQuotes) return trimmed;
+  return `"${trimmed.replace(/"/g, '\\"')}"`;
+};
+
+const inferValueType = (types: string[], fallback: FriendlyField['valueType']): FriendlyField['valueType'] => {
+  const normalized = types.map(t => t.toLowerCase());
+  const has = (needle: string): boolean => normalized.some(type => type === needle || type.includes(needle));
+
+  if (has('user')) return 'user';
+  if (has('date') || has('datetime')) return 'date';
+  if (has('number') || has('float') || has('double') || has('int') || has('long')) return 'number';
+  if (has('project')) return 'project';
+  if (has('issuetype') || has('issue type')) return 'type';
+  if (has('priority')) return 'priority';
+  if (has('status') || has('resolution')) return 'status';
+  if (has('version') || has('component') || has('group') || has('option') || has('label') || has('labels') || has('list') || has('array')) {
+    return 'list';
   }
-  return out;
-})();
+  if (has('text') || has('string') || has('textarea')) return 'text';
+  return fallback;
+};
+
+const getOperatorKeysFromTokens = (tokens: string[]): string[] => {
+  const keys = tokens
+    .map(token => operatorKeyFromToken(token))
+    .filter((key): key is string => Boolean(key));
+  const unique = Array.from(new Set(keys));
+  if (!unique.includes('is-empty')) unique.push('is-empty');
+  if (!unique.includes('is-not-empty')) unique.push('is-not-empty');
+  if (!unique.includes('is-null')) unique.push('is-null');
+  if (!unique.includes('is-not-null')) unique.push('is-not-null');
+  return unique;
+};
+
+const pickDefaultOperator = (valueType: FriendlyField['valueType'], operatorKeys: string[]): string => {
+  const preferred = DEFAULT_OPERATOR_BY_VALUE_TYPE[valueType] ?? 'equals';
+  if (operatorKeys.includes(preferred)) return preferred;
+  return operatorKeys[0] ?? preferred;
+};
+
+const OPERATOR_ORDER = new Map<string, number>(
+  JQL_OPERATOR_DEFS.map((def, index) => [def.key, index])
+);
 
 const SORT_FIELDS = [
   { value: 'updated', label: 'Last Updated' },
@@ -787,87 +863,12 @@ const QUICK_SEARCH_EXAMPLES = [
   'epic stories'
 ];
 
-const OPERATOR_ITEMS = [
-  { label: '=', value: ' = ', description: 'Equals' },
-  { label: '!=', value: ' != ', description: 'Not equals' },
-  { label: '~', value: ' ~ ', description: 'Contains text' },
-  { label: '!~', value: ' !~ ', description: 'Does not contain' },
-  { label: '>', value: ' > ', description: 'Greater than' },
-  { label: '>=', value: ' >= ', description: 'Greater than or equal' },
-  { label: '<', value: ' < ', description: 'Less than' },
-  { label: '<=', value: ' <= ', description: 'Less than or equal' },
-  { label: 'IN', value: ' IN ()', description: 'In list of values' },
-  { label: 'NOT IN', value: ' NOT IN ()', description: 'Not in list of values' },
-  { label: 'IS', value: ' IS ', description: 'Is (for EMPTY/NULL)' },
-  { label: 'IS NOT', value: ' IS NOT ', description: 'Is not (for EMPTY/NULL)' },
-  { label: 'IS EMPTY', value: ' IS EMPTY', description: 'Field has no value' },
-  { label: 'IS NOT EMPTY', value: ' IS NOT EMPTY', description: 'Field has a value' },
-  { label: 'WAS', value: ' WAS ', description: 'Was previously' },
-  { label: 'WAS NOT', value: ' WAS NOT ', description: 'Was not previously' },
-  { label: 'CHANGED', value: ' CHANGED', description: 'Value changed' },
-  { label: 'AND', value: ' AND ', description: 'Both conditions' },
-  { label: 'OR', value: ' OR ', description: 'Either condition' },
-  { label: 'NOT', value: 'NOT ', description: 'Negate condition' },
-  { label: '( )', value: '()', description: 'Group conditions' }
-];
-
-const FUNCTION_ITEMS = [
-  { label: 'currentUser()', value: 'currentUser()', description: 'Currently logged in user' },
-  { label: 'now()', value: 'now()', description: 'Current date/time' },
-  { label: 'startOfDay()', value: 'startOfDay()', description: 'Start of today' },
-  { label: 'endOfDay()', value: 'endOfDay()', description: 'End of today' },
-  { label: 'startOfWeek()', value: 'startOfWeek()', description: 'Start of this week' },
-  { label: 'endOfWeek()', value: 'endOfWeek()', description: 'End of this week' },
-  { label: 'startOfMonth()', value: 'startOfMonth()', description: 'Start of this month' },
-  { label: 'endOfMonth()', value: 'endOfMonth()', description: 'End of this month' },
-  { label: 'startOfYear()', value: 'startOfYear()', description: 'Start of this year' },
-  { label: 'endOfYear()', value: 'endOfYear()', description: 'End of this year' },
-  { label: 'membersOf()', value: 'membersOf("")', description: 'Members of a group' },
-  { label: 'linkedIssues()', value: 'linkedIssues()', description: 'Linked issues' },
-  { label: 'votedIssues()', value: 'votedIssues()', description: 'Issues you voted for' },
-  { label: 'watchedIssues()', value: 'watchedIssues()', description: 'Issues you watch' },
-  { label: 'issueHistory()', value: 'issueHistory()', description: 'Recently viewed issues' },
-  { label: 'openSprints()', value: 'openSprints()', description: 'Active sprints' },
-  { label: 'closedSprints()', value: 'closedSprints()', description: 'Completed sprints' },
-  { label: 'futureSprints()', value: 'futureSprints()', description: 'Upcoming sprints' },
-  { label: 'latestReleasedVersion()', value: 'latestReleasedVersion(PROJECT)', description: 'Latest released version' },
-  { label: 'unreleasedVersions()', value: 'unreleasedVersions(PROJECT)', description: 'Unreleased versions' },
-  { label: 'updatedBy()', value: 'updatedBy()', description: 'Updated by specific user' },
-  { label: 'currentLogin()', value: 'currentLogin()', description: 'Current session start' },
-  { label: 'lastLogin()', value: 'lastLogin()', description: 'Previous session start' }
-];
-
-const COMMON_FIELD_ITEMS = [
-  { label: 'project', value: 'project', description: 'Project key or name' },
-  { label: 'status', value: 'status', description: 'Issue status' },
-  { label: 'assignee', value: 'assignee', description: 'Assigned user' },
-  { label: 'reporter', value: 'reporter', description: 'Issue reporter' },
-  { label: 'priority', value: 'priority', description: 'Issue priority' },
-  { label: 'issuetype', value: 'issuetype', description: 'Type of issue' },
-  { label: 'created', value: 'created', description: 'Creation date' },
-  { label: 'updated', value: 'updated', description: 'Last update date' },
-  { label: 'due', value: 'due', description: 'Due date' },
-  { label: 'resolved', value: 'resolved', description: 'Resolution date' },
-  { label: 'resolution', value: 'resolution', description: 'Resolution type' },
-  { label: 'labels', value: 'labels', description: 'Issue labels' },
-  { label: 'summary', value: 'summary', description: 'Issue title' },
-  { label: 'description', value: 'description', description: 'Issue description' },
-  { label: 'text', value: 'text', description: 'Full text search' },
-  { label: 'component', value: 'component', description: 'Project component' },
-  { label: 'fixVersion', value: 'fixVersion', description: 'Fix version' },
-  { label: 'affectedVersion', value: 'affectedVersion', description: 'Affected version' },
-  { label: 'sprint', value: 'sprint', description: 'Sprint name' },
-  { label: 'watcher', value: 'watcher', description: 'Issue watchers' },
-  { label: 'voter', value: 'voter', description: 'Issue voters' },
-  { label: 'comment', value: 'comment', description: 'Comment text' },
-  { label: 'key', value: 'key', description: 'Issue key (e.g., PROJ-123)' },
-  { label: 'id', value: 'id', description: 'Issue ID number' },
-  { label: 'parent', value: 'parent', description: 'Parent issue key' }
-];
-
-const COMMON_FIELD_VALUE_SET = new Set(COMMON_FIELD_ITEMS.map((item) => item.value.toLowerCase()));
-
 const TIME_ITEMS = [
+  { label: '-1h', value: '-1h', description: '1 hour ago' },
+  { label: '-4h', value: '-4h', description: '4 hours ago' },
+  { label: '-8h', value: '-8h', description: '8 hours ago' },
+  { label: '-12h', value: '-12h', description: '12 hours ago' },
+  { label: '-24h', value: '-24h', description: '24 hours ago' },
   { label: '-1d', value: '-1d', description: '1 day ago' },
   { label: '-2d', value: '-2d', description: '2 days ago' },
   { label: '-3d', value: '-3d', description: '3 days ago' },
@@ -881,27 +882,25 @@ const TIME_ITEMS = [
   { label: '-3m', value: '-3m', description: '3 months ago' },
   { label: '-6m', value: '-6m', description: '6 months ago' },
   { label: '-1y', value: '-1y', description: '1 year ago' },
+  { label: '+1h', value: '+1h', description: '1 hour from now' },
+  { label: '+4h', value: '+4h', description: '4 hours from now' },
+  { label: '+12h', value: '+12h', description: '12 hours from now' },
   { label: '+1d', value: '+1d', description: '1 day from now' },
   { label: '+7d', value: '+7d', description: '1 week from now' },
   { label: '+1w', value: '+1w', description: '1 week from now' },
   { label: '+1m', value: '+1m', description: '1 month from now' },
-  { label: '"2024-01-01"', value: '"2024-01-01"', description: 'Specific date' },
-  { label: '"2024-12-31"', value: '"2024-12-31"', description: 'Specific date' }
-];
-
-const KEYWORD_ITEMS = [
-  { label: 'EMPTY', value: 'EMPTY', description: 'No value' },
-  { label: 'NULL', value: 'NULL', description: 'Null value' },
-  { label: 'ORDER BY', value: ' ORDER BY ', description: 'Sort results' },
-  { label: 'ASC', value: ' ASC', description: 'Ascending order' },
-  { label: 'DESC', value: ' DESC', description: 'Descending order' },
-  { label: 'FROM', value: ' FROM ', description: 'History: from value' },
-  { label: 'TO', value: ' TO ', description: 'History: to value' },
-  { label: 'BY', value: ' BY ', description: 'History: by user' },
-  { label: 'AFTER', value: ' AFTER ', description: 'After date' },
-  { label: 'BEFORE', value: ' BEFORE ', description: 'Before date' },
-  { label: 'ON', value: ' ON ', description: 'On date' },
-  { label: 'DURING', value: ' DURING ', description: 'During period' }
+  { label: '+1y', value: '+1y', description: '1 year from now' },
+  { label: 'startOfDay()', value: 'startOfDay()', description: 'Start of today' },
+  { label: 'endOfDay()', value: 'endOfDay()', description: 'End of today' },
+  { label: 'startOfWeek()', value: 'startOfWeek()', description: 'Start of this week' },
+  { label: 'endOfWeek()', value: 'endOfWeek()', description: 'End of this week' },
+  { label: 'startOfMonth()', value: 'startOfMonth()', description: 'Start of this month' },
+  { label: 'endOfMonth()', value: 'endOfMonth()', description: 'End of this month' },
+  { label: 'startOfYear()', value: 'startOfYear()', description: 'Start of this year' },
+  { label: 'endOfYear()', value: 'endOfYear()', description: 'End of this year' },
+  { label: '"2026-01-01"', value: '"2026-01-01"', description: 'Specific date' },
+  { label: '"2026-12-31"', value: '"2026-12-31"', description: 'Specific date' },
+  { label: '"2026-01-01 13:00"', value: '"2026-01-01 13:00"', description: 'Specific date/time' }
 ];
 
 // ============================================================================
@@ -982,15 +981,243 @@ interface BuilderController {
   destroy: () => void;
 }
 
+interface SwitcherHookController {
+  disconnect: () => void;
+}
+
+interface FieldCatalog {
+  fields: FriendlyField[];
+  fieldsById: Map<string, FriendlyField>;
+  categoryEntries: Array<[FriendlyFieldCategory, FriendlyField[]]>;
+  sortFields: Array<{ value: string; label: string }>;
+  reservedWords: Set<string>;
+}
+
+const buildOperatorItems = (): Array<{ label: string; value: string; description?: string }> => {
+  return JQL_OPERATOR_DEFS.map((def) => {
+    const label = def.valuePreset ? `${def.operator} ${def.valuePreset}` : def.operator;
+    let value = ` ${def.operator} `;
+    if (def.valueMode === 'list') {
+      value = ` ${def.operator} ()`;
+    } else if (def.valueMode === 'none' && def.valuePreset) {
+      value = ` ${def.operator} ${def.valuePreset}`;
+    }
+    return {
+      label,
+      value,
+      description: def.description ?? def.label
+    };
+  });
+};
+
+const buildKeywordItems = (data: JqlAutocompleteData): Array<{ label: string; value: string; description?: string }> => {
+  const keywords = new Set<string>();
+  for (const word of JQL_KEYWORDS) keywords.add(word);
+  for (const word of data.reservedWords ?? []) keywords.add(word);
+
+  const priority = [
+    'AND',
+    'OR',
+    'NOT',
+    'ORDER BY',
+    'ASC',
+    'DESC',
+    'EMPTY',
+    'NULL',
+    'FROM',
+    'TO',
+    'BY',
+    'AFTER',
+    'BEFORE',
+    'ON',
+    'DURING'
+  ];
+
+  const ordered = [
+    ...priority.filter(word => keywords.has(word)),
+    ...Array.from(keywords).filter(word => !priority.includes(word)).sort((a, b) => a.localeCompare(b))
+  ];
+
+  const spacedKeywords = new Set(['AND', 'OR', 'IN', 'IS', 'WAS', 'CHANGED', 'FROM', 'TO', 'BY', 'AFTER', 'BEFORE', 'ON', 'DURING']);
+
+  const items = ordered.map((keyword) => {
+    let value = keyword;
+    if (keyword === 'NOT') value = 'NOT ';
+    else if (keyword === 'ORDER BY') value = ' ORDER BY ';
+    else if (keyword === 'ASC' || keyword === 'DESC') value = ` ${keyword}`;
+    else if (spacedKeywords.has(keyword)) value = ` ${keyword} `;
+    return {
+      label: keyword,
+      value,
+      description: `Keyword: ${keyword}`
+    };
+  });
+
+  items.push({ label: '( )', value: '()', description: 'Group conditions' });
+  return items;
+};
+
+const buildFieldCatalog = (data: JqlAutocompleteData): FieldCatalog => {
+  const reservedWords = buildReservedWordSet(data);
+
+  const normalizedFieldLookup = new Map<string, JqlFieldSuggestion>();
+  for (const entry of data.fields) {
+    const displayName = stripCfSuffix(entry.displayName || entry.value || '');
+    const value = String(entry.value ?? '');
+    const normalizedName = normalizeFieldKey(displayName);
+    const normalizedValue = normalizeFieldKey(value);
+    if (normalizedName && !isCfToken(displayName)) normalizedFieldLookup.set(normalizedName, entry);
+    if (normalizedValue && !isCfToken(value)) normalizedFieldLookup.set(normalizedValue, entry);
+  }
+
+  const baseFields: FriendlyField[] = FRIENDLY_FIELDS.map((field) => {
+    const match =
+      normalizedFieldLookup.get(normalizeFieldKey(field.jqlField)) ??
+      normalizedFieldLookup.get(normalizeFieldKey(field.label));
+    const operatorKeys = match ? getOperatorKeysFromTokens(match.operators ?? []) : undefined;
+    const valueType = match ? inferValueType(match.types ?? [], field.valueType) : field.valueType;
+    const defaultOperator = operatorKeys?.length
+      ? pickDefaultOperator(valueType, operatorKeys)
+      : field.defaultOperator;
+    return {
+      ...field,
+      jqlField: formatFieldToken(field.jqlField, reservedWords),
+      valueType,
+      operatorKeys,
+      defaultOperator,
+      rawName: field.jqlField
+    };
+  });
+
+  const normalizedBase = new Set<string>();
+  for (const field of baseFields) {
+    normalizedBase.add(normalizeFieldKey(field.jqlField));
+    normalizedBase.add(normalizeFieldKey(field.label));
+  }
+
+  const dynamicFields: FriendlyField[] = [];
+  for (const entry of data.fields) {
+    const rawLabel = stripCfSuffix(entry.displayName || entry.value || '');
+    if (!rawLabel || isCfToken(rawLabel)) continue;
+    const normalized = normalizeFieldKey(rawLabel);
+    if (normalizedBase.has(normalized)) continue;
+    normalizedBase.add(normalized);
+
+    const operatorKeys = getOperatorKeysFromTokens(entry.operators ?? []);
+    const valueType = inferValueType(entry.types ?? [], 'text');
+    const fieldId = entry.cfid ? `cfid:${entry.cfid}` : `field:${rawLabel}`;
+
+    // Determine custom field subcategory based on value type
+    let category: FriendlyFieldCategory;
+    if (!entry.cfid) {
+      category = 'other';
+    } else {
+      switch (valueType) {
+        case 'user':
+          category = 'custom-people';
+          break;
+        case 'date':
+          category = 'custom-dates';
+          break;
+        case 'number':
+          category = 'custom-numbers';
+          break;
+        case 'list':
+        case 'status':
+        case 'priority':
+        case 'type':
+          category = 'custom-select';
+          break;
+        case 'text':
+          category = 'custom-text';
+          break;
+        default:
+          category = 'custom-other';
+      }
+    }
+
+    // Choose emoji based on subcategory
+    const emojiByCategory: Record<string, string> = {
+      'custom-people': '👥',
+      'custom-dates': '📆',
+      'custom-numbers': '🔢',
+      'custom-select': '☑️',
+      'custom-text': '📄',
+      'custom-other': '🧩',
+      'other': '🔧'
+    };
+
+    dynamicFields.push({
+      id: fieldId,
+      label: rawLabel,
+      emoji: emojiByCategory[category] ?? '🧩',
+      description: entry.cfid ? 'Custom field' : 'Jira field',
+      jqlField: formatFieldToken(rawLabel, reservedWords),
+      category,
+      defaultOperator: pickDefaultOperator(valueType, operatorKeys),
+      valueType,
+      operatorKeys,
+      isCustom: Boolean(entry.cfid),
+      rawName: rawLabel
+    });
+  }
+
+  const allFields = baseFields.concat(dynamicFields);
+  const grouped: Record<FriendlyFieldCategory, FriendlyField[]> = {
+    who: [],
+    what: [],
+    status: [],
+    where: [],
+    when: [],
+    'custom-people': [],
+    'custom-dates': [],
+    'custom-numbers': [],
+    'custom-select': [],
+    'custom-text': [],
+    'custom-other': [],
+    other: []
+  };
+
+  for (const field of allFields) {
+    grouped[field.category].push(field);
+  }
+
+  for (const category of FIELD_CATEGORY_ORDER) {
+    grouped[category].sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  const categoryEntries: Array<[FriendlyFieldCategory, FriendlyField[]]> = FIELD_CATEGORY_ORDER.map((category): [FriendlyFieldCategory, FriendlyField[]] => [
+    category,
+    grouped[category]
+  ]).filter(([, items]) => items.length > 0);
+
+  const sortFields: Array<{ value: string; label: string }> = [...SORT_FIELDS];
+  const sortKeySet = new Set(sortFields.map(item => normalizeFieldKey(item.value)));
+  for (const field of allFields) {
+    const normalized = normalizeFieldKey(field.jqlField);
+    if (sortKeySet.has(normalized)) continue;
+    sortKeySet.add(normalized);
+    sortFields.push({ value: field.jqlField, label: field.label });
+  }
+
+  return {
+    fields: allFields,
+    fieldsById: new Map(allFields.map(field => [field.id, field])),
+    categoryEntries,
+    sortFields,
+    reservedWords
+  };
+};
+
 // ============================================================================
-// V2 UI STATE - Simplified for ADHD-friendly experience
+// V2 UI STATE - Simplified for a streamlined experience
 // ============================================================================
 
 type ViewMode = 'quick' | 'visual' | 'advanced';
 
 interface FilterCard {
   id: string;
-  fieldId: string; // from FRIENDLY_FIELDS
+  fieldId: string; // from field catalog
   operatorKey: string;
   value: string;
   values: string[]; // for multi-select
@@ -1082,6 +1309,104 @@ const decodeHtml = (() => {
 
 const normalizeSearch = (value: string): string => value.toLowerCase().replace(/\s+/g, ' ').trim();
 
+/**
+ * Smart search matching - supports multiple strategies transparently:
+ * 1. Exact substring match (highest priority)
+ * 2. Word-start matching (e.g., "as" matches "Assigned to")
+ * 3. Acronym matching (e.g., "at" matches "Assigned To")
+ * 4. Fuzzy matching with typo tolerance
+ * 5. Regex matching (if query looks like a regex pattern)
+ *
+ * Returns a score (0 = no match, higher = better match) for sorting results
+ */
+const smartSearch = (query: string, haystack: string): number => {
+  if (!query) return 1; // Empty query matches everything
+
+  const q = normalizeSearch(query);
+  const h = normalizeSearch(haystack);
+
+  if (!q) return 1;
+
+  // 1. Exact match - highest score
+  if (h === q) return 100;
+
+  // 2. Starts with query - very high score
+  if (h.startsWith(q)) return 90;
+
+  // 3. Contains exact substring - high score
+  if (h.includes(q)) return 80;
+
+  // 4. Word-start matching (each query char matches start of a word)
+  const words = h.split(/\s+/);
+  const wordStarts = words.map(w => w[0] || '').join('');
+  if (wordStarts.includes(q)) return 70;
+
+  // 5. Acronym matching - first letter of each word
+  const acronym = words.map(w => w[0] || '').join('');
+  if (acronym === q || acronym.startsWith(q)) return 65;
+
+  // 6. Try regex if it looks like a pattern (contains regex metacharacters)
+  if (/[.*+?^${}()|[\]\\]/.test(query)) {
+    try {
+      const regex = new RegExp(query, 'i');
+      if (regex.test(haystack)) return 60;
+    } catch {
+      // Invalid regex, continue with other methods
+    }
+  }
+
+  // 7. Fuzzy matching - all query chars appear in order (with gaps allowed)
+  let qIdx = 0;
+  let consecutiveBonus = 0;
+  let lastMatchIdx = -2;
+  for (let i = 0; i < h.length && qIdx < q.length; i++) {
+    if (h[i] === q[qIdx]) {
+      if (i === lastMatchIdx + 1) consecutiveBonus += 5; // Reward consecutive matches
+      lastMatchIdx = i;
+      qIdx++;
+    }
+  }
+  if (qIdx === q.length) {
+    // All chars matched - score based on how "tight" the match is
+    const baseScore = 40;
+    const lengthPenalty = Math.max(0, (h.length - q.length) / h.length * 20);
+    return Math.max(1, baseScore - lengthPenalty + consecutiveBonus);
+  }
+
+  // 8. Levenshtein-inspired: allow 1-2 typos for short queries
+  if (q.length >= 3 && q.length <= 10) {
+    const maxTypos = q.length <= 4 ? 1 : 2;
+    // Simple check: count matching characters
+    let matches = 0;
+    const hChars = new Set(h.split(''));
+    for (const c of q) {
+      if (hChars.has(c)) matches++;
+    }
+    const misses = q.length - matches;
+    if (misses <= maxTypos && matches >= q.length * 0.6) {
+      return 20 - misses * 5;
+    }
+  }
+
+  return 0; // No match
+};
+
+/**
+ * Hijack keyboard events to prevent Jira shortcuts from firing.
+ * Call this on any element that contains inputs/textareas outside the main panel.
+ */
+const hijackKeyboardEvents = (element: HTMLElement): void => {
+  const stopIfEditable = (e: KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      e.stopPropagation();
+    }
+  };
+  element.addEventListener('keydown', stopIfEditable, true);
+  element.addEventListener('keyup', stopIfEditable, true);
+  element.addEventListener('keypress', stopIfEditable, true);
+};
+
 const createElement = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
   options: {
@@ -1110,21 +1435,79 @@ const createButton = (label: string, className: string, attrs: Record<string, st
   return createElement('button', { className, text: label, attrs: { type: 'button', ...attrs } }) as HTMLButtonElement;
 };
 
+const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
 const findAdvancedSearchInput = (): HTMLTextAreaElement | null => {
   return document.querySelector<HTMLTextAreaElement>(
-    'textarea#advanced-search, textarea[name="jql"], textarea[aria-label="Advanced Query"]'
+    'textarea#advanced-search, textarea[name="jql"], textarea[aria-label="Advanced Query"], input[aria-label="Advanced Query"]'
   );
+};
+
+const findAdvancedToggle = (): HTMLElement | null => {
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>('a.switcher-item, button.switcher-item, a, button'));
+  return candidates.find((el) => el.textContent?.trim().toLowerCase() === 'advanced') ?? null;
 };
 
 const findSearchButton = (): HTMLButtonElement | null => {
   return document.querySelector<HTMLButtonElement>('button.search-button, button[title="Search for issues"]');
 };
 
-const attemptSwitchToAdvanced = (): void => {
-  const link = Array.from(document.querySelectorAll<HTMLAnchorElement>('a')).find(
-    (el) => el.textContent?.trim().toLowerCase() === 'advanced'
-  );
-  link?.click();
+const ensureAdvancedSearchMode = async (): Promise<boolean> => {
+  if (findAdvancedSearchInput()) return true;
+  const toggle = findAdvancedToggle();
+  if (!toggle) return false;
+  toggle.click();
+  await delay(350);
+  return Boolean(findAdvancedSearchInput());
+};
+
+const findBasicToggle = (): HTMLElement | null => {
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>('a.switcher-item, button.switcher-item, a, button'));
+  return candidates.find((el) => el.textContent?.trim().toLowerCase() === 'basic') ?? null;
+};
+
+const getBuilderController = (): BuilderController | undefined =>
+  (window as any)[BUILDER_GLOBAL_KEY] as BuilderController | undefined;
+
+const setBuilderController = (controller?: BuilderController): void => {
+  (window as any)[BUILDER_GLOBAL_KEY] = controller;
+};
+
+const ensureBuilderToggleButton = (
+  store: Store,
+  log: (message: string, level?: 'debug' | 'info' | 'warn' | 'error') => void
+): void => {
+  const existing = document.querySelector<HTMLButtonElement>('button.cv-jql-builder-toggle');
+  if (existing) return;
+
+  const basic = findBasicToggle();
+  const advanced = findAdvancedToggle();
+  const anchor = basic ?? advanced;
+  if (!anchor || !anchor.parentElement) return;
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'cv-jql-builder-toggle';
+  button.textContent = 'Builder';
+  button.style.cssText = [
+    'margin-left: 8px',
+    'padding: 4px 10px',
+    'border-radius: 999px',
+    'border: 1px solid #cbd5f5',
+    'background: #eef2ff',
+    'color: #3730a3',
+    'font-weight: 600',
+    'font-size: 12px',
+    'cursor: pointer'
+  ].join(';');
+
+  button.addEventListener('click', (e) => {
+    e.preventDefault();
+    void ensureAdvancedSearchMode();
+    void openJqlBuilderV2(store, log);
+  });
+
+  anchor.parentElement.insertBefore(button, anchor.nextSibling);
 };
 
 // ============================================================================
@@ -1224,11 +1607,11 @@ const buildOrderByFromState = (state: V2State): string => {
   return '';
 };
 
-const buildJqlFromV2State = (state: V2State): string => {
+const buildJqlFromV2State = (state: V2State, fieldsById: Map<string, FriendlyField>): string => {
   const clauses: string[] = [];
 
   for (const filter of state.filters) {
-    const field = FRIENDLY_FIELDS_BY_ID.get(filter.fieldId);
+    const field = fieldsById.get(filter.fieldId);
     if (!field) continue;
 
     const operator = resolveOperatorDef(filter.operatorKey);
@@ -1305,7 +1688,7 @@ const formatValueForJql = (value: string, valueType: FriendlyField['valueType'])
 };
 
 // ============================================================================
-// V2 UI CLASS - ADHD-Friendly Query Builder
+// V2 UI CLASS - Modern Query Builder
 // ============================================================================
 
 class JqlBuilderV2UI {
@@ -1313,6 +1696,7 @@ class JqlBuilderV2UI {
   private store: Store;
   private log: (message: string, level?: 'debug' | 'info' | 'warn' | 'error') => void;
   private data: JqlAutocompleteData;
+  private fieldCatalog: FieldCatalog;
   private destroyed = false;
 
   private state: V2State = {
@@ -1348,6 +1732,7 @@ class JqlBuilderV2UI {
     this.store = store;
     this.log = log;
     this.data = data;
+    this.fieldCatalog = buildFieldCatalog(data);
     this.loadStoredPreferences();
   }
 
@@ -1420,6 +1805,8 @@ class JqlBuilderV2UI {
         e.stopPropagation();
       }
     }, true);
+
+    void ensureAdvancedSearchMode();
   }
 
   destroy(): void {
@@ -1441,7 +1828,7 @@ class JqlBuilderV2UI {
   }
 
   // ==========================================================================
-  // STYLES - Modern, ADHD-friendly with clear visual hierarchy
+  // STYLES - Modern design with clear visual hierarchy
   // ==========================================================================
 
   private renderStyles(): HTMLStyleElement {
@@ -1474,6 +1861,11 @@ class JqlBuilderV2UI {
 
       * {
         box-sizing: border-box;
+      }
+
+      .cv-text-muted {
+        color: var(--cv-text-muted);
+        font-size: 12px;
       }
 
       .cv-panel {
@@ -1640,90 +2032,155 @@ class JqlBuilderV2UI {
         color: var(--cv-text-light);
       }
 
-      /* Filter Cards */
+      /* Filter Cards - Modern Stacked Layout */
       .cv-filters {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 16px;
       }
 
       .cv-filter-card {
-        display: grid;
-        grid-template-columns: auto 1fr auto auto;
-        gap: 10px;
-        align-items: center;
-        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
         background: var(--cv-bg-secondary);
         border: 1px solid var(--cv-border);
-        border-radius: var(--cv-radius-sm);
+        border-radius: var(--cv-radius-md);
+        overflow: hidden;
         transition: all var(--cv-transition);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
       }
 
       .cv-filter-card:hover {
         border-color: var(--cv-primary-light);
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
       }
 
       .cv-filter-card:focus-within {
         border-color: var(--cv-primary);
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+      }
+
+      /* Filter Header Row - Field + Operator + Actions */
+      .cv-filter-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        background: linear-gradient(to right, rgba(99, 102, 241, 0.03), transparent);
+        border-bottom: 1px solid var(--cv-border);
       }
 
       .cv-filter-field {
         display: flex;
         align-items: center;
-        gap: 8px;
-        min-width: 140px;
+        gap: 10px;
+        min-width: 0;
+        flex: 0 0 auto;
       }
 
       .cv-filter-field-emoji {
-        font-size: 18px;
+        font-size: 20px;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--cv-bg);
+        border-radius: var(--cv-radius-sm);
+        flex-shrink: 0;
       }
 
-      .cv-filter-field-select {
-        border: none;
-        background: transparent;
+      .cv-filter-field-btn {
+        border: 1px solid var(--cv-border);
+        background: var(--cv-bg);
         font-size: 14px;
-        font-weight: 500;
+        font-weight: 600;
         color: var(--cv-text);
         cursor: pointer;
-        padding: 4px;
+        padding: 8px 12px;
+        border-radius: var(--cv-radius-sm);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        max-width: 200px;
+        transition: all var(--cv-transition);
       }
 
-      .cv-filter-field-select:focus {
-        outline: none;
+      .cv-filter-field-btn:hover {
+        border-color: var(--cv-primary);
+        background: var(--cv-bg-secondary);
+      }
+
+      .cv-filter-field-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .cv-filter-field-caret {
+        font-size: 10px;
+        color: var(--cv-text-muted);
+        transition: transform var(--cv-transition);
+      }
+
+      .cv-filter-field-btn:hover .cv-filter-field-caret {
+        transform: translateY(1px);
       }
 
       .cv-filter-operator {
         display: flex;
         align-items: center;
+        flex-shrink: 0;
       }
 
       .cv-filter-operator select {
         border: 1px solid var(--cv-border);
         background: var(--cv-bg);
-        padding: 6px 10px;
+        padding: 8px 12px;
         border-radius: var(--cv-radius-sm);
         font-size: 13px;
-        color: var(--cv-text);
+        font-weight: 500;
+        color: var(--cv-primary);
         cursor: pointer;
+        transition: all var(--cv-transition);
+        min-width: 100px;
       }
 
+      .cv-filter-operator select:hover {
+        border-color: var(--cv-primary-light);
+      }
+
+      .cv-filter-operator select:focus {
+        outline: none;
+        border-color: var(--cv-primary);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      }
+
+      /* Filter Value Area */
       .cv-filter-value {
         flex: 1;
         display: flex;
-        align-items: center;
-        gap: 8px;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px 16px;
+        min-width: 0;
+      }
+
+      .cv-filter-value > div {
+        width: 100%;
       }
 
       .cv-filter-value input,
       .cv-filter-value select {
-        flex: 1;
+        width: 100%;
         border: 1px solid var(--cv-border);
         background: var(--cv-bg);
-        padding: 8px 12px;
+        padding: 10px 14px;
         border-radius: var(--cv-radius-sm);
-        font-size: 13px;
+        font-size: 14px;
         color: var(--cv-text);
+        transition: all var(--cv-transition);
       }
 
       .cv-filter-value input:focus,
@@ -1737,9 +2194,12 @@ class JqlBuilderV2UI {
         color: var(--cv-text-light);
       }
 
+      /* Filter Actions - Positioned in header */
       .cv-filter-actions {
         display: flex;
         gap: 4px;
+        margin-left: auto;
+        flex-shrink: 0;
       }
 
       .cv-icon-btn {
@@ -1748,22 +2208,25 @@ class JqlBuilderV2UI {
         display: flex;
         align-items: center;
         justify-content: center;
-        border: none;
+        border: 1px solid transparent;
         background: transparent;
-        color: var(--cv-text-muted);
+        color: var(--cv-text-light);
         border-radius: var(--cv-radius-sm);
         cursor: pointer;
         transition: all var(--cv-transition);
-        font-size: 16px;
+        font-size: 14px;
+        font-weight: 600;
       }
 
       .cv-icon-btn:hover {
         background: var(--cv-bg);
+        border-color: var(--cv-border);
         color: var(--cv-text);
       }
 
       .cv-icon-btn.danger:hover {
-        background: rgba(239, 68, 68, 0.1);
+        background: rgba(239, 68, 68, 0.08);
+        border-color: rgba(239, 68, 68, 0.3);
         color: var(--cv-danger);
       }
 
@@ -1772,22 +2235,27 @@ class JqlBuilderV2UI {
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
-        padding: 12px;
+        gap: 10px;
+        padding: 16px;
         border: 2px dashed var(--cv-border);
-        background: transparent;
-        border-radius: var(--cv-radius-sm);
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.02), rgba(99, 102, 241, 0.04));
+        border-radius: var(--cv-radius-md);
         color: var(--cv-text-muted);
         font-size: 14px;
-        font-weight: 500;
+        font-weight: 600;
         cursor: pointer;
         transition: all var(--cv-transition);
       }
 
       .cv-add-filter:hover {
-        border-color: var(--cv-primary-light);
+        border-color: var(--cv-primary);
         color: var(--cv-primary);
-        background: rgba(99, 102, 241, 0.05);
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.04), rgba(99, 102, 241, 0.08));
+        transform: translateY(-1px);
+      }
+
+      .cv-add-filter:active {
+        transform: translateY(0);
       }
 
       /* Date Presets */
@@ -1960,6 +2428,7 @@ class JqlBuilderV2UI {
         cursor: grab;
         transition: all 0.2s ease;
         border: 2px solid transparent;
+        position: relative;
       }
 
       .cv-preset-picker-row:hover {
@@ -1979,8 +2448,32 @@ class JqlBuilderV2UI {
       }
 
       .cv-preset-picker-row.drag-over {
-        border-top-color: var(--cv-primary);
         background: rgba(99, 102, 241, 0.15);
+      }
+
+      .cv-preset-picker-row.drag-over::before {
+        content: '';
+        position: absolute;
+        top: -2px;
+        left: 10px;
+        right: 10px;
+        height: 2px;
+        background: var(--cv-primary);
+      }
+
+      .cv-preset-picker-row.drag-over-invalid {
+        background: rgba(239, 68, 68, 0.12);
+        border-color: rgba(239, 68, 68, 0.35);
+      }
+
+      .cv-preset-picker-row.drag-over-invalid::before {
+        content: '';
+        position: absolute;
+        top: -2px;
+        left: 10px;
+        right: 10px;
+        height: 2px;
+        background: var(--cv-danger);
       }
 
       .cv-preset-picker-row .drag-handle {
@@ -2187,65 +2680,168 @@ class JqlBuilderV2UI {
         background: var(--cv-bg-secondary);
       }
 
-      /* Chips for multi-select */
+      /* Chips for multi-select - Modern pill style */
       .cv-chips {
         display: flex;
         flex-wrap: wrap;
-        gap: 6px;
+        gap: 8px;
+        padding: 4px 0;
       }
 
       .cv-chip {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        padding: 4px 10px;
-        background: var(--cv-primary);
+        gap: 6px;
+        padding: 6px 12px;
+        background: linear-gradient(135deg, var(--cv-primary), #818cf8);
         color: white;
         border-radius: 999px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
-      }
-
-      .cv-chip-remove {
-        width: 16px;
-        height: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(255, 255, 255, 0.2);
-        border: none;
-        border-radius: 50%;
-        color: white;
-        font-size: 10px;
-        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
         transition: all var(--cv-transition);
       }
 
-      .cv-chip-remove:hover {
-        background: rgba(255, 255, 255, 0.4);
+      .cv-chip:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(99, 102, 241, 0.25);
       }
 
-      /* Value suggestions */
+      .cv-chip-remove {
+        width: 18px;
+        height: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.25);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all var(--cv-transition);
+        margin-left: 2px;
+      }
+
+      .cv-chip-remove:hover {
+        background: rgba(255, 255, 255, 0.5);
+        transform: scale(1.1);
+      }
+
+      /* Value suggestions - Quick add buttons */
       .cv-suggestions {
         display: flex;
         flex-wrap: wrap;
-        gap: 4px;
-        margin-top: 6px;
+        gap: 8px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--cv-border);
+      }
+
+      .cv-suggestions::before {
+        content: 'Quick add:';
+        font-size: 11px;
+        color: var(--cv-text-light);
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        margin-right: 4px;
       }
 
       .cv-suggestion {
-        padding: 3px 8px;
+        padding: 6px 12px;
         border: 1px solid var(--cv-border);
         background: var(--cv-bg);
         border-radius: 999px;
-        font-size: 11px;
+        font-size: 12px;
+        font-weight: 500;
         color: var(--cv-text-muted);
         cursor: pointer;
         transition: all var(--cv-transition);
       }
 
       .cv-suggestion:hover {
-        border-color: var(--cv-primary-light);
+        border-color: var(--cv-primary);
+        color: var(--cv-primary);
+        background: rgba(99, 102, 241, 0.05);
+        transform: translateY(-1px);
+      }
+
+      .cv-suggestion:active {
+        transform: translateY(0);
+      }
+
+      /* Field picker */
+      .cv-field-picker-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.35);
+        z-index: 2147483647;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 120px 16px 24px;
+      }
+
+      .cv-field-picker {
+        width: min(640px, calc(100vw - 32px));
+        max-height: calc(100vh - 160px);
+        background: var(--cv-bg);
+        border: 1px solid var(--cv-border);
+        border-radius: var(--cv-radius);
+        box-shadow: var(--cv-shadow-lg);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .cv-field-picker-search {
+        padding: 12px 14px;
+        border: none;
+        border-bottom: 1px solid var(--cv-border);
+        font-size: 14px;
+        outline: none;
+      }
+
+      .cv-field-picker-list {
+        padding: 14px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .cv-field-picker-group-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--cv-text-muted);
+        font-weight: 600;
+      }
+
+      .cv-field-picker-items {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .cv-field-picker-item {
+        border: 1px solid var(--cv-border);
+        background: var(--cv-bg-secondary);
+        border-radius: var(--cv-radius-sm);
+        padding: 6px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        max-width: 260px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .cv-field-picker-item:hover {
+        border-color: var(--cv-primary);
+        background: rgba(99, 102, 241, 0.1);
         color: var(--cv-primary);
       }
 
@@ -2320,6 +2916,8 @@ class JqlBuilderV2UI {
 
       .cv-ref-content {
         padding: 12px;
+        max-height: 260px;
+        overflow-y: auto;
       }
 
       .cv-ref-items {
@@ -2343,6 +2941,59 @@ class JqlBuilderV2UI {
         border-color: var(--cv-primary);
         background: rgba(99, 102, 241, 0.1);
         color: var(--cv-primary);
+      }
+
+      /* Advanced mode enhancements */
+      .cv-advanced-ref {
+        background: var(--cv-bg-secondary);
+        border: 1px solid var(--cv-border);
+        border-radius: var(--cv-radius-md);
+        overflow: hidden;
+      }
+
+      .cv-advanced-search-wrap {
+        padding: 12px;
+        border-bottom: 1px solid var(--cv-border);
+        background: var(--cv-bg);
+      }
+
+      .cv-advanced-search {
+        width: 100%;
+        padding: 10px 14px;
+        border: 1px solid var(--cv-border);
+        border-radius: var(--cv-radius-sm);
+        font-size: 14px;
+        background: var(--cv-bg-secondary);
+        color: var(--cv-text);
+        transition: all var(--cv-transition);
+      }
+
+      .cv-advanced-search:focus {
+        outline: none;
+        border-color: var(--cv-primary);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        background: var(--cv-bg);
+      }
+
+      .cv-advanced-search::placeholder {
+        color: var(--cv-text-light);
+      }
+
+      .cv-ref-category {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--cv-border);
+      }
+
+      .cv-ref-category:last-child {
+        border-bottom: none;
+      }
+
+      .cv-ref-category-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--cv-text-muted);
+        margin-bottom: 8px;
+        padding: 0 4px;
       }
 
       /* Preset multi-select indicator */
@@ -2376,6 +3027,26 @@ class JqlBuilderV2UI {
       }
 
       /* Responsive */
+      @media (max-width: 768px) {
+        .cv-filter-header {
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .cv-filter-field {
+          flex: 1 1 auto;
+          min-width: 140px;
+        }
+
+        .cv-filter-operator {
+          flex: 0 0 auto;
+        }
+
+        .cv-filter-actions {
+          flex: 0 0 auto;
+        }
+      }
+
       @media (max-width: 640px) {
         .cv-panel {
           top: 0;
@@ -2385,17 +3056,62 @@ class JqlBuilderV2UI {
           border-radius: 0;
         }
 
-        .cv-filter-card {
-          grid-template-columns: 1fr;
-          gap: 8px;
+        .cv-filter-header {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 12px;
+          padding: 12px 14px;
+        }
+
+        .cv-filter-header-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
         }
 
         .cv-filter-field {
+          flex: 1;
           min-width: unset;
+        }
+
+        .cv-filter-field-btn {
+          width: 100%;
+          max-width: none;
+          justify-content: space-between;
+        }
+
+        .cv-filter-operator {
+          flex: 0 0 auto;
+        }
+
+        .cv-filter-operator select {
+          min-width: 90px;
+        }
+
+        .cv-filter-actions {
+          margin-left: 0;
+        }
+
+        .cv-filter-value {
+          padding: 12px 14px;
         }
 
         .cv-presets-grid {
           grid-template-columns: 1fr 1fr;
+        }
+
+        .cv-suggestions {
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .cv-suggestions::before {
+          margin-bottom: 4px;
+        }
+
+        .cv-chip {
+          font-size: 12px;
+          padding: 5px 10px;
         }
       }
     `;
@@ -2427,7 +3143,15 @@ class JqlBuilderV2UI {
     const actions = createElement('div', { className: 'cv-header-actions' });
     const closeBtn = createButton('x', 'cv-icon-btn');
     closeBtn.title = 'Close';
-    closeBtn.addEventListener('click', () => this.destroy());
+    closeBtn.addEventListener('click', () => {
+      const controller = getBuilderController();
+      if (controller) {
+        controller.destroy();
+        setBuilderController(undefined);
+      } else {
+        this.destroy();
+      }
+    });
     actions.appendChild(closeBtn);
 
     header.appendChild(title);
@@ -3052,43 +3776,42 @@ class JqlBuilderV2UI {
 
   private renderFilterCard(filter: FilterCard, index: number): HTMLDivElement {
     const card = createElement('div', { className: 'cv-filter-card' });
-    const field = FRIENDLY_FIELDS_BY_ID.get(filter.fieldId) ?? FRIENDLY_FIELDS[0];
+    const field = this.fieldCatalog.fieldsById.get(filter.fieldId) ?? this.fieldCatalog.fields[0] ?? FRIENDLY_FIELDS[0];
+
+    // Header row - contains field, operator, and actions
+    const headerWrap = createElement('div', { className: 'cv-filter-header' });
 
     // Field selector
     const fieldWrap = createElement('div', { className: 'cv-filter-field' });
     const emoji = createElement('span', { className: 'cv-filter-field-emoji', text: field.emoji });
-    const fieldSelect = createElement('select', { className: 'cv-filter-field-select' }) as HTMLSelectElement;
-
-    FRIENDLY_FIELDS_BY_CATEGORY_ENTRIES.forEach(([cat, fields]) => {
-      const optgroup = createElement('optgroup', {
-        attrs: { label: FRIENDLY_FIELD_CATEGORY_LABELS[cat] ?? cat }
-      }) as HTMLOptGroupElement;
-      fields.forEach((f) => {
-        const option = new Option(f.label, f.id);
-        option.selected = f.id === filter.fieldId;
-        optgroup.appendChild(option);
-      });
-      fieldSelect.appendChild(optgroup);
-    });
-
-    fieldSelect.addEventListener('change', () => {
-      filter.fieldId = fieldSelect.value;
-      const newField = FRIENDLY_FIELDS_BY_ID.get(filter.fieldId);
-      if (newField) {
-        filter.operatorKey = newField.defaultOperator;
-      }
-      this.rerender();
+    const fieldButton = createElement('button', {
+      className: 'cv-filter-field-btn',
+      attrs: { type: 'button' }
+    }) as HTMLButtonElement;
+    const fieldLabel = createElement('span', { className: 'cv-filter-field-label', text: field.label });
+    const fieldCaret = createElement('span', { className: 'cv-filter-field-caret', text: '▾' });
+    fieldButton.appendChild(fieldLabel);
+    fieldButton.appendChild(fieldCaret);
+    fieldButton.title = field.label;
+    fieldButton.addEventListener('click', () => {
+      this.showFieldPicker(filter);
     });
 
     fieldWrap.appendChild(emoji);
-    fieldWrap.appendChild(fieldSelect);
+    fieldWrap.appendChild(fieldButton);
 
     // Operator selector
     const opWrap = createElement('div', { className: 'cv-filter-operator' });
     const opSelect = createElement('select') as HTMLSelectElement;
 
-    const validOps = FRIENDLY_OPERATORS_BY_TYPE[field.valueType] ?? FRIENDLY_OPERATORS;
-    validOps.forEach((op) => {
+    const operatorKeys = this.getOperatorKeys(field);
+    if (!operatorKeys.includes(filter.operatorKey)) {
+      filter.operatorKey = operatorKeys.includes(field.defaultOperator)
+        ? field.defaultOperator
+        : operatorKeys[0] ?? field.defaultOperator;
+    }
+    const operatorOptions = this.getOperatorOptions(field);
+    operatorOptions.forEach((op) => {
       const option = new Option(op.label, op.key);
       option.selected = op.key === filter.operatorKey;
       opSelect.appendChild(option);
@@ -3096,32 +3819,24 @@ class JqlBuilderV2UI {
 
     opSelect.addEventListener('change', () => {
       filter.operatorKey = opSelect.value;
+      const operator = resolveOperatorDef(filter.operatorKey);
+      if (operator.valueMode !== 'list') {
+        filter.values = [];
+      }
+      if (operator.valueMode === 'none') {
+        filter.value = '';
+      }
+      if (filter.operatorKey === 'is' || filter.operatorKey === 'is-not') {
+        filter.value = 'EMPTY';
+      }
       this.updatePreview();
       this.rerender();
     });
     opWrap.appendChild(opSelect);
 
-    // Value input
-    const valueWrap = createElement('div', { className: 'cv-filter-value' });
-    const op = resolveOperatorDef(filter.operatorKey);
-
-    if (op.valueMode !== 'none') {
-      if (field.valueType === 'user') {
-        valueWrap.appendChild(this.renderUserValueInput(filter, field));
-      } else if (field.valueType === 'date') {
-        valueWrap.appendChild(this.renderDateValueInput(filter));
-      } else if (field.commonValues && field.commonValues.length > 0) {
-        valueWrap.appendChild(this.renderSelectValueInput(filter, field));
-      } else {
-        valueWrap.appendChild(this.renderTextValueInput(filter, field));
-      }
-    } else {
-      valueWrap.appendChild(createElement('span', { text: '(no value needed)', className: 'cv-text-muted' }));
-    }
-
     // Actions
     const actionsWrap = createElement('div', { className: 'cv-filter-actions' });
-    const removeBtn = createButton('x', 'cv-icon-btn danger');
+    const removeBtn = createButton('×', 'cv-icon-btn danger');
     removeBtn.title = 'Remove filter';
     removeBtn.addEventListener('click', () => {
       this.state.filters.splice(index, 1);
@@ -3129,12 +3844,180 @@ class JqlBuilderV2UI {
     });
     actionsWrap.appendChild(removeBtn);
 
-    card.appendChild(fieldWrap);
-    card.appendChild(opWrap);
+    // Add elements to header
+    headerWrap.appendChild(fieldWrap);
+    headerWrap.appendChild(opWrap);
+    headerWrap.appendChild(actionsWrap);
+
+    // Value input section
+    const valueWrap = createElement('div', { className: 'cv-filter-value' });
+    const op = resolveOperatorDef(filter.operatorKey);
+
+    if (op.valueMode === 'none') {
+      valueWrap.appendChild(createElement('span', { text: '(no value needed)', className: 'cv-text-muted' }));
+    } else if (op.valueMode === 'list') {
+      valueWrap.appendChild(this.renderListValueInput(filter, field));
+    } else if (filter.operatorKey === 'is' || filter.operatorKey === 'is-not') {
+      valueWrap.appendChild(this.renderEmptyNullValueInput(filter));
+    } else if (field.valueType === 'user') {
+      valueWrap.appendChild(this.renderUserValueInput(filter, field));
+    } else if (field.valueType === 'date') {
+      valueWrap.appendChild(this.renderDateValueInput(filter));
+    } else if (field.commonValues && field.commonValues.length > 0) {
+      valueWrap.appendChild(this.renderSelectValueInput(filter, field));
+    } else {
+      valueWrap.appendChild(this.renderTextValueInput(filter, field));
+    }
+
+    card.appendChild(headerWrap);
     card.appendChild(valueWrap);
-    card.appendChild(actionsWrap);
 
     return card;
+  }
+
+  private showFieldPicker(filter: FilterCard): void {
+    const existing = this.shadow.querySelector('.cv-field-picker-overlay');
+    if (existing) existing.remove();
+
+    const overlay = createElement('div', { className: 'cv-field-picker-overlay' });
+    const panel = createElement('div', { className: 'cv-field-picker' });
+
+    // Hijack keyboard events to prevent Jira shortcuts from firing
+    hijackKeyboardEvents(overlay);
+
+    const search = createElement('input', {
+      className: 'cv-field-picker-search',
+      attrs: { type: 'text', placeholder: 'Search fields... (supports fuzzy matching)' }
+    }) as HTMLInputElement;
+
+    const list = createElement('div', { className: 'cv-field-picker-list' });
+
+    const renderList = () => {
+      const query = search.value.trim();
+      list.innerHTML = '';
+
+      // Collect all fields with their match scores
+      const scoredFields: Array<{ field: FriendlyField; category: FriendlyFieldCategory; score: number }> = [];
+
+      this.fieldCatalog.categoryEntries.forEach(([category, fields]) => {
+        fields.forEach((item) => {
+          const haystack = `${item.label} ${item.jqlField} ${item.description || ''}`;
+          const score = smartSearch(query, haystack);
+          if (score > 0) {
+            scoredFields.push({ field: item, category, score });
+          }
+        });
+      });
+
+      if (scoredFields.length === 0) {
+        list.appendChild(createElement('div', { text: 'No fields match your search.', className: 'cv-text-muted' }));
+        return;
+      }
+
+      // Sort by score (descending), then alphabetically
+      scoredFields.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.field.label.localeCompare(b.field.label);
+      });
+
+      // If there's a query, show flat list sorted by relevance
+      // If no query, show grouped by category
+      if (query) {
+        const itemsWrap = createElement('div', { className: 'cv-field-picker-items' });
+        scoredFields.forEach(({ field: item }) => {
+          const btn = createButton(item.label, 'cv-field-picker-item');
+          btn.title = `${item.label} (${item.jqlField})`;
+          btn.addEventListener('click', () => {
+            filter.fieldId = item.id;
+            const operatorKeys = this.getOperatorKeys(item);
+            filter.operatorKey = operatorKeys.includes(item.defaultOperator)
+              ? item.defaultOperator
+              : operatorKeys[0] ?? item.defaultOperator;
+            filter.value = '';
+            filter.values = [];
+            overlay.remove();
+            this.rerender();
+          });
+          itemsWrap.appendChild(btn);
+        });
+        list.appendChild(itemsWrap);
+      } else {
+        // Group by category when no search query
+        const byCategory = new Map<FriendlyFieldCategory, FriendlyField[]>();
+        scoredFields.forEach(({ field, category }) => {
+          if (!byCategory.has(category)) byCategory.set(category, []);
+          byCategory.get(category)!.push(field);
+        });
+
+        this.fieldCatalog.categoryEntries.forEach(([category]) => {
+          const fields = byCategory.get(category);
+          if (!fields?.length) return;
+
+          const groupTitle = createElement('div', {
+            className: 'cv-field-picker-group-title',
+            text: FRIENDLY_FIELD_CATEGORY_LABELS[category] ?? category
+          });
+          const itemsWrap = createElement('div', { className: 'cv-field-picker-items' });
+
+          fields.forEach((item) => {
+            const btn = createButton(item.label, 'cv-field-picker-item');
+            btn.title = `${item.label} (${item.jqlField})`;
+            btn.addEventListener('click', () => {
+              filter.fieldId = item.id;
+              const operatorKeys = this.getOperatorKeys(item);
+              filter.operatorKey = operatorKeys.includes(item.defaultOperator)
+                ? item.defaultOperator
+                : operatorKeys[0] ?? item.defaultOperator;
+              filter.value = '';
+              filter.values = [];
+              overlay.remove();
+              this.rerender();
+            });
+            itemsWrap.appendChild(btn);
+          });
+
+          list.appendChild(groupTitle);
+          list.appendChild(itemsWrap);
+        });
+      }
+    };
+
+    search.addEventListener('input', renderList);
+    renderList();
+
+    panel.appendChild(search);
+    panel.appendChild(list);
+    overlay.appendChild(panel);
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+
+    search.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        overlay.remove();
+      }
+    });
+
+    this.shadow.appendChild(overlay);
+    search.focus();
+    search.select();
+  }
+
+  private getOperatorKeys(field: FriendlyField): string[] {
+    const keys = field.operatorKeys?.length ? field.operatorKeys : JQL_OPERATOR_DEFS.map(def => def.key);
+    const unique = Array.from(new Set(keys));
+    return unique.sort((a, b) => (OPERATOR_ORDER.get(a) ?? 999) - (OPERATOR_ORDER.get(b) ?? 999));
+  }
+
+  private getOperatorOptions(field: FriendlyField): Array<{ key: string; label: string }> {
+    return this.getOperatorKeys(field).map((key) => {
+      const def = resolveOperatorDef(key);
+      return {
+        key,
+        label: def.label || def.operator
+      };
+    });
   }
 
   private renderUserValueInput(filter: FilterCard, field: FriendlyField): HTMLDivElement {
@@ -3142,10 +4025,21 @@ class JqlBuilderV2UI {
     const input = createElement('input', {
       attrs: { type: 'text', placeholder: 'Username or "Me"' }
     }) as HTMLInputElement;
-    input.value = filter.value === 'currentUser()' ? 'Me' : filter.value;
+    input.value =
+      filter.value === 'currentUser()'
+        ? 'Me'
+        : filter.value === 'EMPTY'
+          ? 'Unassigned'
+          : filter.value;
     input.addEventListener('input', () => {
       const val = input.value.trim().toLowerCase();
-      filter.value = val === 'me' || val === 'current user' ? 'currentUser()' : input.value;
+      if (val === 'me' || val === 'current user') {
+        filter.value = 'currentUser()';
+      } else if (val === 'unassigned' || val === 'empty') {
+        filter.value = 'EMPTY';
+      } else {
+        filter.value = input.value;
+      }
       this.updatePreview();
     });
     wrap.appendChild(input);
@@ -3171,10 +4065,105 @@ class JqlBuilderV2UI {
     return wrap;
   }
 
+  private renderEmptyNullValueInput(filter: FilterCard): HTMLDivElement {
+    const wrap = createElement('div');
+    const select = createElement('select') as HTMLSelectElement;
+    select.appendChild(new Option('EMPTY', 'EMPTY'));
+    select.appendChild(new Option('NULL', 'NULL'));
+    select.value = filter.value === 'NULL' ? 'NULL' : 'EMPTY';
+    select.addEventListener('change', () => {
+      filter.value = select.value;
+      this.updatePreview();
+    });
+    wrap.appendChild(select);
+    return wrap;
+  }
+
+  private renderListValueInput(filter: FilterCard, field: FriendlyField): HTMLDivElement {
+    const wrap = createElement('div');
+    const input = createElement('input', {
+      attrs: { type: 'text', placeholder: 'Enter values separated by commas' }
+    }) as HTMLInputElement;
+
+    const normalizeListValue = (value: string): string => {
+      const trimmed = value.trim();
+      const lower = trimmed.toLowerCase();
+      if (field.valueType === 'user') {
+        if (
+          lower === 'me' ||
+          lower === 'me (current user)' ||
+          lower.includes('current user') ||
+          lower === 'currentuser()' ||
+          lower === 'currentuser'
+        ) {
+          return 'currentUser()';
+        }
+        if (lower === 'unassigned' || lower === 'empty') {
+          return 'EMPTY';
+        }
+      }
+      return trimmed;
+    };
+
+    const syncValues = () => {
+      filter.value = input.value;
+      const values = input.value
+        .split(',')
+        .map((item) => normalizeListValue(item))
+        .filter((item) => item.length > 0);
+      filter.values = values;
+      this.updatePreview();
+    };
+
+    input.value = filter.values.length ? filter.values.join(', ') : filter.value;
+    if (!filter.values.length && filter.value) {
+      syncValues();
+    }
+    input.addEventListener('input', syncValues);
+    wrap.appendChild(input);
+
+    if (field.commonValues && field.commonValues.length > 0) {
+      const suggestions = createElement('div', { className: 'cv-suggestions' });
+      field.commonValues.forEach((text) => {
+        const btn = createButton(text, 'cv-suggestion');
+        btn.addEventListener('click', () => {
+          const next = new Set(filter.values.map(val => val.toLowerCase()));
+          if (!next.has(text.toLowerCase())) {
+            filter.values.push(text);
+            input.value = filter.values.join(', ');
+            syncValues();
+          }
+        });
+        suggestions.appendChild(btn);
+      });
+      wrap.appendChild(suggestions);
+    }
+
+    if (field.valueType === 'user') {
+      const suggestions = createElement('div', { className: 'cv-suggestions' });
+      ['Me (current user)', 'Unassigned'].forEach((text) => {
+        const btn = createButton(text, 'cv-suggestion');
+        btn.addEventListener('click', () => {
+          const normalized = text.includes('Me') ? 'currentUser()' : 'EMPTY';
+          const next = new Set(filter.values.map(val => val.toLowerCase()));
+          if (!next.has(normalized.toLowerCase())) {
+            filter.values.push(normalized);
+            input.value = filter.values.join(', ');
+            syncValues();
+          }
+        });
+        suggestions.appendChild(btn);
+      });
+      wrap.appendChild(suggestions);
+    }
+
+    return wrap;
+  }
+
   private renderDateValueInput(filter: FilterCard): HTMLDivElement {
     const wrap = createElement('div');
     const input = createElement('input', {
-      attrs: { type: 'text', placeholder: 'Date (e.g., -7d, 2024-01-01)' }
+      attrs: { type: 'text', placeholder: 'Date (e.g., -7d, 2026-01-01)' }
     }) as HTMLInputElement;
     input.value = filter.value;
     input.addEventListener('input', () => {
@@ -3252,7 +4241,7 @@ class JqlBuilderV2UI {
       }
 
       const fieldSelect = createElement('select') as HTMLSelectElement;
-      SORT_FIELDS.forEach((sf) => {
+      this.fieldCatalog.sortFields.forEach((sf) => {
         const option = new Option(sf.label, sf.value);
         option.selected = sf.value === entry.field;
         fieldSelect.appendChild(option);
@@ -3335,6 +4324,9 @@ class JqlBuilderV2UI {
 
     const overlay = createElement('div', { className: 'cv-modal-overlay' });
     overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10001; display: flex; align-items: center; justify-content: center;';
+
+    // Hijack keyboard events to prevent Jira shortcuts from firing
+    hijackKeyboardEvents(overlay);
 
     const modal = createElement('div', { className: 'cv-modal' });
     modal.style.cssText = 'background: var(--cv-bg); border-radius: 12px; padding: 20px; max-width: 500px; max-height: 70vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.3);';
@@ -3423,7 +4415,10 @@ class JqlBuilderV2UI {
         this.state.draggedPresetId = null;
         row.classList.remove('dragging');
         // Remove drag-over from all rows
-        list.querySelectorAll('.cv-preset-picker-row').forEach(r => r.classList.remove('drag-over'));
+        list.querySelectorAll('.cv-preset-picker-row').forEach(r => {
+          r.classList.remove('drag-over');
+          r.classList.remove('drag-over-invalid');
+        });
       });
 
       row.addEventListener('dragover', (e) => {
@@ -3433,7 +4428,9 @@ class JqlBuilderV2UI {
         }
         // Only show indicator if this isn't the dragged item
         if (this.state.draggedPresetId && this.state.draggedPresetId !== preset.id) {
-          row.classList.add('drag-over');
+          const canDrop = this.state.pinnedPresets.includes(this.state.draggedPresetId);
+          row.classList.toggle('drag-over', canDrop);
+          row.classList.toggle('drag-over-invalid', !canDrop);
         }
       });
 
@@ -3442,16 +4439,21 @@ class JqlBuilderV2UI {
         const relatedTarget = e.relatedTarget as HTMLElement;
         if (!row.contains(relatedTarget)) {
           row.classList.remove('drag-over');
+          row.classList.remove('drag-over-invalid');
         }
       });
 
       row.addEventListener('drop', (e) => {
         e.preventDefault();
         row.classList.remove('drag-over');
+        row.classList.remove('drag-over-invalid');
         if (this.state.draggedPresetId && this.state.draggedPresetId !== preset.id) {
-          this.reorderPinnedPreset(this.state.draggedPresetId, preset.id);
-          overlay.remove();
-          this.showPresetPicker(); // Refresh
+          const canDrop = this.state.pinnedPresets.includes(this.state.draggedPresetId);
+          if (canDrop) {
+            this.reorderPinnedPreset(this.state.draggedPresetId, preset.id);
+            overlay.remove();
+            this.showPresetPicker(); // Refresh
+          }
         }
       });
 
@@ -3618,7 +4620,7 @@ class JqlBuilderV2UI {
   }
 
   // ==========================================================================
-  // ADVANCED MODE - Raw JQL editor
+  // ADVANCED MODE - Raw JQL editor with enhanced reference panel
   // ==========================================================================
 
   private renderAdvancedMode(): HTMLDivElement {
@@ -3628,7 +4630,7 @@ class JqlBuilderV2UI {
     hint.innerHTML = `
       <div class="cv-section-title">🔧 Advanced JQL Editor</div>
       <p style="color: var(--cv-text-muted); font-size: 13px; margin: 0;">
-        Edit JQL directly. Click items below to insert at cursor.
+        Edit JQL directly. Click items below to insert at cursor position.
       </p>
     `;
     container.appendChild(hint);
@@ -3643,7 +4645,7 @@ class JqlBuilderV2UI {
       attrs: { placeholder: 'Enter your JQL query...' }
     }) as HTMLTextAreaElement;
     this.advancedTextarea.style.minHeight = '160px';
-    this.advancedTextarea.value = this.previewEl?.value || buildJqlFromV2State(this.state);
+    this.advancedTextarea.value = this.previewEl?.value || buildJqlFromV2State(this.state, this.fieldCatalog.fieldsById);
     this.advancedTextarea.addEventListener('input', () => {
       if (this.previewEl) {
         this.previewEl.value = this.advancedTextarea.value;
@@ -3652,41 +4654,79 @@ class JqlBuilderV2UI {
     textareaWrap.appendChild(this.advancedTextarea);
     container.appendChild(textareaWrap);
 
-    // Interactive reference sections
-    const refContainer = createElement('div', { className: 'cv-section' });
+    // Interactive reference sections with search
+    const refContainer = createElement('div', { className: 'cv-section cv-advanced-ref' });
     refContainer.style.marginTop = '16px';
+
+    // Search bar
+    const searchWrap = createElement('div', { className: 'cv-advanced-search-wrap' });
+    const searchInput = createElement('input', {
+      className: 'cv-advanced-search',
+      attrs: { type: 'text', placeholder: 'Search fields, operators, functions...' }
+    }) as HTMLInputElement;
+    searchWrap.appendChild(searchInput);
+    refContainer.appendChild(searchWrap);
+
+    // Hijack keyboard events for the search input
+    hijackKeyboardEvents(searchWrap);
 
     // Reference tabs
     const refTabs = createElement('div', { className: 'cv-ref-tabs' });
     const categories = [
-      { id: 'fields', label: '📋 Fields', items: this.getFieldItems() },
-      { id: 'operators', label: '⚙️ Operators', items: this.getOperatorItems() },
-      { id: 'functions', label: 'ƒ Functions', items: this.getFunctionItems() },
-      { id: 'time', label: '🕐 Time', items: this.getTimeItems() },
-      { id: 'keywords', label: '🔤 Keywords', items: this.getKeywordItems() }
+      { id: 'fields', label: '📋 Fields' },
+      { id: 'operators', label: '⚙️ Operators' },
+      { id: 'functions', label: 'ƒ Functions' },
+      { id: 'time', label: '🕐 Time' },
+      { id: 'keywords', label: '🔤 Keywords' }
     ];
 
     let activeTab = 'fields';
     const contentDiv = createElement('div', { className: 'cv-ref-content' });
 
-    const renderContent = (tabId: string) => {
-      const category = categories.find(c => c.id === tabId);
-      if (!category) return;
-
+    const renderContent = (tabId: string, searchQuery: string = '') => {
       contentDiv.innerHTML = '';
-      const itemsWrap = createElement('div', { className: 'cv-ref-items' });
 
-      category.items.forEach(item => {
-        const btn = createButton(item.label, 'cv-ref-item');
-        btn.title = item.description || item.value;
-        btn.addEventListener('click', () => {
-          this.insertAtCursor(item.value);
+      if (tabId === 'fields') {
+        // Render fields with categories and search
+        this.renderAdvancedFieldsContent(contentDiv, searchQuery);
+      } else {
+        // Render other tabs with search
+        const items = this.getItemsForTab(tabId);
+        const filteredItems = searchQuery
+          ? items.filter(item => smartSearch(searchQuery, `${item.label} ${item.description || ''} ${item.value}`) > 0)
+              .sort((a, b) => {
+                const scoreA = smartSearch(searchQuery, `${a.label} ${a.description || ''}`);
+                const scoreB = smartSearch(searchQuery, `${b.label} ${b.description || ''}`);
+                return scoreB - scoreA;
+              })
+          : items;
+
+        if (filteredItems.length === 0) {
+          contentDiv.appendChild(createElement('div', {
+            text: 'No matches found.',
+            className: 'cv-text-muted',
+            style: 'padding: 12px; text-align: center;'
+          }));
+          return;
+        }
+
+        const itemsWrap = createElement('div', { className: 'cv-ref-items' });
+        filteredItems.forEach(item => {
+          const btn = createButton(item.label, 'cv-ref-item');
+          btn.title = item.description || item.value;
+          btn.addEventListener('click', () => {
+            this.insertAtCursor(item.value);
+          });
+          itemsWrap.appendChild(btn);
         });
-        itemsWrap.appendChild(btn);
-      });
-
-      contentDiv.appendChild(itemsWrap);
+        contentDiv.appendChild(itemsWrap);
+      }
     };
+
+    // Search input handler
+    searchInput.addEventListener('input', () => {
+      renderContent(activeTab, searchInput.value.trim());
+    });
 
     categories.forEach(cat => {
       const tab = createButton(cat.label, 'cv-ref-tab');
@@ -3695,7 +4735,7 @@ class JqlBuilderV2UI {
         refTabs.querySelectorAll('.cv-ref-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         activeTab = cat.id;
-        renderContent(cat.id);
+        renderContent(cat.id, searchInput.value.trim());
       });
       refTabs.appendChild(tab);
     });
@@ -3710,30 +4750,137 @@ class JqlBuilderV2UI {
     return container;
   }
 
-  private getFieldItems(): Array<{ label: string; value: string; description?: string }> {
-    // Common fields first, then from autocomplete data
-    // Add custom fields from autocomplete if available
-    if (this.data.fields.length > 0) {
-      const custom = this.data.fields
-        .filter(f => !COMMON_FIELD_VALUE_SET.has(f.value.toLowerCase()))
-        .slice(0, 20) // Limit to prevent overwhelming
-        .map(f => ({
-          label: f.displayName || f.value,
-          value: f.value.includes(' ') ? `"${f.value}"` : f.value,
-          description: f.cfid ? 'Custom field' : undefined
-        }));
-      return COMMON_FIELD_ITEMS.concat(custom);
-    }
+  private renderAdvancedFieldsContent(contentDiv: HTMLElement, searchQuery: string): void {
+    if (searchQuery) {
+      // Flat search results sorted by relevance
+      const scoredFields: Array<{ field: FriendlyField; score: number }> = [];
+      this.fieldCatalog.categoryEntries.forEach(([, fields]) => {
+        fields.forEach((field) => {
+          const haystack = `${field.label} ${field.jqlField} ${field.description || ''}`;
+          const score = smartSearch(searchQuery, haystack);
+          if (score > 0) {
+            scoredFields.push({ field, score });
+          }
+        });
+      });
 
-    return COMMON_FIELD_ITEMS;
+      if (scoredFields.length === 0) {
+        contentDiv.appendChild(createElement('div', {
+          text: 'No fields match your search.',
+          className: 'cv-text-muted',
+          style: 'padding: 12px; text-align: center;'
+        }));
+        return;
+      }
+
+      scoredFields.sort((a, b) => b.score - a.score);
+
+      const itemsWrap = createElement('div', { className: 'cv-ref-items' });
+      scoredFields.forEach(({ field }) => {
+        const btn = createButton(`${field.emoji} ${field.label}`, 'cv-ref-item');
+        btn.title = `${field.description || field.label} (${field.jqlField})`;
+        btn.addEventListener('click', () => {
+          this.insertAtCursor(field.jqlField);
+        });
+        itemsWrap.appendChild(btn);
+      });
+      contentDiv.appendChild(itemsWrap);
+    } else {
+      // Categorized view
+      this.fieldCatalog.categoryEntries.forEach(([category, fields]) => {
+        if (fields.length === 0) return;
+
+        const categorySection = createElement('div', { className: 'cv-ref-category' });
+
+        const categoryHeader = createElement('div', {
+          className: 'cv-ref-category-title',
+          text: FRIENDLY_FIELD_CATEGORY_LABELS[category] ?? category
+        });
+        categorySection.appendChild(categoryHeader);
+
+        const itemsWrap = createElement('div', { className: 'cv-ref-items' });
+        fields.forEach((field) => {
+          const btn = createButton(field.label, 'cv-ref-item');
+          btn.title = `${field.description || field.label} (${field.jqlField})`;
+          btn.addEventListener('click', () => {
+            this.insertAtCursor(field.jqlField);
+          });
+          itemsWrap.appendChild(btn);
+        });
+        categorySection.appendChild(itemsWrap);
+        contentDiv.appendChild(categorySection);
+      });
+    }
+  }
+
+  private getItemsForTab(tabId: string): Array<{ label: string; value: string; description?: string }> {
+    switch (tabId) {
+      case 'operators':
+        return this.getOperatorItems();
+      case 'functions':
+        return this.getFunctionItems();
+      case 'time':
+        return this.getTimeItems();
+      case 'keywords':
+        return this.getKeywordItems();
+      default:
+        return [];
+    }
+  }
+
+  private getFieldItems(): Array<{ label: string; value: string; description?: string }> {
+    const items: Array<{ label: string; value: string; description?: string }> = [];
+    this.fieldCatalog.categoryEntries.forEach(([, fields]) => {
+      fields.forEach((field) => {
+        items.push({
+          label: field.label,
+          value: field.jqlField,
+          description: field.description
+        });
+      });
+    });
+    return items;
   }
 
   private getOperatorItems(): Array<{ label: string; value: string; description?: string }> {
-    return OPERATOR_ITEMS;
+    return buildOperatorItems();
   }
 
   private getFunctionItems(): Array<{ label: string; value: string; description?: string }> {
-    return FUNCTION_ITEMS;
+    const items: Array<{ label: string; value: string; description?: string }> = [];
+    const seen = new Set<string>();
+    const functions = this.data.functions.length > 0 ? this.data.functions : JQL_FUNCTION_DOCS;
+
+    functions.forEach((entry) => {
+      if ('displayName' in entry) {
+        const label = entry.displayName || entry.value;
+        if (!label || seen.has(label.toLowerCase())) return;
+        const doc = JQL_FUNCTION_DOCS_BY_NAME.get(label.toLowerCase());
+        const rawValue = entry.value || label;
+        const value = rawValue.includes('(')
+          ? rawValue
+          : doc?.name?.includes('(')
+            ? doc.name
+            : `${rawValue}()`;
+        items.push({
+          label,
+          value,
+          description: entry.description || doc?.description
+        });
+        seen.add(label.toLowerCase());
+      } else {
+        const label = entry.name;
+        if (!label || seen.has(label.toLowerCase())) return;
+        items.push({
+          label,
+          value: label.includes('(') ? label : `${label}()`,
+          description: entry.description
+        });
+        seen.add(label.toLowerCase());
+      }
+    });
+
+    return items.sort((a, b) => a.label.localeCompare(b.label));
   }
 
   private getTimeItems(): Array<{ label: string; value: string; description?: string }> {
@@ -3741,7 +4888,7 @@ class JqlBuilderV2UI {
   }
 
   private getKeywordItems(): Array<{ label: string; value: string; description?: string }> {
-    return KEYWORD_ITEMS;
+    return buildKeywordItems(this.data);
   }
 
   private insertAtCursor(text: string): void {
@@ -3849,7 +4996,7 @@ class JqlBuilderV2UI {
   }
 
   private addFilter(): void {
-    const defaultField = FRIENDLY_FIELDS[0];
+    const defaultField = this.fieldCatalog.fields[0] ?? FRIENDLY_FIELDS[0];
     this.state.filters.push({
       id: createId(),
       fieldId: defaultField.id,
@@ -3870,7 +5017,7 @@ class JqlBuilderV2UI {
       return;
     }
 
-    this.previewEl.value = buildJqlFromV2State(this.state);
+    this.previewEl.value = buildJqlFromV2State(this.state, this.fieldCatalog.fieldsById);
   }
 
   private rerender(): void {
@@ -3900,14 +5047,9 @@ class JqlBuilderV2UI {
       return;
     }
 
-    let input = findAdvancedSearchInput();
-    if (!input) {
-      attemptSwitchToAdvanced();
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      input = findAdvancedSearchInput();
-    }
-
-    if (!input) {
+    const ready = await ensureAdvancedSearchMode();
+    const input = findAdvancedSearchInput();
+    if (!ready || !input) {
       alert('Advanced search box not found. Switch to Advanced search first.');
       return;
     }
@@ -3962,31 +5104,86 @@ class JqlBuilderV2UI {
 // EXPORT - Toggle function
 // ============================================================================
 
+let pendingOpen: Promise<void> | null = null;
+
+export const openJqlBuilderV2 = async (
+  store: Store,
+  log: (message: string, level?: 'debug' | 'info' | 'warn' | 'error') => void
+): Promise<void> => {
+  if (getBuilderController()) return;
+  if (pendingOpen) return pendingOpen;
+
+  pendingOpen = (async () => {
+    const host = document.createElement('div');
+    host.id = ROOT_ID + '-v2';
+    const shadow = host.attachShadow({ mode: 'open' });
+    const data = await getAutocompleteData(log);
+
+    const builder = new JqlBuilderV2UI(shadow, store, log, data);
+    builder.mount();
+    document.body.appendChild(host);
+
+    const controller: BuilderController = {
+      destroy: () => {
+        builder.destroy();
+        host.remove();
+      }
+    };
+    setBuilderController(controller);
+  })();
+
+  try {
+    await pendingOpen;
+  } finally {
+    pendingOpen = null;
+  }
+};
+
+export const closeJqlBuilderV2 = (): void => {
+  const existing = getBuilderController();
+  if (!existing) return;
+  existing.destroy();
+  setBuilderController(undefined);
+};
+
 export const toggleJqlBuilderV2 = async (
   store: Store,
   log: (message: string, level?: 'debug' | 'info' | 'warn' | 'error') => void
 ): Promise<void> => {
-  const existing = (window as any).__cvJqlBuilderV2 as BuilderController | undefined;
-  if (existing) {
-    existing.destroy();
-    (window as any).__cvJqlBuilderV2 = undefined;
+  if (getBuilderController()) {
+    closeJqlBuilderV2();
     return;
   }
+  await openJqlBuilderV2(store, log);
+};
 
-  const host = document.createElement('div');
-  host.id = ROOT_ID + '-v2';
-  const shadow = host.attachShadow({ mode: 'open' });
-  const data = await getAutocompleteData(log);
+export const installJqlBuilderSwitcherHooks = (
+  store: Store,
+  log: (message: string, level?: 'debug' | 'info' | 'warn' | 'error') => void
+): void => {
+  const existing = (window as any)[SWITCHER_HOOK_KEY] as SwitcherHookController | undefined;
+  if (existing) return;
 
-  const builder = new JqlBuilderV2UI(shadow, store, log, data);
-  builder.mount();
-  document.body.appendChild(host);
+  const bind = () => {
+    const advanced = findAdvancedToggle();
+    const basic = findBasicToggle();
+    ensureBuilderToggleButton(store, log);
 
-  const controller: BuilderController = {
-    destroy: () => {
-      builder.destroy();
-      host.remove();
+    if (basic && !basic.dataset.cvJqlBuilderBound) {
+      basic.dataset.cvJqlBuilderBound = 'basic';
+      basic.addEventListener('click', () => {
+        closeJqlBuilderV2();
+      }, true);
     }
   };
-  (window as any).__cvJqlBuilderV2 = controller;
+
+  bind();
+
+  const observer = new MutationObserver(() => bind());
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  const controller: SwitcherHookController = {
+    disconnect: () => observer.disconnect()
+  };
+  (window as any)[SWITCHER_HOOK_KEY] = controller;
 };
