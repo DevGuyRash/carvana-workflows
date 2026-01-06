@@ -186,6 +186,12 @@ function createResultsView(params: {
     mode: null as 'cell' | 'row' | 'col' | null,
     anchorRow: 0,
     anchorCol: 0,
+    rafId: 0,
+    pendingRow: null as number | null,
+    pendingCol: null as number | null,
+    lastRowRange: null as { minRow: number; maxRow: number } | null,
+    lastColRange: null as { minCol: number; maxCol: number } | null,
+    lastCellRange: null as { minRow: number; maxRow: number; minCol: number; maxCol: number } | null,
   };
 
   const setStatus = () => {
@@ -457,27 +463,146 @@ function createResultsView(params: {
     return true;
   };
 
-  const selectCellRange = (minRow: number, maxRow: number, minCol: number, maxCol: number) => {
-    clearCellSelection();
-    for (let r = minRow; r <= maxRow; r++) {
-      for (let c = minCol; c <= maxCol; c++) {
-        setCellSelected(r, c, true);
+  const updateCellRange = (next: { minRow: number; maxRow: number; minCol: number; maxCol: number }) => {
+    const prev = drag.lastCellRange;
+    if (!prev) {
+      for (let r = next.minRow; r <= next.maxRow; r++) {
+        for (let c = next.minCol; c <= next.maxCol; c++) {
+          setCellSelected(r, c, true);
+        }
+      }
+      drag.lastCellRange = next;
+      return;
+    }
+
+    for (let r = prev.minRow; r <= prev.maxRow; r++) {
+      for (let c = prev.minCol; c <= prev.maxCol; c++) {
+        if (r < next.minRow || r > next.maxRow || c < next.minCol || c > next.maxCol) {
+          setCellSelected(r, c, false);
+        }
       }
     }
+    for (let r = next.minRow; r <= next.maxRow; r++) {
+      for (let c = next.minCol; c <= next.maxCol; c++) {
+        if (r < prev.minRow || r > prev.maxRow || c < prev.minCol || c > prev.maxCol) {
+          setCellSelected(r, c, true);
+        }
+      }
+    }
+    drag.lastCellRange = next;
   };
 
-  const selectRowRange = (minRow: number, maxRow: number) => {
-    clearRowSelection();
-    for (let r = minRow; r <= maxRow; r++) {
-      setRowSelected(r, true);
+  const updateRowRange = (next: { minRow: number; maxRow: number }) => {
+    const prev = drag.lastRowRange;
+    if (!prev) {
+      for (let r = next.minRow; r <= next.maxRow; r++) {
+        setRowSelected(r, true);
+      }
+      drag.lastRowRange = next;
+      return;
     }
+    for (let r = prev.minRow; r <= prev.maxRow; r++) {
+      if (r < next.minRow || r > next.maxRow) setRowSelected(r, false);
+    }
+    for (let r = next.minRow; r <= next.maxRow; r++) {
+      if (r < prev.minRow || r > prev.maxRow) setRowSelected(r, true);
+    }
+    drag.lastRowRange = next;
   };
 
-  const selectColRange = (minCol: number, maxCol: number) => {
-    clearColSelection();
-    for (let c = minCol; c <= maxCol; c++) {
-      setColSelected(c, true);
+  const updateColRange = (next: { minCol: number; maxCol: number }) => {
+    const prev = drag.lastColRange;
+    if (!prev) {
+      for (let c = next.minCol; c <= next.maxCol; c++) {
+        setColSelected(c, true);
+      }
+      drag.lastColRange = next;
+      return;
     }
+    for (let c = prev.minCol; c <= prev.maxCol; c++) {
+      if (c < next.minCol || c > next.maxCol) setColSelected(c, false);
+    }
+    for (let c = next.minCol; c <= next.maxCol; c++) {
+      if (c < prev.minCol || c > prev.maxCol) setColSelected(c, true);
+    }
+    drag.lastColRange = next;
+  };
+
+  const startDragSelection = (mode: 'cell' | 'row' | 'col', row: number, col: number) => {
+    drag.active = true;
+    drag.didDrag = false;
+    drag.mode = mode;
+    drag.rafId = 0;
+    drag.pendingRow = null;
+    drag.pendingCol = null;
+    drag.lastRowRange = null;
+    drag.lastColRange = null;
+    drag.lastCellRange = null;
+    drag.anchorRow = row;
+    drag.anchorCol = col;
+
+    setMode(mode);
+    if (mode === 'row') {
+      clearRowSelection();
+      updateRowRange({ minRow: row, maxRow: row });
+      selection.anchor = { row, col: 0, mode: 'row' };
+    } else if (mode === 'col') {
+      clearColSelection();
+      updateColRange({ minCol: col, maxCol: col });
+      selection.anchor = { row: 0, col, mode: 'col' };
+    } else {
+      clearCellSelection();
+      updateCellRange({ minRow: row, maxRow: row, minCol: col, maxCol: col });
+      selection.anchor = { row, col, mode: 'cell' };
+    }
+    setStatus();
+  };
+
+  const scheduleDragUpdate = (row: number, col: number) => {
+    drag.pendingRow = row;
+    drag.pendingCol = col;
+    if (drag.rafId) return;
+    drag.rafId = hostWindow.requestAnimationFrame(() => {
+      drag.rafId = 0;
+      if (!drag.active || drag.pendingRow === null || drag.pendingCol === null || !drag.mode) return;
+      const nextRow = drag.pendingRow;
+      const nextCol = drag.pendingCol;
+
+      if (drag.mode === 'col') {
+        if (nextCol !== drag.anchorCol) drag.didDrag = true;
+        const minCol = Math.min(drag.anchorCol, nextCol);
+        const maxCol = Math.max(drag.anchorCol, nextCol);
+        const prev = drag.lastColRange;
+        if (!prev || prev.minCol !== minCol || prev.maxCol !== maxCol) {
+          updateColRange({ minCol, maxCol });
+          setStatus();
+        }
+        return;
+      }
+
+      if (drag.mode === 'row') {
+        if (nextRow !== drag.anchorRow) drag.didDrag = true;
+        const minRow = Math.min(drag.anchorRow, nextRow);
+        const maxRow = Math.max(drag.anchorRow, nextRow);
+        const prev = drag.lastRowRange;
+        if (!prev || prev.minRow !== minRow || prev.maxRow !== maxRow) {
+          updateRowRange({ minRow, maxRow });
+          setStatus();
+        }
+        return;
+      }
+
+      if (nextRow !== drag.anchorRow || nextCol !== drag.anchorCol) drag.didDrag = true;
+      const minRow = Math.min(drag.anchorRow, nextRow);
+      const maxRow = Math.max(drag.anchorRow, nextRow);
+      const minCol = Math.min(drag.anchorCol, nextCol);
+      const maxCol = Math.max(drag.anchorCol, nextCol);
+      const prev = drag.lastCellRange;
+      if (!prev || prev.minRow !== minRow || prev.maxRow !== maxRow || prev.minCol !== minCol || prev.maxCol !== maxCol) {
+        updateCellRange({ minRow, maxRow, minCol, maxCol });
+        setStatus();
+      }
+    });
   };
 
   const handleCellClick = (row: number, col: number, isShift: boolean, isCtrl: boolean) => {
@@ -671,20 +796,11 @@ function createResultsView(params: {
 
     event.preventDefault();
 
-    drag.active = true;
-    drag.didDrag = false;
-    drag.mode = null;
-
     if (cell.tagName === 'TH') {
       const colIndex = cell.getAttribute('data-col-index');
       if (colIndex !== null) {
         const col = Number.parseInt(colIndex, 10);
-        drag.mode = 'col';
-        drag.anchorCol = col;
-        setMode('col');
-        selectColRange(col, col);
-        selection.anchor = { row: 0, col, mode: 'col' };
-        setStatus();
+        startDragSelection('col', 0, col);
       }
       return;
     }
@@ -694,25 +810,14 @@ function createResultsView(params: {
     const row = Number.parseInt(rowIndex, 10);
 
     if (cell.getAttribute('data-row-header') === '1') {
-      drag.mode = 'row';
-      drag.anchorRow = row;
-      setMode('row');
-      selectRowRange(row, row);
-      selection.anchor = { row, col: 0, mode: 'row' };
-      setStatus();
+      startDragSelection('row', row, 0);
       return;
     }
 
     const colIndex = cell.getAttribute('data-col-index');
     if (colIndex === null) return;
     const col = Number.parseInt(colIndex, 10);
-    drag.mode = 'cell';
-    drag.anchorRow = row;
-    drag.anchorCol = col;
-    setMode('cell');
-    selectCellRange(row, row, col, col);
-    selection.anchor = { row, col, mode: 'cell' };
-    setStatus();
+    startDragSelection('cell', row, col);
   });
 
   table.addEventListener('mousemove', (event) => {
@@ -733,42 +838,29 @@ function createResultsView(params: {
       const colIndex = cell.getAttribute('data-col-index');
       if (colIndex === null) return;
       const col = Number.parseInt(colIndex, 10);
-      if (col !== drag.anchorCol) drag.didDrag = true;
-      const minCol = Math.min(drag.anchorCol, col);
-      const maxCol = Math.max(drag.anchorCol, col);
-      selectColRange(minCol, maxCol);
-      setStatus();
+      scheduleDragUpdate(drag.anchorRow, col);
       return;
     }
 
     const rowIndex = cell.getAttribute('data-row-index');
     if (rowIndex === null) return;
     const row = Number.parseInt(rowIndex, 10);
-
-    if (drag.mode === 'row') {
-      if (row !== drag.anchorRow) drag.didDrag = true;
-      const minRow = Math.min(drag.anchorRow, row);
-      const maxRow = Math.max(drag.anchorRow, row);
-      selectRowRange(minRow, maxRow);
-      setStatus();
-      return;
-    }
-
     const colIndex = cell.getAttribute('data-col-index');
     if (colIndex === null) return;
     const col = Number.parseInt(colIndex, 10);
-    if (row !== drag.anchorRow || col !== drag.anchorCol) drag.didDrag = true;
-    const minRow = Math.min(drag.anchorRow, row);
-    const maxRow = Math.max(drag.anchorRow, row);
-    const minCol = Math.min(drag.anchorCol, col);
-    const maxCol = Math.max(drag.anchorCol, col);
-    selectCellRange(minRow, maxRow, minCol, maxCol);
-    setStatus();
+    if (drag.mode === 'row') {
+      scheduleDragUpdate(row, drag.anchorCol);
+      return;
+    }
+    scheduleDragUpdate(row, col);
   });
 
   const stopDrag = () => {
     if (!drag.active) return;
     drag.active = false;
+    drag.rafId = 0;
+    drag.pendingRow = null;
+    drag.pendingCol = null;
     if (drag.didDrag) {
       drag.suppressClick = true;
     }
