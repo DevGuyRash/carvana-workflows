@@ -10,6 +10,8 @@ function parseRepo(remote) {
   if (!remote) return null;
   const httpsMatch = remote.match(/^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/i);
   if (httpsMatch) return httpsMatch[1];
+  const sshUrlMatch = remote.match(/^ssh:\/\/git@github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/i);
+  if (sshUrlMatch) return sshUrlMatch[1];
   const sshMatch = remote.match(/^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/i);
   if (sshMatch) return sshMatch[1];
   return null;
