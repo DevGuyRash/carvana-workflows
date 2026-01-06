@@ -468,3 +468,9 @@ chore: update dependencies
 - You SHALL write `Overview` as 2–4 lines of prose explaining why and impact; you SHALL NOT include refs in `Overview`.
 - You SHALL NOT duplicate refs across bullets and `## Refs`.
 - You SHALL ensure each ref item is a valid issue ref (`#123`), cross-repo ref (`owner/repo#123`), or URL.
+
+Note that AI reviewers will often comment on or create review threads on your PRs. When responding to them, they will not respond to you if you don't tag them in your response:
+
+- @gemini-code-assist
+- @codex
+  - May appear as `chatgpt-codex-connector`, but only responds to `@codex`
