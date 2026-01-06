@@ -138,6 +138,7 @@
     - [B) 10-minute "outside-in" scan](#b-10-minute-outside-in-scan)
     - [C) Discussion closure (PRs)](#c-discussion-closure-prs)
       - [CLI helper for unresolved inline threads (GraphQL)](#cli-helper-for-unresolved-inline-threads-graphql)
+      - [CLI helper to reply inline (REST)](#cli-helper-to-reply-inline-rest)
     - [D) Findings standard (how to write comments)](#d-findings-standard-how-to-write-comments)
     - [E) Minimal review output template (Quick Review Card)](#e-minimal-review-output-template-quick-review-card)
 
@@ -206,6 +207,15 @@ gh api graphql \
   -f query="$query" \
   --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)'
 ```
+
+If you need to **reply inline** from CLI, use the review comment reply endpoint (note the required PR number in the path):
+
+```bash
+gh api -X POST /repos/<owner>/<repo>/pulls/<pr_number>/comments/<comment_id>/replies \
+  -f body="reply text"
+```
+
+GraphQL note: `addPullRequestReviewComment` is deprecated; use `addPullRequestReviewThreadReply` with the thread ID if you need GraphQL-based replies.
 
 ---
 
@@ -559,6 +569,14 @@ Applies to both authors and reviewers; it prevents “lost” decisions.
 - Reply in the **same thread** as the feedback (avoid new top-level comments unless summarizing).
 - **Resolve conversations** only when the feedback is addressed (code changed, question answered, or decision recorded).
 - **Do not resolve** a conversation if you still need input—reply and explicitly tag/request follow-up from the reviewer.
+- If you must reply inline via CLI, use:
+
+  ```bash
+  gh api -X POST /repos/<owner>/<repo>/pulls/<pr_number>/comments/<comment_id>/replies \
+    -f body="reply text"
+  ```
+
+  (GraphQL `addPullRequestReviewComment` is deprecated; prefer `addPullRequestReviewThreadReply`.)
 - When pushing changes in response to feedback:
   - summarize what changed and where,
   - call out what remains unchanged and why (if applicable),
@@ -2112,6 +2130,13 @@ For each category, if a check fails: escalate to full checklist (§6/§7) and as
 
 ```bash
 gh api graphql -F owner=<owner> -F repo=<repo> -F number=<pr> -f query='query($owner:String!, $repo:String!, $number:Int!) { repository(owner:$owner, name:$repo) { pullRequest(number:$number) { reviewThreads(first:100) { nodes { isResolved comments(first:10) { nodes { author { login } body path line } } } } } } }' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)'
+```
+
+#### CLI helper to reply inline (REST)
+
+```bash
+gh api -X POST /repos/<owner>/<repo>/pulls/<pr_number>/comments/<comment_id>/replies \
+  -f body="reply text"
 ```
 
 ---
