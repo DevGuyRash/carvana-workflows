@@ -19,7 +19,7 @@ The reviewer (human or AI) **SHALL**:
 
 2. **Produce a final verdict** — You SHALL conclude every review with an explicit `APPROVE`, `REQUEST CHANGES`, or `BLOCK` verdict per §12. A review without a verdict is incomplete and invalid.
 
-3. **Use the required templates** — You SHALL use the templates in §13 to structure your output. You SHALL NOT invent alternative formats. The templates exist to ensure completeness; deviating from them causes omissions.
+3. **Use the required templates** — You SHALL use the templates in §13 to structure your output (delivered per §12 "Report storage"). You SHALL NOT invent alternative formats. The templates exist to ensure completeness; deviating from them causes omissions.
 
 4. **Cite evidence for every claim** — You SHALL provide evidence anchors per §1.5.1 for every non-trivial claim. IF you cannot provide evidence, THEN you SHALL use the confidence calibration language from §1.5.2 and add the item to residual risk per §12.2.
 
@@ -35,6 +35,7 @@ The reviewer **SHALL NOT**:
 - Mark high-risk domains as "Lightweight Review" (violates §11)
 - Leave the "Not verified / residual risk" section empty without explicit justification (violates §12.2)
 - Ignore template requirements (violates §13)
+- Paste the full report into chat when file output is possible (violates §12 "Report storage")
 
 ### Cross-Reference Mesh (Enforcement Network)
 
@@ -131,6 +132,7 @@ The invoker **SHALL** provide:
 - For every BLOCKER/MAJOR finding, you SHALL include: location, concrete failure mode, a fix, and a verification step per §1.1.
 - You SHALL include a verdict (APPROVE / REQUEST CHANGES / BLOCK) per §12 Required sections.
 - You SHALL populate the "Not verified / residual risk" section per §12.2, or explicitly state why it is empty.
+- You SHALL deliver the final report per §12 "Report storage".
 
 **Checkpoint (§0 complete)**: Before proceeding to §1, verify:
 
@@ -1931,9 +1933,9 @@ WHEN the diff makes outbound network calls, you **SHALL** verify:
 
 ### Report storage
 
-You SHALL store review reports in the repo's preferred location. IF none is defined, THEN you SHALL use a predictable folder such as:
+You SHALL store review reports in the repo's preferred location. IF none is defined, default to `.local/reports/` (then `reports/`). WHEN filesystem write access is available, you SHALL write the complete report to that file (not chat) and keep chat output to a short pointer (report path + verdict).
 
-- `reports/` or `.local/reports/`
+- `.local/reports/` (default) or `reports/`
 - `{YYYY-MM-DD}_{HH-MM-SS}_code-review_{branch_or_pr}.md`
 
 ---
