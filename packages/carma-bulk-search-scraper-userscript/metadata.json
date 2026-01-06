@@ -1,7 +1,7 @@
 {
   "name": "Carma Bulk Search Scraper",
   "namespace": "https://carma.cvnacorp.com/",
-  "version": "0.6.1",
+  "version": "0.0.1",
   "description": "Bulk scrape result tables from /research/search/<term> (stock number, phone, name, email, etc.) with optional column enabling, page-size, pagination, and CSV/JSON export.",
   "author": "Carvana Automation",
   "match": [

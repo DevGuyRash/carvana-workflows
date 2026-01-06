@@ -1,7 +1,7 @@
 {
   "name": "CV Automations — Jira",
   "namespace": "cv-userscripts",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Carvana automation foundation for Jira.",
   "author": "Carvana Automation",
   "match": [
