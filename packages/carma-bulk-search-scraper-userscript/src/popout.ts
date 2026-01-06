@@ -845,13 +845,13 @@ function createResultsView(params: {
     const rowIndex = cell.getAttribute('data-row-index');
     if (rowIndex === null) return;
     const row = Number.parseInt(rowIndex, 10);
-    const colIndex = cell.getAttribute('data-col-index');
-    if (colIndex === null) return;
-    const col = Number.parseInt(colIndex, 10);
     if (drag.mode === 'row') {
       scheduleDragUpdate(row, drag.anchorCol);
       return;
     }
+    const colIndex = cell.getAttribute('data-col-index');
+    if (colIndex === null) return;
+    const col = Number.parseInt(colIndex, 10);
     scheduleDragUpdate(row, col);
   });
 
