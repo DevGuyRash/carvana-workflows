@@ -21,6 +21,8 @@ const SWITCHER_HOOK_KEY = '__cvJqlBuilderSwitcherHook';
 const CUSTOM_PRESETS_KEY = 'jira.jql.builder:customPresets';
 const PINNED_PRESETS_KEY = 'jira.jql.builder:pinnedPresets';
 const RECENT_FILTERS_KEY = 'jira.jql.builder:recentFilters';
+const BUILDER_STATE_KEY = 'jira.jql.builder:v2state';
+const BUILDER_STATE_VERSION = 1;
 const AUTO_CACHE_KEY = '__cvJqlAutocompleteData';
 const AUTO_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -1250,6 +1252,23 @@ interface V2State {
   pinnedPresets: string[]; // IDs of presets to show in visual mode (4 max)
   recentFilters: RecentFilter[]; // Recently used filters
   draggedPresetId: string | null; // For drag-and-drop reordering
+  advancedText: string; // Raw advanced editor text
+}
+
+interface StoredV2State {
+  version: number;
+  mode: ViewMode;
+  filters: FilterCard[];
+  sortField: string;
+  sortDirection: 'ASC' | 'DESC';
+  sortEntries: SortEntry[];
+  showAdvancedSort: boolean;
+  advancedSorts: JqlSortState[];
+  searchText: string;
+  selectedPresets: string[];
+  showReferencePanel: boolean;
+  advancedText: string;
+  updatedAt: number;
 }
 
 // ============================================================================
@@ -1698,6 +1717,8 @@ class JqlBuilderV2UI {
   private data: JqlAutocompleteData;
   private fieldCatalog: FieldCatalog;
   private destroyed = false;
+  private saveTimer: number | undefined;
+  private outsideClickHandler?: (ev: PointerEvent) => void;
 
   private state: V2State = {
     mode: 'visual',
@@ -1713,7 +1734,8 @@ class JqlBuilderV2UI {
     customPresets: [],
     pinnedPresets: ['my-active-work', 'my-open', 'recently-updated', 'overdue'],
     recentFilters: [],
-    draggedPresetId: null
+    draggedPresetId: null,
+    advancedText: ''
   };
 
   private panel!: HTMLDivElement;
@@ -1734,6 +1756,7 @@ class JqlBuilderV2UI {
     this.data = data;
     this.fieldCatalog = buildFieldCatalog(data);
     this.loadStoredPreferences();
+    this.loadStoredState();
   }
 
   private loadStoredPreferences(): void {
@@ -1745,6 +1768,61 @@ class JqlBuilderV2UI {
     );
     // Load recent filters
     this.state.recentFilters = gmStorage.get<RecentFilter[]>(RECENT_FILTERS_KEY, []);
+  }
+
+  private loadStoredState(): void {
+    const stored = gmStorage.get<StoredV2State | null>(BUILDER_STATE_KEY, null);
+    if (!stored || stored.version !== BUILDER_STATE_VERSION) return;
+
+    this.state.mode = stored.mode ?? this.state.mode;
+    this.state.filters = Array.isArray(stored.filters) ? stored.filters : this.state.filters;
+    this.state.sortField = stored.sortField || this.state.sortField;
+    this.state.sortDirection = stored.sortDirection || this.state.sortDirection;
+    this.state.sortEntries = Array.isArray(stored.sortEntries)
+      ? stored.sortEntries
+      : this.state.sortEntries;
+    this.state.showAdvancedSort = Boolean(stored.showAdvancedSort);
+    this.state.advancedSorts = Array.isArray(stored.advancedSorts) ? stored.advancedSorts : this.state.advancedSorts;
+    this.state.searchText = stored.searchText ?? this.state.searchText;
+    this.state.selectedPresets = new Set(Array.isArray(stored.selectedPresets) ? stored.selectedPresets : []);
+    this.state.showReferencePanel = Boolean(stored.showReferencePanel);
+    this.state.advancedText = stored.advancedText ?? this.state.advancedText;
+    this.syncSortEntriesToLegacy();
+  }
+
+  private scheduleSaveState(): void {
+    if (this.saveTimer) window.clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => {
+      this.saveTimer = undefined;
+      this.saveState();
+    }, 200);
+  }
+
+  private saveState(): void {
+    const stored: StoredV2State = {
+      version: BUILDER_STATE_VERSION,
+      mode: this.state.mode,
+      filters: this.state.filters,
+      sortField: this.state.sortField,
+      sortDirection: this.state.sortDirection,
+      sortEntries: this.state.sortEntries,
+      showAdvancedSort: this.state.showAdvancedSort,
+      advancedSorts: this.state.advancedSorts,
+      searchText: this.state.searchText,
+      selectedPresets: Array.from(this.state.selectedPresets),
+      showReferencePanel: this.state.showReferencePanel,
+      advancedText: this.state.advancedText,
+      updatedAt: Date.now()
+    };
+    gmStorage.set(BUILDER_STATE_KEY, stored);
+  }
+
+  private flushStateSave(): void {
+    if (this.saveTimer) {
+      window.clearTimeout(this.saveTimer);
+      this.saveTimer = undefined;
+    }
+    this.saveState();
   }
 
   private saveCustomPresets(): void {
@@ -1785,6 +1863,9 @@ class JqlBuilderV2UI {
     this.panel = this.renderPanel();
     this.shadow.appendChild(this.panel);
     this.updatePreview();
+    if (this.state.mode === 'advanced' && this.advancedTextarea) {
+      this.advancedTextarea.value = this.state.advancedText || this.previewEl.value;
+    }
 
     // Hijack keyboard events on textboxes to prevent Jira shortcuts from firing
     this.panel.addEventListener('keydown', (e) => {
@@ -1806,11 +1887,29 @@ class JqlBuilderV2UI {
       }
     }, true);
 
+    this.outsideClickHandler = (ev: PointerEvent) => {
+      const path = ev.composedPath();
+      if (path.includes(this.panel) || path.includes(this.shadow.host)) return;
+      const controller = getBuilderController();
+      if (controller) {
+        controller.destroy();
+        setBuilderController(undefined);
+      } else {
+        this.destroy();
+      }
+    };
+    document.addEventListener('pointerdown', this.outsideClickHandler, true);
+
     void ensureAdvancedSearchMode();
   }
 
   destroy(): void {
     this.destroyed = true;
+    this.flushStateSave();
+    if (this.outsideClickHandler) {
+      document.removeEventListener('pointerdown', this.outsideClickHandler, true);
+      this.outsideClickHandler = undefined;
+    }
     this.panel?.remove();
     this.toastEl?.remove();
   }
@@ -3696,7 +3795,7 @@ class JqlBuilderV2UI {
       btn.addEventListener('click', () => {
         this.state.selectedPresets.clear();
         this.state.selectedPresets.add(preset.id);
-        this.previewEl.value = preset.jql;
+        this.updatePreview();
         this.addToRecentFilters(preset.jql, preset.label);
       });
       presetsGrid.appendChild(btn);
@@ -3722,6 +3821,8 @@ class JqlBuilderV2UI {
         btn.title = recent.jql;
         btn.addEventListener('click', () => {
           this.previewEl.value = recent.jql;
+          this.state.advancedText = recent.jql;
+          this.scheduleSaveState();
         });
         recentGrid.appendChild(btn);
       });
@@ -4645,11 +4746,13 @@ class JqlBuilderV2UI {
       attrs: { placeholder: 'Enter your JQL query...' }
     }) as HTMLTextAreaElement;
     this.advancedTextarea.style.minHeight = '160px';
-    this.advancedTextarea.value = this.previewEl?.value || buildJqlFromV2State(this.state, this.fieldCatalog.fieldsById);
+    this.advancedTextarea.value = this.state.advancedText || this.previewEl?.value || buildJqlFromV2State(this.state, this.fieldCatalog.fieldsById);
     this.advancedTextarea.addEventListener('input', () => {
       if (this.previewEl) {
         this.previewEl.value = this.advancedTextarea.value;
       }
+      this.state.advancedText = this.advancedTextarea.value;
+      this.scheduleSaveState();
     });
     textareaWrap.appendChild(this.advancedTextarea);
     container.appendChild(textareaWrap);
@@ -4991,7 +5094,14 @@ class JqlBuilderV2UI {
   // ==========================================================================
 
   private setMode(mode: ViewMode): void {
+    const previousMode = this.state.mode;
     this.state.mode = mode;
+    if (mode === 'advanced' && previousMode !== 'advanced') {
+      this.state.advancedText = this.previewEl?.value || this.state.advancedText || '';
+    }
+    if (mode !== 'advanced') {
+      this.state.advancedText = this.state.advancedText || this.previewEl?.value || '';
+    }
     this.rerender();
   }
 
@@ -5011,13 +5121,21 @@ class JqlBuilderV2UI {
   private updatePreview(): void {
     if (!this.previewEl) return;
 
+    if (this.state.mode === 'advanced') {
+      this.previewEl.value = this.state.advancedText ?? '';
+      this.scheduleSaveState();
+      return;
+    }
+
     // If presets are selected, combine them
     if (this.state.selectedPresets.size > 0) {
       this.combineSelectedPresets();
+      this.scheduleSaveState();
       return;
     }
 
     this.previewEl.value = buildJqlFromV2State(this.state, this.fieldCatalog.fieldsById);
+    this.scheduleSaveState();
   }
 
   private rerender(): void {
