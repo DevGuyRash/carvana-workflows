@@ -312,6 +312,7 @@ if (!CVR.apProcess) {
       [/notice of lien online application/i,["MISSOURI DEPARTMENT OF REVENUE"]],
       [/villarreal\s*enterprise\s*group/i,["VILLARREAL ENTERPRISE GROUP LLC"]],
       [/lyft/i,["LYFT, INC"]],
+      [/waymo/i,["WAYMO LLC"]],
       [/motor\s*car\s*tag\s*(?:&|and)\s*title/i,["MOTOR CAR TAG & TITLE"]],
       [/edealer\s*services/i,["eDealer Services"]],
       [/\bvitu\b|vitu llc|vitu,?\s*inc/i,["VITU",IV,M,T]],
