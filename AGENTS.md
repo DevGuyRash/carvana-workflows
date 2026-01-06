@@ -361,10 +361,10 @@ If the new action introduces new selector fields, update `packages/core/src/ui.t
 - AFTER push or merge operations, you SHALL include a receipt in user-visible output:
 
   ```markdown
-  - **branch `<branch-name>`**
-    - `<SHA>` - _first line of commit message_
-    - `<SHA>` - _first line of commit message_
-  ```
+   - **branch `<branch-name>`**
+     - `<SHA>` `<type>[(<scope>)]:` _<description>_
+     - `<SHA>` `<type>[(<scope>)]:` _<description>_
+   ```
 
 - You SHALL list branches in execution order (e.g., `test → fix → feat → refactor`).
 - You SHALL include PR URL/ID if pushed.
