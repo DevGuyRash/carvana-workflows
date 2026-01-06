@@ -72,6 +72,23 @@ US_BASE_URL=http://localhost:4873 npm run build
 
 ---
 
+## Release build (GitHub links)
+
+To build userscripts with `@downloadURL`/`@updateURL` pointing at the latest GitHub
+release artifacts (mirrors CI behavior):
+
+```bash
+npm run build:release
+```
+
+If your git remote is not GitHub, you can set the repository explicitly:
+
+```bash
+GITHUB_REPOSITORY=owner/repo npm run build:release
+```
+
+---
+
 ## First Run / Demo Workflows
 
 The default registry is **demo‑only**. On a matching site, click the **gear**:

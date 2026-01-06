@@ -8,6 +8,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:dev": "cross-env US_BASE_URL=http://localhost:4873 node scripts/build.mjs",
+    "build:release": "node scripts/build-release.mjs",
     "build:watch": "cross-env US_BASE_URL=http://localhost:4873 node scripts/build.mjs --watch",
     "clean": "rimraf dist && rimraf packages/*/dist",
     "dev": "node scripts/dev.mjs",
