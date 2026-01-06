@@ -17,12 +17,23 @@ function toMetaBlock(meta){
   return lines.join('\n');
 }
 
+function normalizeVersion(raw){
+  if (!raw) return null;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+  return trimmed.startsWith('v') && /^\dv?/.test(trimmed.slice(1))
+    ? trimmed.slice(1)
+    : trimmed;
+}
+
 function loadMeta(pkgDir){
   const metaPath = path.join(pkgDir, 'metadata.json');
   const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
   // keep version in sync with root version if missing
   const rootPkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf-8'));
-  if (!meta.version) meta.version = rootPkg.version;
+  const envVersion = normalizeVersion(process.env.US_VERSION);
+  if (envVersion) meta.version = envVersion;
+  else if (!meta.version) meta.version = rootPkg.version;
   return meta;
 }
 

@@ -26,6 +26,7 @@ jobs:
       - name: Build userscripts
         env:
           US_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+          US_VERSION: ${{ github.ref_name }}
         run: npm run build
 
       - name: Upload artifacts to release
