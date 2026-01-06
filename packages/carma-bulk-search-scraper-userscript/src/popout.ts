@@ -65,9 +65,10 @@ function ensureStyles(doc: Document): void {
     tbody td.cbss-row-header{text-align:right;padding-right:10px;color:#64748b;background:#f1f5f9;position:sticky;left:0;z-index:1;}
     tbody tr:nth-child(even) td.cbss-row-header{background:#e2e8f0;}
     tbody tr:nth-child(even) td{background:#f8fafc;}
+    table, thead, tbody, tr, td, th{user-select:none;-webkit-user-select:none;-moz-user-select:none;}
+    tbody td.cbss-col-selected{background:#eff6ff;}
     tbody tr.cbss-row-selected td{background:#fee2e2;}
     tbody td.cbss-cell-selected{background:#fef3c7;outline:1px solid #f59e0b;}
-    tbody td.cbss-col-selected{background:#dbeafe;}
     .cbss-inline-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:24px;}
     .cbss-inline-modal{background:#fff;border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.35);width:min(1400px,96vw);height:min(92vh,900px);overflow:hidden;}
   `;
@@ -176,6 +177,21 @@ function createResultsView(params: {
     rows: new Set<number>(),
     cols: new Set<number>(),
     anchor: null as { row: number; col: number; mode: 'cell' | 'row' | 'col' } | null,
+  };
+
+  const drag = {
+    active: false,
+    didDrag: false,
+    suppressClick: false,
+    mode: null as 'cell' | 'row' | 'col' | null,
+    anchorRow: 0,
+    anchorCol: 0,
+    rafId: 0,
+    pendingRow: null as number | null,
+    pendingCol: null as number | null,
+    lastRowRange: null as { minRow: number; maxRow: number } | null,
+    lastColRange: null as { minCol: number; maxCol: number } | null,
+    lastCellRange: null as { minRow: number; maxRow: number; minCol: number; maxCol: number } | null,
   };
 
   const setStatus = () => {
@@ -447,6 +463,148 @@ function createResultsView(params: {
     return true;
   };
 
+  const updateCellRange = (next: { minRow: number; maxRow: number; minCol: number; maxCol: number }) => {
+    const prev = drag.lastCellRange;
+    if (!prev) {
+      for (let r = next.minRow; r <= next.maxRow; r++) {
+        for (let c = next.minCol; c <= next.maxCol; c++) {
+          setCellSelected(r, c, true);
+        }
+      }
+      drag.lastCellRange = next;
+      return;
+    }
+
+    for (let r = prev.minRow; r <= prev.maxRow; r++) {
+      for (let c = prev.minCol; c <= prev.maxCol; c++) {
+        if (r < next.minRow || r > next.maxRow || c < next.minCol || c > next.maxCol) {
+          setCellSelected(r, c, false);
+        }
+      }
+    }
+    for (let r = next.minRow; r <= next.maxRow; r++) {
+      for (let c = next.minCol; c <= next.maxCol; c++) {
+        if (r < prev.minRow || r > prev.maxRow || c < prev.minCol || c > prev.maxCol) {
+          setCellSelected(r, c, true);
+        }
+      }
+    }
+    drag.lastCellRange = next;
+  };
+
+  const updateRowRange = (next: { minRow: number; maxRow: number }) => {
+    const prev = drag.lastRowRange;
+    if (!prev) {
+      for (let r = next.minRow; r <= next.maxRow; r++) {
+        setRowSelected(r, true);
+      }
+      drag.lastRowRange = next;
+      return;
+    }
+    for (let r = prev.minRow; r <= prev.maxRow; r++) {
+      if (r < next.minRow || r > next.maxRow) setRowSelected(r, false);
+    }
+    for (let r = next.minRow; r <= next.maxRow; r++) {
+      if (r < prev.minRow || r > prev.maxRow) setRowSelected(r, true);
+    }
+    drag.lastRowRange = next;
+  };
+
+  const updateColRange = (next: { minCol: number; maxCol: number }) => {
+    const prev = drag.lastColRange;
+    if (!prev) {
+      for (let c = next.minCol; c <= next.maxCol; c++) {
+        setColSelected(c, true);
+      }
+      drag.lastColRange = next;
+      return;
+    }
+    for (let c = prev.minCol; c <= prev.maxCol; c++) {
+      if (c < next.minCol || c > next.maxCol) setColSelected(c, false);
+    }
+    for (let c = next.minCol; c <= next.maxCol; c++) {
+      if (c < prev.minCol || c > prev.maxCol) setColSelected(c, true);
+    }
+    drag.lastColRange = next;
+  };
+
+  const startDragSelection = (mode: 'cell' | 'row' | 'col', row: number, col: number) => {
+    drag.active = true;
+    drag.didDrag = false;
+    drag.mode = mode;
+    drag.rafId = 0;
+    drag.pendingRow = null;
+    drag.pendingCol = null;
+    drag.lastRowRange = null;
+    drag.lastColRange = null;
+    drag.lastCellRange = null;
+    drag.anchorRow = row;
+    drag.anchorCol = col;
+
+    setMode(mode);
+    if (mode === 'row') {
+      clearRowSelection();
+      updateRowRange({ minRow: row, maxRow: row });
+      selection.anchor = { row, col: 0, mode: 'row' };
+    } else if (mode === 'col') {
+      clearColSelection();
+      updateColRange({ minCol: col, maxCol: col });
+      selection.anchor = { row: 0, col, mode: 'col' };
+    } else {
+      clearCellSelection();
+      updateCellRange({ minRow: row, maxRow: row, minCol: col, maxCol: col });
+      selection.anchor = { row, col, mode: 'cell' };
+    }
+    setStatus();
+  };
+
+  const scheduleDragUpdate = (row: number, col: number) => {
+    drag.pendingRow = row;
+    drag.pendingCol = col;
+    if (drag.rafId) return;
+    drag.rafId = hostWindow.requestAnimationFrame(() => {
+      drag.rafId = 0;
+      if (!drag.active || drag.pendingRow === null || drag.pendingCol === null || !drag.mode) return;
+      const nextRow = drag.pendingRow;
+      const nextCol = drag.pendingCol;
+
+      if (drag.mode === 'col') {
+        if (nextCol !== drag.anchorCol) drag.didDrag = true;
+        const minCol = Math.min(drag.anchorCol, nextCol);
+        const maxCol = Math.max(drag.anchorCol, nextCol);
+        const prev = drag.lastColRange;
+        if (!prev || prev.minCol !== minCol || prev.maxCol !== maxCol) {
+          updateColRange({ minCol, maxCol });
+          setStatus();
+        }
+        return;
+      }
+
+      if (drag.mode === 'row') {
+        if (nextRow !== drag.anchorRow) drag.didDrag = true;
+        const minRow = Math.min(drag.anchorRow, nextRow);
+        const maxRow = Math.max(drag.anchorRow, nextRow);
+        const prev = drag.lastRowRange;
+        if (!prev || prev.minRow !== minRow || prev.maxRow !== maxRow) {
+          updateRowRange({ minRow, maxRow });
+          setStatus();
+        }
+        return;
+      }
+
+      if (nextRow !== drag.anchorRow || nextCol !== drag.anchorCol) drag.didDrag = true;
+      const minRow = Math.min(drag.anchorRow, nextRow);
+      const maxRow = Math.max(drag.anchorRow, nextRow);
+      const minCol = Math.min(drag.anchorCol, nextCol);
+      const maxCol = Math.max(drag.anchorCol, nextCol);
+      const prev = drag.lastCellRange;
+      if (!prev || prev.minRow !== minRow || prev.maxRow !== maxRow || prev.minCol !== minCol || prev.maxCol !== maxCol) {
+        updateCellRange({ minRow, maxRow, minCol, maxCol });
+        setStatus();
+      }
+    });
+  };
+
   const handleCellClick = (row: number, col: number, isShift: boolean, isCtrl: boolean) => {
     setMode('cell');
     const anchor = selection.anchor;
@@ -591,6 +749,10 @@ function createResultsView(params: {
   };
 
   table.addEventListener('click', (event) => {
+    if (drag.suppressClick) {
+      drag.suppressClick = false;
+      return;
+    }
     const target = event.target as HTMLElement | null;
     if (!target) return;
     const cell = target.closest('td,th') as HTMLElement | null;
@@ -622,6 +784,94 @@ function createResultsView(params: {
     }
   });
 
+  table.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    const cell = target.closest('td,th') as HTMLElement | null;
+    if (!cell) return;
+    const isShift = event.shiftKey;
+    const isCtrl = event.ctrlKey || event.metaKey;
+    if (isShift || isCtrl) return;
+
+    event.preventDefault();
+
+    if (cell.tagName === 'TH') {
+      const colIndex = cell.getAttribute('data-col-index');
+      if (colIndex !== null) {
+        const col = Number.parseInt(colIndex, 10);
+        startDragSelection('col', 0, col);
+      }
+      return;
+    }
+
+    const rowIndex = cell.getAttribute('data-row-index');
+    if (rowIndex === null) return;
+    const row = Number.parseInt(rowIndex, 10);
+
+    if (cell.getAttribute('data-row-header') === '1') {
+      startDragSelection('row', row, 0);
+      return;
+    }
+
+    const colIndex = cell.getAttribute('data-col-index');
+    if (colIndex === null) return;
+    const col = Number.parseInt(colIndex, 10);
+    startDragSelection('cell', row, col);
+  });
+
+  table.addEventListener('mousemove', (event) => {
+    if (!drag.active || !drag.mode) return;
+    if (!(event.buttons & 1)) {
+      drag.active = false;
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    const cell = target.closest('td,th') as HTMLElement | null;
+    if (!cell) return;
+
+    event.preventDefault();
+
+    if (drag.mode === 'col') {
+      const colIndex = cell.getAttribute('data-col-index');
+      if (colIndex === null) return;
+      const col = Number.parseInt(colIndex, 10);
+      scheduleDragUpdate(drag.anchorRow, col);
+      return;
+    }
+
+    const rowIndex = cell.getAttribute('data-row-index');
+    if (rowIndex === null) return;
+    const row = Number.parseInt(rowIndex, 10);
+    if (drag.mode === 'row') {
+      scheduleDragUpdate(row, drag.anchorCol);
+      return;
+    }
+    const colIndex = cell.getAttribute('data-col-index');
+    if (colIndex === null) return;
+    const col = Number.parseInt(colIndex, 10);
+    scheduleDragUpdate(row, col);
+  });
+
+  const stopDrag = () => {
+    if (!drag.active) return;
+    drag.active = false;
+    drag.rafId = 0;
+    drag.pendingRow = null;
+    drag.pendingCol = null;
+    if (drag.didDrag) {
+      drag.suppressClick = true;
+      hostWindow.setTimeout(() => {
+        drag.suppressClick = false;
+      }, 0);
+    }
+  };
+
+  hostWindow.addEventListener('mouseup', stopDrag);
+  hostWindow.addEventListener('blur', stopDrag);
+
   const onKeydown = (event: KeyboardEvent) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
       event.preventDefault();
@@ -652,6 +902,8 @@ function createResultsView(params: {
   const cleanup = () => {
     hostWindow.clearInterval(interval);
     hostWindow.removeEventListener('keydown', onKeydown);
+    hostWindow.removeEventListener('mouseup', stopDrag);
+    hostWindow.removeEventListener('blur', stopDrag);
   };
 
   const handle: PopoutHandle = {
