@@ -7,10 +7,9 @@
 
 ---
 
-## Table of contents- [Universal Code Review Guidelines \& Prompt (Language‑Agnostic)](#universal-code-review-guidelines--prompt-languageagnostic)
+## Table of contents
 
 - [Universal Code Review Guidelines \& Prompt (Language‑Agnostic)](#universal-code-review-guidelines--prompt-languageagnostic)
-  - [Table of contents- Universal Code Review Guidelines \& Prompt (Language‑Agnostic)](#table-of-contents--universal-code-review-guidelines--prompt-languageagnostic)
   - [0) How to use this guide (humans and AI reviewers)](#0-how-to-use-this-guide-humans-and-ai-reviewers)
     - [If you use an AI reviewer](#if-you-use-an-ai-reviewer)
       - [Inputs to provide (minimum)](#inputs-to-provide-minimum)
