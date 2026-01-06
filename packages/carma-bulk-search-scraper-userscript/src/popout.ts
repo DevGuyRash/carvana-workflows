@@ -65,9 +65,10 @@ function ensureStyles(doc: Document): void {
     tbody td.cbss-row-header{text-align:right;padding-right:10px;color:#64748b;background:#f1f5f9;position:sticky;left:0;z-index:1;}
     tbody tr:nth-child(even) td.cbss-row-header{background:#e2e8f0;}
     tbody tr:nth-child(even) td{background:#f8fafc;}
+    table, thead, tbody, tr, td, th{user-select:none;-webkit-user-select:none;-moz-user-select:none;}
+    tbody td.cbss-col-selected{background:#eff6ff;}
     tbody tr.cbss-row-selected td{background:#fee2e2;}
     tbody td.cbss-cell-selected{background:#fef3c7;outline:1px solid #f59e0b;}
-    tbody td.cbss-col-selected{background:#dbeafe;}
     .cbss-inline-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:24px;}
     .cbss-inline-modal{background:#fff;border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.35);width:min(1400px,96vw);height:min(92vh,900px);overflow:hidden;}
   `;
@@ -176,6 +177,15 @@ function createResultsView(params: {
     rows: new Set<number>(),
     cols: new Set<number>(),
     anchor: null as { row: number; col: number; mode: 'cell' | 'row' | 'col' } | null,
+  };
+
+  const drag = {
+    active: false,
+    didDrag: false,
+    suppressClick: false,
+    mode: null as 'cell' | 'row' | 'col' | null,
+    anchorRow: 0,
+    anchorCol: 0,
   };
 
   const setStatus = () => {
@@ -447,6 +457,29 @@ function createResultsView(params: {
     return true;
   };
 
+  const selectCellRange = (minRow: number, maxRow: number, minCol: number, maxCol: number) => {
+    clearCellSelection();
+    for (let r = minRow; r <= maxRow; r++) {
+      for (let c = minCol; c <= maxCol; c++) {
+        setCellSelected(r, c, true);
+      }
+    }
+  };
+
+  const selectRowRange = (minRow: number, maxRow: number) => {
+    clearRowSelection();
+    for (let r = minRow; r <= maxRow; r++) {
+      setRowSelected(r, true);
+    }
+  };
+
+  const selectColRange = (minCol: number, maxCol: number) => {
+    clearColSelection();
+    for (let c = minCol; c <= maxCol; c++) {
+      setColSelected(c, true);
+    }
+  };
+
   const handleCellClick = (row: number, col: number, isShift: boolean, isCtrl: boolean) => {
     setMode('cell');
     const anchor = selection.anchor;
@@ -591,6 +624,10 @@ function createResultsView(params: {
   };
 
   table.addEventListener('click', (event) => {
+    if (drag.suppressClick) {
+      drag.suppressClick = false;
+      return;
+    }
     const target = event.target as HTMLElement | null;
     if (!target) return;
     const cell = target.closest('td,th') as HTMLElement | null;
@@ -622,6 +659,124 @@ function createResultsView(params: {
     }
   });
 
+  table.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    const cell = target.closest('td,th') as HTMLElement | null;
+    if (!cell) return;
+    const isShift = event.shiftKey;
+    const isCtrl = event.ctrlKey || event.metaKey;
+    if (isShift || isCtrl) return;
+
+    event.preventDefault();
+
+    drag.active = true;
+    drag.didDrag = false;
+    drag.mode = null;
+
+    if (cell.tagName === 'TH') {
+      const colIndex = cell.getAttribute('data-col-index');
+      if (colIndex !== null) {
+        const col = Number.parseInt(colIndex, 10);
+        drag.mode = 'col';
+        drag.anchorCol = col;
+        setMode('col');
+        selectColRange(col, col);
+        selection.anchor = { row: 0, col, mode: 'col' };
+        setStatus();
+      }
+      return;
+    }
+
+    const rowIndex = cell.getAttribute('data-row-index');
+    if (rowIndex === null) return;
+    const row = Number.parseInt(rowIndex, 10);
+
+    if (cell.getAttribute('data-row-header') === '1') {
+      drag.mode = 'row';
+      drag.anchorRow = row;
+      setMode('row');
+      selectRowRange(row, row);
+      selection.anchor = { row, col: 0, mode: 'row' };
+      setStatus();
+      return;
+    }
+
+    const colIndex = cell.getAttribute('data-col-index');
+    if (colIndex === null) return;
+    const col = Number.parseInt(colIndex, 10);
+    drag.mode = 'cell';
+    drag.anchorRow = row;
+    drag.anchorCol = col;
+    setMode('cell');
+    selectCellRange(row, row, col, col);
+    selection.anchor = { row, col, mode: 'cell' };
+    setStatus();
+  });
+
+  table.addEventListener('mousemove', (event) => {
+    if (!drag.active || !drag.mode) return;
+    if (!(event.buttons & 1)) {
+      drag.active = false;
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    const cell = target.closest('td,th') as HTMLElement | null;
+    if (!cell) return;
+
+    event.preventDefault();
+
+    if (drag.mode === 'col') {
+      const colIndex = cell.getAttribute('data-col-index');
+      if (colIndex === null) return;
+      const col = Number.parseInt(colIndex, 10);
+      if (col !== drag.anchorCol) drag.didDrag = true;
+      const minCol = Math.min(drag.anchorCol, col);
+      const maxCol = Math.max(drag.anchorCol, col);
+      selectColRange(minCol, maxCol);
+      setStatus();
+      return;
+    }
+
+    const rowIndex = cell.getAttribute('data-row-index');
+    if (rowIndex === null) return;
+    const row = Number.parseInt(rowIndex, 10);
+
+    if (drag.mode === 'row') {
+      if (row !== drag.anchorRow) drag.didDrag = true;
+      const minRow = Math.min(drag.anchorRow, row);
+      const maxRow = Math.max(drag.anchorRow, row);
+      selectRowRange(minRow, maxRow);
+      setStatus();
+      return;
+    }
+
+    const colIndex = cell.getAttribute('data-col-index');
+    if (colIndex === null) return;
+    const col = Number.parseInt(colIndex, 10);
+    if (row !== drag.anchorRow || col !== drag.anchorCol) drag.didDrag = true;
+    const minRow = Math.min(drag.anchorRow, row);
+    const maxRow = Math.max(drag.anchorRow, row);
+    const minCol = Math.min(drag.anchorCol, col);
+    const maxCol = Math.max(drag.anchorCol, col);
+    selectCellRange(minRow, maxRow, minCol, maxCol);
+    setStatus();
+  });
+
+  const stopDrag = () => {
+    if (!drag.active) return;
+    drag.active = false;
+    if (drag.didDrag) {
+      drag.suppressClick = true;
+    }
+  };
+
+  hostWindow.addEventListener('mouseup', stopDrag);
+  hostWindow.addEventListener('blur', stopDrag);
+
   const onKeydown = (event: KeyboardEvent) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
       event.preventDefault();
@@ -652,6 +807,8 @@ function createResultsView(params: {
   const cleanup = () => {
     hostWindow.clearInterval(interval);
     hostWindow.removeEventListener('keydown', onKeydown);
+    hostWindow.removeEventListener('mouseup', stopDrag);
+    hostWindow.removeEventListener('blur', stopDrag);
   };
 
   const handle: PopoutHandle = {
