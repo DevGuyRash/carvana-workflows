@@ -863,6 +863,9 @@ function createResultsView(params: {
     drag.pendingCol = null;
     if (drag.didDrag) {
       drag.suppressClick = true;
+      hostWindow.setTimeout(() => {
+        drag.suppressClick = false;
+      }, 0);
     }
   };
 
