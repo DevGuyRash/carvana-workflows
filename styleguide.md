@@ -65,22 +65,148 @@ IF any validation fails, THEN the review is incomplete. You SHALL NOT proceed to
 
 - [Universal Code Review Guidelines \& Prompt (Language‑Agnostic)](#universal-code-review-guidelines--prompt-languageagnostic)
   - [⚠️ PROTOCOL INTEGRITY \& ENFORCEMENT (MANDATORY — READ FIRST)](#️-protocol-integrity--enforcement-mandatory--read-first)
+    - [Binding Obligations](#binding-obligations)
+    - [Protocol Violations (auto-flag as BLOCKER)](#protocol-violations-auto-flag-as-blocker)
+    - [Cross-Reference Mesh (Enforcement Network)](#cross-reference-mesh-enforcement-network)
+  - [Table of contents](#table-of-contents)
   - [0) How to use this guide (humans and AI reviewers)](#0-how-to-use-this-guide-humans-and-ai-reviewers)
+    - [If you use an AI reviewer](#if-you-use-an-ai-reviewer)
+      - [Inputs to provide (minimum)](#inputs-to-provide-minimum)
+      - [Procedure (what the AI SHALL do)](#procedure-what-the-ai-shall-do)
+      - [Output requirements](#output-requirements)
+      - [GitHub CLI note: unresolved inline threads](#github-cli-note-unresolved-inline-threads)
   - [0.1) What this is for](#01-what-this-is-for)
   - [1) Non‑shallow review rules (quality bar)](#1-nonshallow-review-rules-quality-bar)
+    - [1.1 Every finding SHALL be anchored](#11-every-finding-shall-be-anchored)
+    - [1.2 Evidence SHALL beat vibes](#12-evidence-shall-beat-vibes)
+    - [1.3 Risk SHALL dictate depth](#13-risk-shall-dictate-depth)
+    - [1.4 You SHALL prefer small, composable patches](#14-you-shall-prefer-small-composable-patches)
+    - [1.5 Audit discipline (anti false completeness)](#15-audit-discipline-anti-false-completeness)
+      - [1.5.1 Evidence standard (hard citations)](#151-evidence-standard-hard-citations)
+      - [1.5.2 Confidence calibration (required language)](#152-confidence-calibration-required-language)
+      - [1.5.3 Signal preservation (anti dilution rules)](#153-signal-preservation-anti-dilution-rules)
+      - [1.5.4 Approval discipline (release-readiness mindset)](#154-approval-discipline-release-readiness-mindset)
   - [2) Severity rubric (required)](#2-severity-rubric-required)
   - [3) Repository contract \& workflow discovery (mandatory first step)](#3-repository-contract--workflow-discovery-mandatory-first-step)
+    - [3.1 You SHALL read the repo's instruction set (in priority order if present)](#31-you-shall-read-the-repos-instruction-set-in-priority-order-if-present)
+    - [3.2 You SHALL populate the Repo Snapshot during discovery](#32-you-shall-populate-the-repo-snapshot-during-discovery)
+    - [3.3 Discovery enforcement rules (mechanical)](#33-discovery-enforcement-rules-mechanical)
   - [4) Review workflow (multi‑pass, with required coverage)](#4-review-workflow-multipass-with-required-coverage)
+    - [Round −1 — Fresh eyes (mandatory)](#round-1--fresh-eyes-mandatory)
+    - [Round 0 — Triage \& intent (mandatory)](#round-0--triage--intent-mandatory)
+      - [Quick triage checks](#quick-triage-checks)
+      - [Change inventory (required for audit-style reviews)](#change-inventory-required-for-audit-style-reviews)
+      - [Commit hygiene (required)](#commit-hygiene-required)
+    - [Round 1 — Diff review (mandatory)](#round-1--diff-review-mandatory)
+      - ["Play computer" checklist](#play-computer-checklist)
+    - [Round 2 — Requirements trace (mandatory when possible)](#round-2--requirements-trace-mandatory-when-possible)
+      - [Using `git` (works anywhere)](#using-git-works-anywhere)
+      - [Using GitHub CLI (`gh`) when available](#using-github-cli-gh-when-available)
+      - [If a PR exists, you SHALL also review](#if-a-pr-exists-you-shall-also-review)
+      - [Re‑review questions](#rereview-questions)
+      - [Requirements traceability (audit requirement)](#requirements-traceability-audit-requirement)
+    - [Round 3 — Discussion \& unresolved thread closure (mandatory for PRs)](#round-3--discussion--unresolved-thread-closure-mandatory-for-prs)
+      - [4.3.1 Review threads: are we done?](#431-review-threads-are-we-done)
+      - [4.3.2 How to find unresolved conversations (especially inline review threads)](#432-how-to-find-unresolved-conversations-especially-inline-review-threads)
+      - [4.3.3 Responding to PR feedback (thread hygiene)](#433-responding-to-pr-feedback-thread-hygiene)
+      - [4.3.4 Review drift \& merge gates](#434-review-drift--merge-gates)
+    - [Round 4 — Verification (mandatory for high risk; required for standard reviews when commands available)](#round-4--verification-mandatory-for-high-risk-required-for-standard-reviews-when-commands-available)
+      - [Verification artifacts (audit requirement)](#verification-artifacts-audit-requirement)
+    - [Round 5 — Final sanity check (mandatory)](#round-5--final-sanity-check-mandatory)
   - [5) Core engineering principles (mechanical checks)](#5-core-engineering-principles-mechanical-checks)
+    - [5.1 KISS — Keep It Simple](#51-kiss--keep-it-simple)
+    - [5.2 DRY — Don't Repeat Yourself](#52-dry--dont-repeat-yourself)
+    - [5.3 YAGNI — You Aren't Gonna Need It](#53-yagni--you-arent-gonna-need-it)
+    - [5.4 SOLID principles (mechanical checks)](#54-solid-principles-mechanical-checks)
+      - [Single Responsibility](#single-responsibility)
+      - [Open/Closed](#openclosed)
+      - [Liskov Substitution](#liskov-substitution)
+      - [Interface Segregation](#interface-segregation)
+      - [Dependency Inversion](#dependency-inversion)
+    - [5.5 Law of Demeter (Least Knowledge)](#55-law-of-demeter-least-knowledge)
+    - [5.6 Make Illegal States Unrepresentable](#56-make-illegal-states-unrepresentable)
+    - [5.7 Functional Core / Imperative Shell](#57-functional-core--imperative-shell)
+    - [5.8 Fail Fast vs Fail Safe](#58-fail-fast-vs-fail-safe)
+    - [5.9 Principle of Least Privilege](#59-principle-of-least-privilege)
+    - [5.10 Robustness with Precision](#510-robustness-with-precision)
+    - [5.11 Consistency over cleverness](#511-consistency-over-cleverness)
   - [6) Universal checklist (deep, apply to every change)](#6-universal-checklist-deep-apply-to-every-change)
+    - [6.1 Correctness \& edge cases](#61-correctness--edge-cases)
+    - [6.2 Contracts \& compatibility](#62-contracts--compatibility)
+    - [6.3 Determinism \& reproducibility (when outputs persist or are user-visible)](#63-determinism--reproducibility-when-outputs-persist-or-are-user-visible)
+    - [6.4 Security \& privacy (deny-by-default mindset)](#64-security--privacy-deny-by-default-mindset)
+    - [6.5 Reliability \& resilience](#65-reliability--resilience)
+    - [6.6 Observability \& operability](#66-observability--operability)
+    - [6.7 Maintainability \& readability](#67-maintainability--readability)
+    - [6.8 Dependencies \& supply chain](#68-dependencies--supply-chain)
+    - [6.9 Async \& concurrency correctness (apply whenever async/workers are involved)](#69-async--concurrency-correctness-apply-whenever-asyncworkers-are-involved)
+    - [6.10 Code quality \& refactoring (mechanical detection)](#610-code-quality--refactoring-mechanical-detection)
   - [7) Change-type checklists (pick what applies)](#7-change-type-checklists-pick-what-applies)
+    - [A) Public API / schema / wire contracts](#a-public-api--schema--wire-contracts)
+      - [Concrete contract hardening (recommended)](#concrete-contract-hardening-recommended)
+    - [B) Storage, migrations, and data model changes](#b-storage-migrations-and-data-model-changes)
+    - [C) Event-driven / distributed / async workflows](#c-event-driven--distributed--async-workflows)
+      - [Semantics \& correctness](#semantics--correctness)
+      - [Reliability \& backpressure](#reliability--backpressure)
+      - [Data consistency](#data-consistency)
+      - [Observability](#observability)
+      - [Security](#security)
+    - [D) External calls (network/file/subprocess/third-party APIs)](#d-external-calls-networkfilesubprocessthird-party-apis)
+    - [E) Caching](#e-caching)
+    - [F) Performance-sensitive changes](#f-performance-sensitive-changes)
+    - [G) Concurrency and parallelism](#g-concurrency-and-parallelism)
+    - [H) UI/UX changes (CLI, web, mobile)](#h-uiux-changes-cli-web-mobile)
+      - [CLI-specific](#cli-specific)
+    - [I) CI/CD, tooling, and developer experience](#i-cicd-tooling-and-developer-experience)
   - [8) Big‑O complexity expectations (mechanical analysis)](#8-bigo-complexity-expectations-mechanical-analysis)
+    - [8.1 Complexity analysis checklist (mechanical)](#81-complexity-analysis-checklist-mechanical)
+    - [8.2 Anti-pattern detection (mechanical)](#82-anti-pattern-detection-mechanical)
+    - [8.3 Evidence requirements for performance claims](#83-evidence-requirements-for-performance-claims)
   - [9) Test quality standards (language‑agnostic)](#9-test-quality-standards-languageagnostic)
+    - [9.1 Coverage requirements (with thresholds)](#91-coverage-requirements-with-thresholds)
+      - [9.1.1 High-risk domains (auth, payments, migrations, crypto, PII)](#911-high-risk-domains-auth-payments-migrations-crypto-pii)
+      - [9.1.2 Behavioral changes (not pure refactor)](#912-behavioral-changes-not-pure-refactor)
+      - [9.1.3 Pure mechanical refactors](#913-pure-mechanical-refactors)
+      - [9.1.4 Test coverage gaps](#914-test-coverage-gaps)
+    - [9.2 Must‑haves (mechanical checks)](#92-musthaves-mechanical-checks)
+    - [9.3 Risk-based test requirements (apply when applicable)](#93-risk-based-test-requirements-apply-when-applicable)
+    - [9.4 Testing anti-patterns (flag when found)](#94-testing-anti-patterns-flag-when-found)
+    - [9.5 Missing test escalation](#95-missing-test-escalation)
   - [10) Security review mini-framework (mandatory for high-risk)](#10-security-review-mini-framework-mandatory-for-high-risk)
+    - [10.1 Threat summary table (required output)](#101-threat-summary-table-required-output)
+    - [10.2 Injection checklist (mechanical)](#102-injection-checklist-mechanical)
+    - [10.3 Authorization checklist (mechanical)](#103-authorization-checklist-mechanical)
+    - [10.4 Secrets and sensitive data checklist (mechanical)](#104-secrets-and-sensitive-data-checklist-mechanical)
+    - [10.5 Cryptography checklist (mechanical)](#105-cryptography-checklist-mechanical)
+    - [10.6 Network and external calls checklist (mechanical)](#106-network-and-external-calls-checklist-mechanical)
   - [11) Review depth selection (decision tree)](#11-review-depth-selection-decision-tree)
+    - [11.1 Depth selection decision tree](#111-depth-selection-decision-tree)
+    - [11.2 Depth escalation triggers](#112-depth-escalation-triggers)
+    - [11.3 Review depth output requirement](#113-review-depth-output-requirement)
   - [12) Reviewer output expectations (format + completeness)](#12-reviewer-output-expectations-format--completeness)
+    - [Required sections](#required-sections)
+    - [12.2 Residual risk population rules (mandatory)](#122-residual-risk-population-rules-mandatory)
+    - [Report storage](#report-storage)
+      - [Directory structure](#directory-structure)
+      - [Path components](#path-components)
+      - [Scope labels](#scope-labels)
+      - [One-file-per-agent rule](#one-file-per-agent-rule)
+      - [Session manifest (mandatory)](#session-manifest-mandatory)
+      - [Manifest update protocol](#manifest-update-protocol)
+      - [Example: multi-level agent tree](#example-multi-level-agent-tree)
+      - [Chat output](#chat-output)
   - [13) Templates (copy/paste)](#13-templates-copypaste)
+    - [13.1 Findings template](#131-findings-template)
+    - [13.2 AI reviewer usage](#132-ai-reviewer-usage)
   - [14) Quick Review Card (one-page cheat sheet)](#14-quick-review-card-one-page-cheat-sheet)
+    - [A) 2-minute triage](#a-2-minute-triage)
+      - [Stop conditions (immediate escalation to Full Audit)](#stop-conditions-immediate-escalation-to-full-audit)
+    - [B) 10-minute "outside-in" scan](#b-10-minute-outside-in-scan)
+    - [C) Discussion closure (PRs)](#c-discussion-closure-prs)
+      - [CLI helper for unresolved inline threads (GraphQL)](#cli-helper-for-unresolved-inline-threads-graphql)
+      - [CLI helper to reply inline (REST)](#cli-helper-to-reply-inline-rest)
+    - [D) Findings standard (how to write comments)](#d-findings-standard-how-to-write-comments)
+    - [E) Minimal review output template (Quick Review Card)](#e-minimal-review-output-template-quick-review-card)
   - [⚠️ END OF DOCUMENT — FINAL PROTOCOL REMINDER](#️-end-of-document--final-protocol-reminder)
 
 ---
@@ -1933,10 +2059,174 @@ WHEN the diff makes outbound network calls, you **SHALL** verify:
 
 ### Report storage
 
-You SHALL store review reports in the repo's preferred location. IF none is defined, default to `.local/reports/` (then `reports/`). WHEN filesystem write access is available, you SHALL write the complete report to that file (not chat) and keep chat output to a short pointer (report path + verdict).
+You SHALL store review reports using the session-based structure defined below. This structure supports arbitrary agent tree depth (recursive spawning) while maintaining a flat file layout within each session.
 
-- `.local/reports/` (default) or `reports/`
-- `{YYYY-MM-DD}_{HH-MM-SS}_code-review_{branch_or_pr}.md`
+#### Directory structure
+
+```markdown
+.local/reports/code*reviews/{ref}/{session_id}/
+├── {HH-MM-SS-mmm}*{uuid8}\_{scope}.md
+├── ...
+└── \_session.json
+```
+
+IF `.local/reports/` is unavailable, you SHALL use `reports/code_reviews/` as fallback.
+
+#### Path components
+
+| Component      | Format                                 | Example                            | Notes                                                                  |
+| -------------- | -------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------- |
+| `ref`          | Branch with `/`→`-`, or `pr-{N}`       | `feature-auth-flow`, `pr-456`      | Filesystem-safe identifier                                             |
+| `session_id`   | `YYYY-MM-DD_HH-MM-SS-mmm_{root_uuid8}` | `2025-01-15_14-30-22-456_a3f8b2c1` | Identifies one review run; uses root agent's start time and ID         |
+| `HH-MM-SS-mmm` | Time with milliseconds                 | `14-32-00-789`                     | Agent's completion time; provides natural ordering                     |
+| `uuid8`        | First 8 chars of UUIDv4                | `a3f8b2c1`                         | Agent's unique identifier for collision resistance and cross-reference |
+| `scope`        | Review focus label                     | `security`, `final`                | What this file covers (see scope labels below)                         |
+
+#### Scope labels
+
+| Label       | When to use                                                                     |
+| ----------- | ------------------------------------------------------------------------------- |
+| `full`      | Standard full review (all applicable checklists from §6–§7)                     |
+| `security`  | Security-focused review (§10 + §6.4)                                            |
+| `contracts` | API/schema/wire format focus (§7.A)                                             |
+| `storage`   | Data model/migration focus (§7.B)                                               |
+| `async`     | Async/distributed systems focus (§7.C + §6.9)                                   |
+| `perf`      | Performance focus (§7.F + §8)                                                   |
+| _{custom}_  | Any domain-specific scope justified by the change                               |
+| `final`     | **Authoritative session output**—only one file per session SHALL use this scope |
+
+#### One-file-per-agent rule
+
+Each agent SHALL produce exactly one file upon completion. That file SHALL contain:
+
+1. **The agent's own analysis** (if it performed direct review work)
+2. **Synthesis of children** (if it spawned child agents—merged and deduplicated per the template in §13.1)
+3. **A verdict** for its scope/subtree
+
+The file is written when the agent completes. This means:
+
+- Grandchildren finish first → their files appear first
+- Children wait for grandchildren, then write their synthesis
+- Root writes last → its `_final` file is naturally the authoritative output
+
+WHEN an agent both performs its own review work AND coordinates children, it SHALL include both in its single file using the Synthesized Findings section from the template (§13.1).
+
+#### Session manifest (mandatory)
+
+You SHALL create and maintain `_session.json` in the session directory. The root agent SHALL create this file at session start; all agents SHALL update it upon completion.
+
+**Schema:**
+
+```json
+{
+  "session_id": "2025-01-15_14-30-22-456_a3f8b2c1",
+  "ref": "feature-auth",
+  "ref_type": "branch",
+  "pr_number": null,
+  "status": "in_progress",
+  "root_agent": "a3f8b2c1",
+  "started_at": "2025-01-15T14:30:22.456Z",
+  "completed_at": null,
+
+  "agents": {
+    "a3f8b2c1": {
+      "file": null,
+      "scope": "final",
+      "parent": null,
+      "children": ["b7d4e9f2", "c1a2b3d4"],
+      "status": "in_progress",
+      "verdict": null,
+      "severity_counts": null
+    },
+    "b7d4e9f2": {
+      "file": "14-31-10-234_b7d4_security.md",
+      "scope": "security",
+      "parent": "a3f8b2c1",
+      "children": ["d5e6f7a8"],
+      "status": "complete",
+      "verdict": "REQUEST_CHANGES",
+      "severity_counts": { "blocker": 1, "major": 2, "minor": 0, "nit": 1 }
+    }
+  },
+
+  "authoritative": {
+    "agent": "a3f8b2c1",
+    "file": null
+  }
+}
+```
+
+**Required fields:**
+
+| Field                 | Type                            | Description                                                  |
+| --------------------- | ------------------------------- | ------------------------------------------------------------ |
+| `session_id`          | string                          | Matches directory name                                       |
+| `ref`                 | string                          | Sanitized branch or PR reference                             |
+| `ref_type`            | `"branch"` \| `"pr"`            | Reference type                                               |
+| `pr_number`           | number \| null                  | PR number if `ref_type` is `"pr"`                            |
+| `status`              | `"in_progress"` \| `"complete"` | Session status; set to `"complete"` when root agent finishes |
+| `root_agent`          | string                          | UUID8 of the root agent                                      |
+| `started_at`          | ISO8601                         | Session start timestamp                                      |
+| `completed_at`        | ISO8601 \| null                 | Session completion timestamp                                 |
+| `agents`              | object                          | Map of agent UUID8 → agent record                            |
+| `authoritative.agent` | string                          | UUID8 of agent producing final output                        |
+| `authoritative.file`  | string \| null                  | Filename of authoritative output                             |
+
+**Agent record fields:**
+
+| Field             | Type                            | Description                           |
+| ----------------- | ------------------------------- | ------------------------------------- |
+| `file`            | string \| null                  | Filename (null until agent completes) |
+| `scope`           | string                          | Scope label for this agent's review   |
+| `parent`          | string \| null                  | Parent agent's UUID8 (null for root)  |
+| `children`        | string[]                        | Child agent UUID8s (empty if none)    |
+| `status`          | `"in_progress"` \| `"complete"` | Agent status                          |
+| `verdict`         | string \| null                  | Verdict once complete                 |
+| `severity_counts` | object \| null                  | `{blocker, major, minor, nit}` counts |
+
+#### Manifest update protocol
+
+1. **Root agent at session start**: Creates `_session.json` with own entry, `status: "in_progress"`
+2. **Agent spawning child**: Adds child entry to `agents`, updates own `children` array
+3. **Agent completing**: Updates own entry with `file`, `status: "complete"`, `verdict`, `severity_counts`
+4. **Root agent completing**: Additionally sets `completed_at`, `status: "complete"`, and `authoritative.file`
+
+WHEN multiple agents update the manifest concurrently, you SHALL use atomic write operations (write to temp file, rename) to prevent corruption.
+
+#### Example: multi-level agent tree
+
+Agent tree:
+
+```markdown
+Root (a3f8) - full review + coordination
+├── Child1 (b7d4) - security
+│ ├── Grandchild1 (d5e6) - auth deep-dive
+│ └── Grandchild2 (f7a8) - injection
+├── Child2 (c1a2) - contracts
+└── Child3 (e9f0) - storage
+```
+
+Resulting filesystem (files ordered by completion time):
+
+```markdown
+.local/reports/code_reviews/feature-auth/2025-01-15_14-30-22-456_a3f8b2c1/
+├── 14-30-45-123_d5e6_auth.md # grandchild
+├── 14-30-47-456_f7a8_injection.md # grandchild
+├── 14-30-50-789_c1a2_contracts.md # child (no grandchildren)
+├── 14-30-52-012_e9f0_storage.md # child
+├── 14-31-10-234_b7d4_security.md # child (synthesizes grandchildren)
+├── 14-32-00-567_a3f8_final.md # root (authoritative)
+└── \_session.json
+```
+
+#### Chat output
+
+WHEN filesystem write access is available, you SHALL write the complete report to file and output only a short pointer to chat:
+
+```markdown
+Review complete: .local/reports/code_reviews/feature-auth/2025-01-15_14-30-22-456_a3f8b2c1/14-32-00-567_a3f8_final.md
+Verdict: REQUEST CHANGES (2 BLOCKER, 3 MAJOR, 1 MINOR, 0 NIT)
+```
 
 ---
 
