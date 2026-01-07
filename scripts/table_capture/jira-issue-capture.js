@@ -313,6 +313,7 @@ if (!CVR.apProcess) {
       [/villarreal\s*enterprise\s*group/i,["VILLARREAL ENTERPRISE GROUP LLC"]],
       [/lyft/i,["LYFT, INC"]],
       [/waymo/i,["WAYMO LLC"]],
+      [/notarize/i,["NOTARIZE INC"]],
       [/motor\s*car\s*tag\s*(?:&|and)\s*title/i,["MOTOR CAR TAG & TITLE"]],
       [/edealer\s*services/i,["eDealer Services"]],
       [/\bvitu\b|vitu llc|vitu,?\s*inc/i,["VITU",IV,M,T]],
