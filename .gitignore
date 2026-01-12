@@ -4,6 +4,7 @@ temp*.js
 temp*.vb
 temp*.js
 temp*.py
+temp*.fx
 
 # dependencies
 node_modules/
