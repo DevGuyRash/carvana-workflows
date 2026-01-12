@@ -334,7 +334,7 @@ if (!CVR.apProcess) {
       [/folder/i,[0,CR,H]],
       [/walked to the dmv/i,[0,CR,H]],
       [/\bncdmv\b|\bnc dmv\b/i,[0,CR,H]],
-      [/service oklahoma/i,[0,CR,H]],
+      [/service oklahoma/i,["SERVICE OKLAHOMA",CR,H]],
       [/commonwealth of pennsylvania/i,[0,CR,H]],
       [/market street/i,["Market Street",CR,I,0,"4011 N MARKET ST, Spokane, WA 99207"]],
       [/corporate check request/i,[0,CR,I]],
