@@ -314,6 +314,7 @@ if (!CVR.apProcess) {
       [/lyft/i,["LYFT, INC"]],
       [/waymo/i,["WAYMO LLC"]],
       [/notarize/i,["NOTARIZE INC"]],
+      [/plate express/i,["PLATE EXPRESS"]],
       [/motor\s*car\s*tag\s*(?:&|and)\s*title/i,["MOTOR CAR TAG & TITLE"]],
       [/edealer\s*services/i,["eDealer Services"]],
       [/\bvitu\b|vitu llc|vitu,?\s*inc/i,["VITU",IV,M,T]],
