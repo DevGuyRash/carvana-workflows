@@ -1,6 +1,6 @@
 =LET(
   initials, "AK",
-  date, TEXT(TODAY(), "yyyymmdd"),
+  date, TEXT(TODAY(), "mmddyyyy"),
   fileInfo, CELL("filename", A1),
   uuid, IF(fileInfo="","",
     LET(
