@@ -5,7 +5,7 @@
   saltRounds, 3,
   partsRequested, 4,
 
-  fileInfo, CELL("filename", A1),
+  fileInfo, CELL("filename", $A$1),
 
   idText,
     IF(fileInfo="","",
