@@ -1,5 +1,9 @@
 ## T&R Upload Template
 
+### Notes
+
+- All headers currently exist on Row 4 and real data starts on Row 5
+
 ### 'AP_INVOICES_INTERFACE' sheet
 
 | Header Name           | Cell Reference |
