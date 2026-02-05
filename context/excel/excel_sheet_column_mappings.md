@@ -6,6 +6,10 @@
 
 ### 'AP_INVOICES_INTERFACE' sheet
 
+Named Values:
+
+- Table Name: `tbl_invoices`
+
 | Header Name           | Cell Reference |
 | :-------------------- | :------------- |
 | *Invoice ID           | A4             |
@@ -29,6 +33,10 @@
 | Pay Alone             | AA4            |
 
 ### 'AP_INVOICE_LINES_INTERFACE' SHEET
+
+Named Values:
+
+- Table Name: `tbl_invoice_lines`
 
 | Header Name              | Cell Reference |
 | :----------------------- | :------------- |
