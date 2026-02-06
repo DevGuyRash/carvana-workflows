@@ -40,6 +40,10 @@ Private Const ZIP_POLL_SLEEP_MS As Long = 150
 Private Const PS_SCRIPT_NAME As String = "apinvoiceimport_makezip.ps1"
 Private Const WORK_ZIP_NAME As String = "apinvoiceimport.zip"
 
+' Which tabs to export (skip first two tabs)
+Private Const INVOICES_SHEET_INDEX As Long = 3
+Private Const LINES_SHEET_INDEX As Long = 4
+
 '========================
 ' APP STATE
 '========================
@@ -76,10 +80,13 @@ Public Sub GenCSV()
     On Error GoTo ErrHandler
 
     '--- Enforce the "2 sheets after the first" rule
-    If wb.Worksheets.Count < 3 Then
+    If wb.Worksheets.Count < LINES_SHEET_INDEX Then
         Err.Raise vbObjectError + 2000, "GenCSV", _
-                  "Workbook must have at least 3 worksheets. Sheet(1) is ignored; Sheet(2) and Sheet(3) are the sources."
+                "Workbook must have at least " & LINES_SHEET_INDEX & " worksheets. " & _
+                "Sheet(1) and Sheet(2) are ignored; Sheet(" & INVOICES_SHEET_INDEX & _
+                ") and Sheet(" & LINES_SHEET_INDEX & ") are the sources."
     End If
+
 
     '--- Prompt ONLY for ZIP path (internal filenames are locked)
     zipPathV = Application.GetSaveAsFilename( _
@@ -101,9 +108,9 @@ Public Sub GenCSV()
     workZipPath = tempFolder & Application.PathSeparator & WORK_ZIP_NAME
     psScriptPath = tempFolder & Application.PathSeparator & PS_SCRIPT_NAME
 
-    '--- Export CSVs directly from Worksheet(2) and Worksheet(3)
-    WriteWorksheetToInterfaceCsv wb.Worksheets(2), csvInvPath
-    WriteWorksheetToInterfaceCsv wb.Worksheets(3), csvLinesPath
+    '--- Export CSVs directly from Worksheet(3) and Worksheet(4)
+    WriteWorksheetToInterfaceCsv wb.Worksheets(INVOICES_SHEET_INDEX), csvInvPath
+    WriteWorksheetToInterfaceCsv wb.Worksheets(LINES_SHEET_INDEX), csvLinesPath
 
     '--- Build ZIP in temp folder (reliable) then copy to user-selected destination
     CreateZipFromTwoFiles workZipPath, csvInvPath, CSV_INV, csvLinesPath, CSV_LINES, psScriptPath
