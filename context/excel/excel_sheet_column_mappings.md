@@ -41,7 +41,7 @@ Named Values:
 | Header Name              | Cell Reference |
 | :----------------------- | :------------- |
 | \*Invoice ID             | A4             |
-| \*Line Number            | B4             |
+| Line Number              | B4             |
 | \*Line Type              | C4             |
 | \*Amount                 | D4             |
 | Description              | H4             |
