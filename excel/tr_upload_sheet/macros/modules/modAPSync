@@ -1,0 +1,443 @@
+Option Explicit
+
+'==== CONFIG ===========================================================
+Private Const SH_INVOICES As String = "AP_INVOICES_INTERFACE"
+Private Const SH_LINES    As String = "AP_INVOICE_LINES_INTERFACE"
+
+Private Const TBL_INVOICES As String = "tbl_invoices"
+Private Const TBL_LINES    As String = "tbl_invoice_lines"
+'======================================================================
+
+'Resize tbl_invoices so it has at least one row, and otherwise exactly MAX(Invoice ID) from tbl_invoice_lines.
+'When shrinking, it clears the leftover cells that Excel leaves behind (structured-ref formulas => #VALUE!).
+Public Sub AP_SyncInvoicesTable(Optional ByVal Silent As Boolean = True)
+
+    Dim prevEvents As Boolean, prevScreen As Boolean
+    Dim prevCalc As XlCalculation
+
+    prevEvents = Application.EnableEvents
+    prevScreen = Application.ScreenUpdating
+    prevCalc = Application.Calculation
+
+    On Error GoTo EH
+
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+
+    Dim wb As Workbook: Set wb = ThisWorkbook
+
+    Dim wsInv As Worksheet:   Set wsInv = wb.Worksheets(SH_INVOICES)
+    Dim wsLines As Worksheet: Set wsLines = wb.Worksheets(SH_LINES)
+
+    Dim loInv As ListObject:   Set loInv = wsInv.ListObjects(TBL_INVOICES)
+
+    'Keep line table physically trimmed first so invoice sync uses current line-table shape.
+    AP_SyncInvoiceLinesTable True
+
+    Dim loLines As ListObject: Set loLines = wsLines.ListObjects(TBL_LINES)
+
+    '--- capture OLD size/position so we can clear orphans after shrinking
+    Dim oldRows As Long
+    oldRows = loInv.ListRows.Count
+
+    Dim firstDataRow As Long
+    firstDataRow = loInv.HeaderRowRange.Row + 1
+
+    Dim firstCol As Long, colCount As Long
+    firstCol = loInv.Range.Column
+    colCount = loInv.Range.Columns.Count
+
+    '--- compute desired rows from Invoice IDs on lines
+    Dim maxID As Long
+    maxID = MaxInvoiceID_FromLines(loLines)
+
+    Dim desiredRows As Long
+    If maxID < 1 Then
+        desiredRows = 1            'tables can't be 0-row
+    Else
+        desiredRows = maxID
+    End If
+
+    '--- resize (only if needed)
+    If oldRows <> desiredRows Then
+        ResizeListObjectDataRows loInv, desiredRows
+
+        'If table SHRANK, clear the leftover cells Excel left behind
+        If desiredRows < oldRows Then
+            ClearOrphanedTableArea wsInv, _
+                                   firstDataRow + desiredRows, _
+                                   firstDataRow + oldRows - 1, _
+                                   firstCol, colCount, False
+        End If
+    End If
+
+    ApplyTableBottomBoundary loInv
+
+CleanExit:
+    Application.Calculation = prevCalc
+    Application.ScreenUpdating = prevScreen
+    Application.EnableEvents = prevEvents
+    Exit Sub
+
+EH:
+    If Not Silent Then
+        MsgBox "AP_SyncInvoicesTable failed: " & Err.Description, vbExclamation
+    End If
+    Resume CleanExit
+End Sub
+
+'Resize tbl_invoice_lines to the last used *Invoice ID row (minimum 1 data row).
+Public Sub AP_SyncInvoiceLinesTable(Optional ByVal Silent As Boolean = True)
+
+    Dim prevEvents As Boolean, prevScreen As Boolean
+    Dim prevCalc As XlCalculation
+
+    prevEvents = Application.EnableEvents
+    prevScreen = Application.ScreenUpdating
+    prevCalc = Application.Calculation
+
+    On Error GoTo EH
+
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+
+    Dim wb As Workbook: Set wb = ThisWorkbook
+    Dim wsLines As Worksheet: Set wsLines = wb.Worksheets(SH_LINES)
+    Dim loLines As ListObject: Set loLines = wsLines.ListObjects(TBL_LINES)
+
+    Dim initialRows As Long
+    initialRows = loLines.ListRows.Count
+
+    Dim firstDataRow As Long
+    firstDataRow = loLines.HeaderRowRange.Row + 1
+
+    Dim firstCol As Long, colCount As Long
+    firstCol = loLines.Range.Column
+    colCount = loLines.Range.Columns.Count
+
+    Dim compactPass As Long
+    For compactPass = 1 To 3
+        wsLines.Calculate
+        If CompactInvoiceLinesBlankRows(loLines) = 0 Then Exit For
+    Next compactPass
+
+    Dim oldRows As Long
+    oldRows = loLines.ListRows.Count
+
+    Dim desiredRows As Long
+    desiredRows = LastUsedInvoiceIDRowCount(loLines)
+    If desiredRows < 1 Then desiredRows = 1
+
+    If oldRows <> desiredRows Then
+        ResizeListObjectDataRows loLines, desiredRows
+    End If
+
+    Dim finalRows As Long
+    finalRows = loLines.ListRows.Count
+
+    If finalRows < initialRows Then
+        ClearOrphanedTableArea wsLines, _
+                               firstDataRow + finalRows, _
+                               firstDataRow + initialRows - 1, _
+                               firstCol, colCount, False
+    End If
+
+    ApplyTableBottomBoundary loLines
+
+CleanExit:
+    Application.Calculation = prevCalc
+    Application.ScreenUpdating = prevScreen
+    Application.EnableEvents = prevEvents
+    Exit Sub
+
+EH:
+    If Not Silent Then
+        MsgBox "AP_SyncInvoiceLinesTable failed: " & Err.Description, vbExclamation
+    End If
+    Resume CleanExit
+End Sub
+
+'Custom undo entry-point for AP_INVOICE_LINES_INTERFACE Worksheet_Change.
+'Replays Excel's last user action, then re-syncs tbl_invoices.
+Public Sub AP_UndoInvoiceLinesChange()
+    Dim prevEvents As Boolean
+    prevEvents = Application.EnableEvents
+
+    On Error GoTo CleanExit
+    Application.EnableEvents = False
+
+    Application.Undo
+    AP_SyncInvoiceLinesTable True
+    AP_SyncInvoicesTable True
+
+CleanExit:
+    Application.EnableEvents = prevEvents
+End Sub
+
+'One-time cleanup helper (run manually if you already have #VALUE! leftovers below the table)
+Public Sub AP_CleanupInvoicesOrphans(Optional ByVal Silent As Boolean = True)
+    Dim prevEvents As Boolean, prevScreen As Boolean, prevCalc As XlCalculation
+    prevEvents = Application.EnableEvents
+    prevScreen = Application.ScreenUpdating
+    prevCalc = Application.Calculation
+
+    On Error GoTo EH
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+
+    Dim wsInv As Worksheet: Set wsInv = ThisWorkbook.Worksheets(SH_INVOICES)
+    Dim loInv As ListObject: Set loInv = wsInv.ListObjects(TBL_INVOICES)
+
+    Dim firstCol As Long, colCount As Long
+    firstCol = loInv.Range.Column
+    colCount = loInv.Range.Columns.Count
+
+    Dim bottomRow As Long
+    bottomRow = loInv.Range.Row + loInv.Range.Rows.Count - 1
+
+    'Search below the table within its columns for ANY formulas/values (including those #VALUE! structured refs)
+    Dim searchRng As Range
+    Set searchRng = wsInv.Range(wsInv.Cells(bottomRow + 1, firstCol), _
+                                wsInv.Cells(wsInv.Rows.Count, firstCol + colCount - 1))
+
+    Dim lastCell As Range
+    Set lastCell = searchRng.Find(What:="*", _
+                                  After:=searchRng.Cells(1, 1), _
+                                  LookIn:=xlFormulas, _
+                                  LookAt:=xlPart, _
+                                  SearchOrder:=xlByRows, _
+                                  SearchDirection:=xlPrevious, _
+                                  MatchCase:=False, _
+                                  SearchFormat:=False)
+
+    If Not lastCell Is Nothing Then
+        ClearOrphanedTableArea wsInv, bottomRow + 1, lastCell.Row, firstCol, colCount
+    End If
+
+CleanExit:
+    Application.Calculation = prevCalc
+    Application.ScreenUpdating = prevScreen
+    Application.EnableEvents = prevEvents
+    Exit Sub
+
+EH:
+    If Not Silent Then
+        MsgBox "AP_CleanupInvoicesOrphans failed: " & Err.Description, vbExclamation
+    End If
+    Resume CleanExit
+End Sub
+
+'===== internal helpers =================================================
+
+Private Function MaxInvoiceID_FromLines(ByVal loLines As ListObject) As Long
+    If loLines.DataBodyRange Is Nothing Then
+        MaxInvoiceID_FromLines = 0
+        Exit Function
+    End If
+
+    Dim lcID As ListColumn
+    Set lcID = GetListColumn(loLines, "*Invoice ID", "Invoice ID")
+    If lcID Is Nothing Then Err.Raise vbObjectError + 4000, , _
+        "Couldn't find '*Invoice ID' in " & loLines.Name
+
+    Dim rngID As Range
+    Set rngID = lcID.DataBodyRange
+
+    'Make sure formula-driven Invoice IDs are up-to-date (fast, column only)
+    On Error Resume Next
+    rngID.Calculate
+    On Error GoTo 0
+
+    'Limit scan to "used" portion (so we don't scan a giant pre-sized table)
+    Dim lastCell As Range
+    Set lastCell = rngID.Find(What:="*", _
+                              After:=rngID.Cells(1, 1), _
+                              LookIn:=xlValues, _
+                              LookAt:=xlPart, _
+                              SearchOrder:=xlByRows, _
+                              SearchDirection:=xlPrevious, _
+                              MatchCase:=False, _
+                              SearchFormat:=False)
+
+    If lastCell Is Nothing Then
+        MaxInvoiceID_FromLines = 0
+        Exit Function
+    End If
+
+    Dim usedIDs As Range
+    Set usedIDs = rngID.Resize(lastCell.Row - rngID.Row + 1, 1)
+
+    'Array scan: treats numeric text like "4" as numeric, ignores blanks/errors/text
+    MaxInvoiceID_FromLines = CLng(MaxNumericCoerce(usedIDs))
+End Function
+
+Private Function MaxNumericCoerce(ByVal rng As Range) As Double
+    Dim arr As Variant, v As Variant
+    Dim i As Long, m As Double
+
+    arr = rng.Value2
+    m = 0#
+
+    If IsArray(arr) Then
+        For i = 1 To UBound(arr, 1)
+            v = arr(i, 1)
+            If Not IsError(v) Then
+                If IsNumeric(v) Then
+                    If CDbl(v) > m Then m = CDbl(v)
+                End If
+            End If
+        Next i
+    Else
+        v = arr
+        If Not IsError(v) Then
+            If IsNumeric(v) Then m = CDbl(v)
+        End If
+    End If
+
+    MaxNumericCoerce = m
+End Function
+
+Private Sub ResizeListObjectDataRows(ByVal lo As ListObject, ByVal newDataRows As Long)
+    Dim totalRows As Long
+    totalRows = 1 + newDataRows + IIf(lo.ShowTotals, 1, 0) 'header + data + totals(if any)
+
+    Dim newRange As Range
+    Set newRange = lo.Range.Cells(1, 1).Resize(totalRows, lo.Range.Columns.Count)
+
+    lo.Resize newRange
+End Sub
+
+Private Sub ClearOrphanedTableArea(ByVal ws As Worksheet, _
+                                  ByVal startRow As Long, ByVal endRow As Long, _
+                                  ByVal firstCol As Long, ByVal colCount As Long, _
+                                  Optional ByVal keepFormats As Boolean = True)
+    If endRow < startRow Then Exit Sub
+
+    Dim rngClear As Range
+    Set rngClear = ws.Range(ws.Cells(startRow, firstCol), _
+                            ws.Cells(endRow, firstCol + colCount - 1))
+
+    If keepFormats Then
+        'Clear formulas/values only; leave formatting as-is.
+        rngClear.ClearContents
+    Else
+        'Clear all contents/formatting to prevent table style carryover below table.
+        rngClear.Clear
+    End If
+End Sub
+
+Private Function GetListColumn(ByVal lo As ListObject, ParamArray colNames() As Variant) As ListColumn
+    Dim i As Long
+    For i = LBound(colNames) To UBound(colNames)
+        On Error Resume Next
+        Set GetListColumn = lo.ListColumns(CStr(colNames(i)))
+        On Error GoTo 0
+        If Not GetListColumn Is Nothing Then Exit Function
+    Next i
+End Function
+
+Private Function LastUsedInvoiceIDRowCount(ByVal loLines As ListObject) As Long
+    If loLines.DataBodyRange Is Nothing Then
+        LastUsedInvoiceIDRowCount = 0
+        Exit Function
+    End If
+
+    Dim lcID As ListColumn
+    Set lcID = GetListColumn(loLines, "*Invoice ID", "Invoice ID")
+    If lcID Is Nothing Then Err.Raise vbObjectError + 4010, , _
+        "Couldn't find '*Invoice ID' in " & loLines.Name
+
+    Dim rngID As Range
+    Set rngID = lcID.DataBodyRange
+
+    On Error Resume Next
+    rngID.Calculate
+    On Error GoTo 0
+
+    Dim lastCell As Range
+    Set lastCell = rngID.Find(What:="*", _
+                              After:=rngID.Cells(1, 1), _
+                              LookIn:=xlValues, _
+                              LookAt:=xlPart, _
+                              SearchOrder:=xlByRows, _
+                              SearchDirection:=xlPrevious, _
+                              MatchCase:=False, _
+                              SearchFormat:=False)
+
+    If lastCell Is Nothing Then
+        LastUsedInvoiceIDRowCount = 0
+    Else
+        LastUsedInvoiceIDRowCount = lastCell.Row - rngID.Row + 1
+    End If
+End Function
+
+Private Function CompactInvoiceLinesBlankRows(ByVal loLines As ListObject) As Long
+    If loLines.DataBodyRange Is Nothing Then
+        CompactInvoiceLinesBlankRows = 0
+        Exit Function
+    End If
+
+    Dim lcLN As ListColumn, lcID As ListColumn
+    Set lcLN = GetListColumn(loLines, "Line Number", "*Line Number")
+    Set lcID = GetListColumn(loLines, "*Invoice ID", "Invoice ID")
+
+    If lcLN Is Nothing Then Err.Raise vbObjectError + 4020, , _
+        "Couldn't find 'Line Number' in " & loLines.Name
+    If lcID Is Nothing Then Err.Raise vbObjectError + 4021, , _
+        "Couldn't find '*Invoice ID' in " & loLines.Name
+
+    'Ensure formula-driven Invoice ID values are current before blank-row checks.
+    On Error Resume Next
+    lcLN.DataBodyRange.Calculate
+    lcID.DataBodyRange.Calculate
+    On Error GoTo 0
+
+    Dim deletedRows As Long
+    Dim rowIndex As Long
+    For rowIndex = loLines.ListRows.Count To 1 Step -1
+        If RowBlankByLineNumberAndInvoiceID(lcLN, lcID, rowIndex) Then
+            If loLines.ListRows.Count > 1 Then
+                loLines.ListRows(rowIndex).Delete
+                deletedRows = deletedRows + 1
+            End If
+        End If
+    Next rowIndex
+
+    CompactInvoiceLinesBlankRows = deletedRows
+End Function
+
+Private Function RowBlankByLineNumberAndInvoiceID(ByVal lcLN As ListColumn, _
+                                                   ByVal lcID As ListColumn, _
+                                                   ByVal rowIndex As Long) As Boolean
+    Dim lnValue As Variant, idValue As Variant
+    lnValue = lcLN.DataBodyRange.Cells(rowIndex, 1).Value2
+    idValue = lcID.DataBodyRange.Cells(rowIndex, 1).Value2
+
+    RowBlankByLineNumberAndInvoiceID = IsBlankLike(lnValue) And IsBlankLike(idValue)
+End Function
+
+Private Function IsBlankLike(ByVal valueInCell As Variant) As Boolean
+    If IsError(valueInCell) Then
+        IsBlankLike = False
+        Exit Function
+    End If
+
+    If IsEmpty(valueInCell) Then
+        IsBlankLike = True
+        Exit Function
+    End If
+
+    IsBlankLike = (Len(Trim$(CStr(valueInCell))) = 0)
+End Function
+
+Private Sub ApplyTableBottomBoundary(ByVal lo As ListObject)
+    Dim edge As Border
+    Set edge = lo.Range.Borders(xlEdgeBottom)
+
+    edge.LineStyle = xlContinuous
+    edge.Weight = xlThin
+    edge.Color = RGB(128, 128, 128)
+End Sub
