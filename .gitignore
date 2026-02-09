@@ -32,3 +32,14 @@ Thumbs.db
 .env
 session.json
 .local
+book.zip
+book_unz/
+vba_dump/
+
+# Excel workbooks
+*.xls
+*.xlsx
+*.xlsm
+*.xlsb
+*.xltx
+*.xltm
