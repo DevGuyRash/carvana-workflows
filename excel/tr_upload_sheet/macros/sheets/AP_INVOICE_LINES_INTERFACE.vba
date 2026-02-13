@@ -18,10 +18,44 @@ Private Sub Worksheet_Change(ByVal Target As Range)
 
     If Intersect(Target, watchRng) Is Nothing Then Exit Sub
 
+    Dim changedBottomRow As Long
+    Dim changedTopRow As Long
+    Dim changedFirstCol As Long
+    Dim changedLastCol As Long
+    Dim isClearAction As Boolean
+    changedTopRow = Target.Row
+    changedBottomRow = Target.Row + Target.Rows.Count - 1
+    changedFirstCol = Target.Column
+    changedLastCol = Target.Column + Target.Columns.Count - 1
+    isClearAction = RangeIsAllBlank(Target)
+
     'Run the sync (Application.Run avoids "Sub or function not defined" compile issues)
-    Application.Run "'" & ThisWorkbook.Name & "'!AP_SyncInvoiceLinesTable", True
-    Application.Run "'" & ThisWorkbook.Name & "'!AP_SyncInvoicesTable", True
+    Application.Run "'" & ThisWorkbook.Name & "'!AP_SyncInvoiceLinesTable_WithTarget", _
+                    True, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, Not isClearAction
+    Application.Run "'" & ThisWorkbook.Name & "'!AP_SyncInvoicesTable", True, True
     Application.OnUndo "Undo last invoice-lines change", "'" & ThisWorkbook.Name & "'!AP_UndoInvoiceLinesChange"
 
 SafeExit:
 End Sub
+
+Private Function RangeIsAllBlank(ByVal rng As Range) As Boolean
+    Dim area As Range
+    Dim cell As Range
+    Dim valueInCell As Variant
+
+    For Each area In rng.Areas
+        For Each cell In area.Cells
+            valueInCell = cell.Value2
+            If IsError(valueInCell) Then
+                Exit Function
+            End If
+            If Not IsEmpty(valueInCell) Then
+                If Len(Trim$(CStr(valueInCell))) > 0 Then
+                    Exit Function
+                End If
+            End If
+        Next cell
+    Next area
+
+    RangeIsAllBlank = True
+End Function
