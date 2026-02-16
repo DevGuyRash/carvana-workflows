@@ -1,10 +1,11 @@
 =LET(
   rawText, "" & [@Description],
   normalizedText, UPPER(REGEXREPLACE(TRIM(rawText), "\s+", " ")),
+  canonicalText, REGEXREPLACE(normalizedText, "\s*-\s*", "-"),
   pidLabelMatch,
     IFERROR(
       REGEXEXTRACT(
-        normalizedText,
+        canonicalText,
         "\bPID(?:\s*NUMBER(?:S)?)?\b\s*(?:[#:\(\)\[\]\-]\s*)*\d{3,}\b"
       ),
       ""
@@ -20,18 +21,18 @@
   descriptorMatchRaw,
     IFERROR(
       REGEXEXTRACT(
-        normalizedText,
-        "(?:^|[^A-Z0-9])(?:[A-Z0-9]{2,5}-)?\d{7,12}-[A-HJ-NPR-Z0-9]{11,17}-\d{3,}(?:$|[^A-Z0-9])"
+        canonicalText,
+        "(?:^|[^A-Z0-9])(?:[A-Z0-9]{2,5}-)?\d{7,12}(?:-(?:[A-Z]{2,8}|\d{1,4}))?-[A-HJ-NPR-Z0-9]{11,17}-\d{3,}(?:$|[^A-Z0-9])"
       ),
       ""
     ),
   descriptorMatch, REGEXREPLACE(descriptorMatchRaw, "^[^A-Z0-9]+|[^A-Z0-9]+$", ""),
-  descriptorParts, IF(descriptorMatch="", "", TEXTSPLIT(descriptorMatch, "-")),
-  descriptorPartCount, IF(descriptorMatch="", 0, COUNTA(descriptorParts)),
   pidByDescriptor,
-    IF(
-      descriptorPartCount>=3,
-      INDEX(descriptorParts, 1, descriptorPartCount),
+    IFERROR(
+      REGEXEXTRACT(
+        descriptorMatch,
+        "(\d{3,})$"
+      ),
       ""
     ),
   IF(pidByLabel<>"", pidByLabel, pidByDescriptor)

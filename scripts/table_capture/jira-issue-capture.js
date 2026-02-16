@@ -317,6 +317,7 @@ if (!CVR.apProcess) {
       [/plate express/i,["PLATE EXPRESS"]],
       [/scale invoice/i,["HARBOR TRUCK STOP INC"]],
       [/motor\s*car\s*tag\s*(?:&|and)\s*title/i,["MOTOR CAR TAG & TITLE"]],
+      [/tag\s*agency\s*of\s*pinellas/i,["TAG AGENCY PROFESSIONALS"]],
       [/edealer\s*services/i,["eDealer Services"]],
       [/\bvitu\b|vitu llc|vitu,?\s*inc/i,["VITU",IV,M,T]],
       [/title one/i,["Title One",IV,M,T]],
@@ -368,6 +369,8 @@ if (!CVR.apProcess) {
       const s=v=>(v??"").toString();
       const b=v=>{v=s(v).trim();return!v||/^(n\/?a|-|—)$/i.test(v)};
       const n=v=>s(v).toLowerCase().replace(/[^a-z0-9]+/g,"");
+      const hh=v=>s(v).replace(/\u00A0/g," ").replace(/[ \t]*-[ \t]*/g,"-");
+      const sid=v=>hh(v).replace(/\s+/g,"").trim();
 
       const hl=v=>{
         v=s(v).trim();
@@ -406,16 +409,16 @@ if (!CVR.apProcess) {
         let rx=new RegExp("\\b"+l+"(?:\\s*number(?:s)?)?\\b","ig"),m;
         while((m=rx.exec(t))){
           let a=t.slice(m.index+m[0].length),
-              line=(a.split("\n",2)[0]||""),
+              line=hh(a.split("\n",2)[0]||""),
               mm=new RegExp("^\\s*(?:[#:\\(\\)\\[\\]\\-]\\s*)*"+pat,"i").exec(line);
-          if(mm)return mm[1].trim();
+          if(mm)return sid(mm[1]);
           let ls=a.split("\n");
           for(let i=0;i<ls.length;i++){
-            let ln=ls[i];
+            let ln=hh(ls[i]);
             if(!ln.trim())continue;
             if(!/[A-Za-z0-9]/.test(ln))continue; // punctuation-only line like ':' -> skip
             let m2=new RegExp("^\\s*"+pat,"i").exec(ln);
-            if(m2)return m2[1].trim();
+            if(m2)return sid(m2[1]);
             break
           }
         }
@@ -423,7 +426,9 @@ if (!CVR.apProcess) {
       };
 
       // Patterns (kept compact + compiled once per run)
-      const VVP='([A-HJ-NPR-Z0-9]{11,17})\\b', SVP='([A-Z0-9-]{3,})\\b', PVP='(\\d{3,})\\b';
+      const VVP='([A-HJ-NPR-Z0-9]{11,17})\\b', SVP='((?:[A-Z0-9]{2,5}-)?\\d{7,12}(?:-(?:[A-Z]{2,8}|\\d{1,4}))?)\\b', PVP='(\\d{3,})\\b';
+      const DVP=/(?:^|[^A-Z0-9])((?:[A-Z0-9]{2,5}-)?\d{7,12})(?:-([A-Z]{2,8}|\d{1,4}))?-([A-HJ-NPR-Z0-9]{11,17})-(\d{3,})(?:$|[^A-Z0-9])/i;
+      const SXP=/^((?:[A-Z0-9]{2,5}-)?\d{7,12})(?:-([A-Z]{2,8}|\d{1,4}))?$/i;
       const VCHK=/^[A-HJ-NPR-Z0-9]{11,17}$/i;
 
       // Today's date for Invoice fallback: MMDDYYYY-TR (example: 12302025-TR)
@@ -496,7 +501,7 @@ if (!CVR.apProcess) {
         o[3]=F;
         o[4]=Z;
 
-        let oi=iOIN>-1?s(row[iOIN]).trim():"";
+        let oi=iOIN>-1?sid(row[iOIN]):"";
         o[7]=oi;
         o[1]=b(oi)?"False":"True";
 
@@ -526,38 +531,59 @@ if (!CVR.apProcess) {
         // -------------------------------
         // Stock / VIN / PID (columns -> description fallback)
         // -------------------------------
-        let st=iSN1>-1?s(row[iSN1]).trim():"";
-        if(b(st)&&iSN2>-1)st=s(row[iSN2]).trim();
+        let st=iSN1>-1?sid(row[iSN1]):"";
+        if(b(st)&&iSN2>-1)st=sid(row[iSN2]);
 
-        let vin=iVIN>-1?s(row[iVIN]).trim():"";
-        let pid=iPID>-1?s(row[iPID]).trim():"";
+        let vin=iVIN>-1?sid(row[iVIN]):"";
+        let pid=iPID>-1?sid(row[iPID]):"";
 
         if(b(st)) st=fv(txt,"stock",SVP);
         if(b(vin))vin=fv(txt,"vin",VVP);
         if(b(pid))pid=fv(txt,"pid",PVP);
 
+       let dm=DVP.exec(hh(txt).toUpperCase());
+       if(dm){
+         if(b(st)) st=dm[1]+(dm[2]?("-"+dm[2]):"");
+         if(b(vin))vin=dm[3];
+         if(b(pid))pid=dm[4]
+       }
+
+       st=sid(st);
+       vin=sid(vin);
+       pid=sid(pid);
+
        // Safety: don't let STOCK be a VIN by mistake
        if(st && VCHK.test(st)) st="";
+
+       let stInvoice=st;
+       let sm=SXP.exec(st);
+       if(sm){
+         let stBase=sid(sm[1]).toUpperCase(),
+             stTag=sid(sm[2]||"").toUpperCase(),
+             stBaseNumeric=stBase.replace(/^[A-Z0-9]{2,5}-/,"");
+         st=stTag?(stBase+"-"+stTag):stBase;
+         stInvoice=stTag?(stBaseNumeric+"-"+stTag):stBaseNumeric
+       }
 
        // Defaults (requested):
        // - If ANY of (stock/vin/pid) exists, fill missing pieces with placeholders:
        //     StockNumber -> "STOCK", VIN -> "VIN", PID -> "PID"
        // - If NONE exist, keep all three blank (no placeholders, no reference)
-       // NOTE: we still use raw `st` for Invoice (date fallback).
+       // NOTE: Invoice uses numeric stock base + optional modifier.
        let anyId=!b(st)||!b(vin)||!b(pid);
-       let stD=anyId?(b(st)?"STOCK":st):"";
-       let vinD=anyId?(b(vin)?"VIN":vin):"";
-       let pidD=anyId?(b(pid)?"PID":pid):"";
+       let stD=anyId?(b(st)?"STOCK":sid(st)):"";
+       let vinD=anyId?(b(vin)?"VIN":sid(vin)):"";
+       let pidD=anyId?(b(pid)?"PID":sid(pid)):"";
 
        o[12]=stD;
        o[13]=vinD;
        o[14]=pidD;
 
        // Reference: HUB-STOCK-VIN-PID (inserted after Mailing Instructions)
-       o[10]=anyId?("HUB-"+[stD,vinD,pidD].join("-")):"";
+       o[10]=anyId?sid("HUB-"+[stD,vinD,pidD].join("-")):"";
 
         // Invoice: STOCK-TR else MMDDYYYY-TR (example: 12302025-TR)
-        o[11]=(st?st:DT)+"-TR";
+        o[11]=sid((stInvoice?stInvoice:DT)+"-TR");
 
         // -------------------------------
         // Final Amount (CRA -> Amount -> Fee+Tax)

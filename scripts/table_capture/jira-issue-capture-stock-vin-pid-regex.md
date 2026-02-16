@@ -14,6 +14,7 @@ Extract the best available value for each identifier using field-first lookup, t
 Apply these before and after matching:
 - Trim leading/trailing whitespace.
 - Collapse internal whitespace to a single space when reading free text.
+- Normalize hyphen separators by replacing `\s*-\s*` with `-`.
 - Use case-insensitive matching for label detection.
 - Preserve original case/value in output unless your downstream system requires uppercasing.
 
@@ -33,12 +34,24 @@ Meaning:
 ### Stock value pattern
 
 ```regex
-([A-Z0-9-]{3,})\b
+((?:[A-Z0-9]{2,5}-)?\d{7,12}(?:-(?:[A-Z]{2,8}|\d{1,4}))?)\b
 ```
 
 Meaning:
-- 3 or more characters
-- Allowed: uppercase letters, digits, hyphen
+- Base stock format: optional alpha-numeric prefix + `-` + 7-12 digits
+- Optional stock modifier segment after base stock:
+  - alphabetic code from 2 to 8 letters
+  - numeric increment from 1 to 4 digits
+- Modifier must be a full hyphen-delimited segment (between stock and VIN when present), not a partial VIN prefix
+
+### Base stock-only pattern (project number)
+
+```regex
+((?:[A-Z0-9]{2,5}-)?\d{7,12})\b
+```
+
+Meaning:
+- Captures stock before any optional modifier and before VIN/PID descriptor segments
 
 ### PID value pattern
 
@@ -48,6 +61,18 @@ Meaning:
 
 Meaning:
 - 3 or more digits
+
+### Combined descriptor pattern (stock-modifier-vin-pid)
+
+```regex
+(?:^|[^A-Z0-9])((?:[A-Z0-9]{2,5}-)?\d{7,12})(?:-([A-Z]{2,8}|\d{1,4}))?-([A-HJ-NPR-Z0-9]{11,17})-(\d{3,})(?:$|[^A-Z0-9])
+```
+
+Meaning:
+- Group 1: base stock
+- Group 2: optional stock modifier (2-8 letter code or 1-4 digit increment)
+- Group 3: VIN
+- Group 4: PID
 
 ## Label Detection Pattern
 
@@ -85,7 +110,7 @@ Fallback parser:
 ```
 
 Replace `<PATTERN>` with the field's core value pattern:
-- Stock -> `([A-Z0-9-]{3,})\b`
+- Stock -> `((?:[A-Z0-9]{2,5}-)?\d{7,12}(?:-(?:[A-Z]{2,8}|\d{1,4}))?)\b`
 - VIN -> `([A-HJ-NPR-Z0-9]{11,17})\b`
 - PID -> `(\d{3,})\b`
 
@@ -109,8 +134,14 @@ If stock matches this VIN-like full-string pattern, reject it as stock.
 3. For each label match:
    - Try primary parser on immediate trailing text.
    - If not found, scan subsequent non-empty line and apply fallback parser.
-4. Apply stock-vs-VIN safety check.
-5. Return final `Stock`, `VIN`, `PID` values.
+4. If values are still missing, try combined descriptor parsing with optional stock modifier.
+5. Apply stock-vs-VIN safety check.
+6. Return final `Stock`, `VIN`, `PID` values.
+
+## Downstream Notes (Jira Capture)
+
+- `StockNumber` output may keep a location/prefix segment (example: `<PREFIX>-<STOCK>-<MODIFIER>`).
+- Invoice stock base should use the numeric stock component (example: `<STOCK>`) and append modifier only when a full modifier segment exists (`<STOCK>-<MODIFIER>-TR`).
 
 ## Missing-Value Policy
 

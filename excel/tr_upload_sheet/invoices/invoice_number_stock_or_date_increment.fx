@@ -5,7 +5,8 @@
 
   relatedLineCount, COUNTIF(tbl_invoice_lines[*Invoice ID], invoiceId),
   relatedDescriptions, IFERROR(FILTER(tbl_invoice_lines[Description], tbl_invoice_lines[*Invoice ID]=invoiceId), ""),
-  relatedText, UPPER(REGEXREPLACE(TRIM(TEXTJOIN(" ", TRUE, relatedDescriptions)), "\s+", " ")),
+  relatedTextRaw, UPPER(REGEXREPLACE(TRIM(TEXTJOIN(" ", TRUE, relatedDescriptions)), "\s+", " ")),
+  relatedText, REGEXREPLACE(relatedTextRaw, "\s*-\s*", "-"),
 
   stockLabelMatch,
     IFERROR(
@@ -15,7 +16,7 @@
       ),
       ""
     ),
-  stockByLabel,
+  stockByLabelRaw,
     IFERROR(
       REGEXEXTRACT(
         stockLabelMatch,
@@ -23,36 +24,81 @@
       ),
       ""
     ),
-  descriptorMatchRaw,
-    IFERROR(
-      REGEXEXTRACT(
-        relatedText,
-        "(?:^|[^A-Z0-9])(?:[A-Z0-9]{2,5}-)?\d{7,12}-[A-HJ-NPR-Z0-9]{11,17}-\d{3,}(?:$|[^A-Z0-9])"
-      ),
-      ""
-    ),
-  descriptorMatch, REGEXREPLACE(descriptorMatchRaw, "^[^A-Z0-9]+|[^A-Z0-9]+$", ""),
-  descriptorParts, IF(descriptorMatch="", "", TEXTSPLIT(descriptorMatch, "-")),
-  descriptorPartCount, IF(descriptorMatch="", 0, COUNTA(descriptorParts)),
-  stockByDescriptor,
+  stockByLabel,
     IF(
-      descriptorPartCount>=3,
-      INDEX(descriptorParts, 1, descriptorPartCount-2),
-      ""
-    ),
-  stockBaseCandidate, IF(stockByLabel<>"", stockByLabel, stockByDescriptor),
-  stockTag,
-    IF(
-      stockBaseCandidate="",
+      stockByLabelRaw="",
       "",
       IFERROR(
         REGEXEXTRACT(
-          relatedText,
-          "(?:^|[^A-Z0-9])" & stockBaseCandidate & "-(ADJ|SP|[0-9])(?:-|[^A-Z0-9]|$)"
+          stockByLabelRaw,
+          "^((?:[A-Z0-9]{2,5}-)?\d{7,12})"
         ),
         ""
       )
     ),
+  stockByLabelNumeric,
+    IF(
+      stockByLabel="",
+      "",
+      REGEXREPLACE(stockByLabel, "^[A-Z0-9]{2,5}-", "")
+    ),
+  stockTagByLabel,
+    IFERROR(
+      REGEXEXTRACT(
+        stockByLabelRaw,
+        "^(?:[A-Z0-9]{2,5}-)?\d{7,12}-(?:[A-Z]{2,8}|[0-9]{1,4})$"
+      ),
+      ""
+    ),
+  stockTagByLabelOnly,
+    IF(
+      stockTagByLabel="",
+      "",
+      REGEXREPLACE(stockTagByLabel, "^(?:[A-Z0-9]{2,5}-)?\d{7,12}-", "")
+    ),
+  descriptorMatchRaw,
+    IFERROR(
+      REGEXEXTRACT(
+        relatedText,
+        "(?:^|[^A-Z0-9])(?:[A-Z0-9]{2,5}-)?\d{7,12}(?:-(?:[A-Z]{2,8}|\d{1,4}))?-[A-HJ-NPR-Z0-9]{11,17}-\d{3,}(?:$|[^A-Z0-9])"
+      ),
+      ""
+    ),
+  descriptorMatch, REGEXREPLACE(descriptorMatchRaw, "^[^A-Z0-9]+|[^A-Z0-9]+$", ""),
+  stockByDescriptor,
+    IFERROR(
+      REGEXEXTRACT(
+        descriptorMatch,
+        "^((?:[A-Z0-9]{2,5}-)?\d{7,12})"
+      ),
+      ""
+    ),
+  stockByDescriptorNumeric,
+    IF(
+      stockByDescriptor="",
+      "",
+      REGEXREPLACE(stockByDescriptor, "^[A-Z0-9]{2,5}-", "")
+    ),
+  stockTagByDescriptor,
+    IFERROR(
+      REGEXEXTRACT(
+        descriptorMatch,
+        "^(?:[A-Z0-9]{2,5}-)?\d{7,12}-(?:[A-Z]{2,8}|\d{1,4})-[A-HJ-NPR-Z0-9]{11,17}-\d{3,}$"
+      ),
+      ""
+    ),
+  stockTagByDescriptorOnly,
+    IF(
+      stockTagByDescriptor="",
+      "",
+      REGEXREPLACE(
+        REGEXREPLACE(stockTagByDescriptor, "^(?:[A-Z0-9]{2,5}-)?\d{7,12}-", ""),
+        "-[A-HJ-NPR-Z0-9]{11,17}-\d{3,}$",
+        ""
+      )
+    ),
+  stockBaseCandidate, IF(stockByLabelNumeric<>"", stockByLabelNumeric, stockByDescriptorNumeric),
+  stockTag, IF(stockTagByLabelOnly<>"", stockTagByLabelOnly, stockTagByDescriptorOnly),
   stockCandidate, IF(stockTag="", stockBaseCandidate, stockBaseCandidate & "-" & stockTag),
   stockIsVinLike,
     IF(

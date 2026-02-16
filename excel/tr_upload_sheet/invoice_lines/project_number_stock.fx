@@ -1,15 +1,16 @@
 =LET(
   rawText, "" & [@Description],
   normalizedText, UPPER(REGEXREPLACE(TRIM(rawText), "\s+", " ")),
+  canonicalText, REGEXREPLACE(normalizedText, "\s*-\s*", "-"),
   stockLabelMatch,
     IFERROR(
       REGEXEXTRACT(
-        normalizedText,
+        canonicalText,
         "\bSTOCK(?:\s*NUMBER(?:S)?)?\b\s*(?:[#:\(\)\[\]\-]\s*)*[A-Z0-9-]{3,}\b"
       ),
       ""
     ),
-  stockByLabel,
+  stockByLabelRaw,
     IFERROR(
       REGEXEXTRACT(
         stockLabelMatch,
@@ -17,24 +18,48 @@
       ),
       ""
     ),
+  stockByLabel,
+    IF(
+      stockByLabelRaw="",
+      "",
+      IFERROR(
+        REGEXEXTRACT(
+          stockByLabelRaw,
+          "^(?:[A-Z0-9]{2,5}-)?\d{7,12}"
+        ),
+        ""
+      )
+    ),
+  stockByLabelNumeric,
+    IF(
+      stockByLabel="",
+      "",
+      REGEXREPLACE(stockByLabel, "^[A-Z0-9]{2,5}-", "")
+    ),
   descriptorMatchRaw,
     IFERROR(
       REGEXEXTRACT(
-        normalizedText,
-        "(?:^|[^A-Z0-9])(?:[A-Z0-9]{2,5}-)?\d{7,12}-[A-HJ-NPR-Z0-9]{11,17}-\d{3,}(?:$|[^A-Z0-9])"
+        canonicalText,
+        "(?:^|[^A-Z0-9])(?:[A-Z0-9]{2,5}-)?\d{7,12}(?:-(?:[A-Z]{2,8}|\d{1,4}))?-[A-HJ-NPR-Z0-9]{11,17}-\d{3,}(?:$|[^A-Z0-9])"
       ),
       ""
     ),
   descriptorMatch, REGEXREPLACE(descriptorMatchRaw, "^[^A-Z0-9]+|[^A-Z0-9]+$", ""),
-  descriptorParts, IF(descriptorMatch="", "", TEXTSPLIT(descriptorMatch, "-")),
-  descriptorPartCount, IF(descriptorMatch="", 0, COUNTA(descriptorParts)),
   stockByDescriptor,
-    IF(
-      descriptorPartCount>=3,
-      INDEX(descriptorParts, 1, descriptorPartCount-2),
+    IFERROR(
+      REGEXEXTRACT(
+        descriptorMatch,
+        "^(?:[A-Z0-9]{2,5}-)?\d{7,12}"
+      ),
       ""
     ),
-  stockCandidate, IF(stockByLabel<>"", stockByLabel, stockByDescriptor),
+  stockByDescriptorNumeric,
+    IF(
+      stockByDescriptor="",
+      "",
+      REGEXREPLACE(stockByDescriptor, "^[A-Z0-9]{2,5}-", "")
+    ),
+  stockCandidate, IF(stockByLabelNumeric<>"", stockByLabelNumeric, stockByDescriptorNumeric),
   stockIsVinLike,
     IF(
       stockCandidate="",
