@@ -385,18 +385,421 @@ if (!CVR.apProcess) {
         return '=HYPERLINK("'+u+'","'+t+'")'
       };
 
-      const pa=a=>{
-        a=s(a).replace(/\s*\|\s*/g,",").replace(/\s+/g," ").trim();
-        if(!a)return["","","","",""];
-        let z=(a.match(/\b\d{5}(?:-\d{4})?\b(?!.*\b\d{5})/)||[])[0]||"";
-        if(z)a=a.replace(z,"").replace(/[,\s]+$/,"").trim();
-        let st="",m=a.match(/(?:,|\s)([A-Za-z]{2})\s*$/);
-        if(m){st=m[1].toUpperCase();a=a.slice(0,m.index).replace(/[,\s]+$/,"").trim()}
-        let apt="",am=a.match(/\b(?:apt|unit|ste|suite|#)\s*[\w-]+/i);
-        if(am){apt=am[0];a=a.replace(am[0],"").replace(/\s{2,}/g," ").replace(/[,\s]+$/,"").trim()}
-        let p=a.split(/\s*,\s*/).filter(Boolean),city="";
-        if(p.length>1){city=p.pop();a=p.join(", ")}
-        return[a,apt,city,st,z]
+      // -------------------------------
+      // Address parsing (supports: full address, split columns, and description scraping)
+      // -------------------------------
+      // Address "blank" (slightly broader than b())
+      const ab=v=>{v=s(v).trim();return!v||/^(?:n\/?a|none|null|unknown|tbd|-|)$/i.test(v)};
+      const aw=v=>s(v).replace(/[\u00A0\u2007\u202F]/g," ").replace(/\r/g,"");
+      const a1=v=>aw(v).replace(/\s+/g," ").trim();
+      const aq=v=>a1(v).replace(/^["']+|["']+$/g,"").trim();
+
+      const ZIP_RX=/\b(\d{5})(?:[-\s]?(\d{4}))?\b/;
+      const normZip=v=>{
+        v=aq(v);
+        let m=ZIP_RX.exec(v);
+        if(!m) return "";
+        return m[2]?m[1]+"-"+m[2]:m[1]
+      };
+
+      const STMAP=(function(){
+        const m=Object.create(null);
+        const nk=x=>a1(x).toUpperCase().replace(/[^A-Z]/g,"");
+        const pairs=[
+          ["ALABAMA","AL"],["ALASKA","AK"],["ARIZONA","AZ"],["ARKANSAS","AR"],
+          ["CALIFORNIA","CA"],["COLORADO","CO"],["CONNECTICUT","CT"],["DELAWARE","DE"],
+          ["FLORIDA","FL"],["GEORGIA","GA"],["HAWAII","HI"],["IDAHO","ID"],
+          ["ILLINOIS","IL"],["INDIANA","IN"],["IOWA","IA"],["KANSAS","KS"],
+          ["KENTUCKY","KY"],["LOUISIANA","LA"],["MAINE","ME"],["MARYLAND","MD"],
+          ["MASSACHUSETTS","MA"],["MICHIGAN","MI"],["MINNESOTA","MN"],["MISSISSIPPI","MS"],
+          ["MISSOURI","MO"],["MONTANA","MT"],["NEBRASKA","NE"],["NEVADA","NV"],
+          ["NEW HAMPSHIRE","NH"],["NEW JERSEY","NJ"],["NEW MEXICO","NM"],["NEW YORK","NY"],
+          ["NORTH CAROLINA","NC"],["NORTH DAKOTA","ND"],["OHIO","OH"],["OKLAHOMA","OK"],
+          ["OREGON","OR"],["PENNSYLVANIA","PA"],["RHODE ISLAND","RI"],["SOUTH CAROLINA","SC"],
+          ["SOUTH DAKOTA","SD"],["TENNESSEE","TN"],["TEXAS","TX"],["UTAH","UT"],
+          ["VERMONT","VT"],["VIRGINIA","VA"],["WASHINGTON","WA"],["WEST VIRGINIA","WV"],
+          ["WISCONSIN","WI"],["WYOMING","WY"],
+          ["DISTRICT OF COLUMBIA","DC"],["PUERTO RICO","PR"]
+        ];
+        const names=[];
+        for(const [name,abbr] of pairs){
+          m[nk(name)]=abbr;
+          m[nk(abbr)]=abbr;
+          names.push(name)
+        }
+        for(const nm of ["WASHINGTON DC","WASHINGTON D C","WASHINGTON D.C."]){
+          m[nk(nm)]="DC";
+          names.push(nm)
+        }
+        const uniq=Array.from(new Set(names.map(x=>a1(x).toUpperCase()))).sort((a,b)=>b.length-a.length);
+        return {m,nk,names:uniq}
+      })();
+
+      const normState=v=>{
+        v=aq(v);
+        if(ab(v)) return "";
+        let key=STMAP.nk(v);
+        return STMAP.m[key]||""
+      };
+
+      const isCity=v=>{
+        v=aq(v);
+        if(ab(v)) return false;
+        if(v.length<2||v.length>60) return false;
+        if(/\d/.test(v)) return false;
+        if(/\b(united\s*states|usa|us)\b/i.test(v)) return false;
+        return true
+      };
+
+      // More conservative street check (avoid misclassifying cities like "St Louis" as street)
+      const isStreet=v=>{
+        v=aq(v);
+        if(ab(v)) return false;
+        if(/\b\d{1,6}\b/.test(v)) return true;
+        if(/\bP\.?\s*O\.?\s*BOX\b/i.test(v)) return true;
+        if(/\b(AVE|AVENUE|RD|ROAD|BLVD|BOULEVARD|DR|DRIVE|LN|LANE|HWY|HIGHWAY|PKWY|PARKWAY|CT|COURT|PL|PLACE|WAY|TRL|TRAIL|CIR|CIRCLE|TER|TERRACE)\b/i.test(v)) return true;
+        return v.length>18
+      };
+
+      const isApt=v=>{
+        v=aq(v);
+        if(ab(v)) return false;
+        return /(?:^|[,\s])#\s*\w+/.test(v) || /\b(APT|APARTMENT|UNIT|STE|SUITE|BLDG|BUILDING|FL|FLOOR|RM|ROOM|LOT|TRLR|TRAILER)\b/i.test(v)
+      };
+
+      const splitAptFromStreet=(street)=>{
+        street=aq(street);
+        if(!street) return ["",""];
+        const pats=[
+          {s:2,rx:/\b(?:APT|APARTMENT)\b\.?\s*(?:#\s*)?[A-Za-z0-9-]+(?:\s*[A-Za-z0-9-]+)*/ig},
+          {s:2,rx:/\b(?:STE|SUITE)\b\.?\s*(?:#\s*)?[A-Za-z0-9-]+(?:\s*[A-Za-z0-9-]+)*/ig},
+          {s:2,rx:/\b(?:UNIT)\b\.?\s*(?:#\s*)?[A-Za-z0-9-]+(?:\s*[A-Za-z0-9-]+)*/ig},
+          {s:2,rx:/\b(?:BLDG|BUILDING)\b\.?\s*(?:#\s*)?[A-Za-z0-9-]+(?:\s*[A-Za-z0-9-]+)*/ig},
+          {s:2,rx:/\b(?:FL|FLOOR|RM|ROOM|LOT|TRLR|TRAILER)\b\.?\s*(?:#\s*)?[A-Za-z0-9-]+(?:\s*[A-Za-z0-9-]+)*/ig},
+          {s:1,rx:/(?:^|[,\s])#\s*[A-Za-z0-9-]+/ig}
+        ];
+        let best=null;
+        for(const p of pats){
+          p.rx.lastIndex=0;
+          let m;
+          while((m=p.rx.exec(street))){
+            let cand={score:p.s,index:m.index,text:m[0]};
+            if(!best || cand.score>best.score || (cand.score===best.score && cand.index>best.index) || (cand.score===best.score && cand.index===best.index && cand.text.length>best.text.length)){
+              best=cand
+            }
+          }
+        }
+        if(!best) return [street,""];
+        let apt=a1(best.text.replace(/^[,\s]+/,"").trim());
+        // If apt is like "#1215" and there's a stray "Apt" token right before it, fix to "Apt #1215"
+        if(/^#\s*/.test(apt)){
+          let pre=street.slice(0,best.index).trim();
+          if(/\bAPT\b\.?\s*$/i.test(pre)) apt="Apt "+apt;
+          if(/\bSUITE\b\.?\s*$/i.test(pre)) apt="Suite "+apt;
+          if(/\bSTE\b\.?\s*$/i.test(pre)) apt="Ste "+apt;
+          if(/\bUNIT\b\.?\s*$/i.test(pre)) apt="Unit "+apt
+        }
+        let out=(street.slice(0,best.index)+street.slice(best.index+best.text.length))
+          .replace(/\s{2,}/g," ")
+          .replace(/[,\s]+$/,"")
+          .replace(/^[,\s]+/,"")
+          .trim();
+        // If we removed just the unit number, also remove a dangling "Apt"/"Suite" token at the end
+        out=out.replace(/\b(?:APT|APARTMENT|SUITE|STE|UNIT)\b\.?\s*$/i,"").replace(/[ ,]+$/g,"").trim();
+        return [out,apt]
+      };
+
+      const stripAddrLabels=(t)=>{
+        t=aw(t).replace(/\n{2,}/g,"\n").trim();
+        t=t.replace(/^\s*(?:mail(?:ing)?|remit(?:tance)?|payee|vendor|check)?\s*address\s*[:\-]\s*/i,"");
+        t=t.replace(/^\s*(?:please\s+)?(?:mail(?:\s+the)?\s+check|send(?:\s*check)?|mail)\s*(?:to)?\s*[:\-]\s*/i,"");
+        return t.trim()
+      };
+
+      const parseAddressParts=(raw)=>{
+        raw=stripAddrLabels(raw);
+        raw=raw.replace(/<br\s*\/?>/gi,"\n");
+        raw=raw.replace(/\s*\|\s*/g,"\n").replace(/\s+\/\s+/g,"\n");
+        raw=raw.replace(/\r/g,"").replace(/\n{2,}/g,"\n").trim();
+        if(ab(raw)) return {street:"",apt:"",city:"",state:"",zip:""};
+        let lines=raw.split(/\n+/).map(aq).filter(Boolean);
+
+        let city="",state="",zip="",street="",apt="";
+
+        const takeLabeled=(rx)=>{
+          for(let i=0;i<lines.length;i++){
+            let m=lines[i].match(rx);
+            if(m){
+              let v=aq(m[1]);
+              lines.splice(i,1);
+              return v
+            }
+          }
+          return ""
+        };
+
+        let lCity=takeLabeled(/^\s*city\s*[:\-]\s*(.+)\s*$/i);
+        let lState=takeLabeled(/^\s*state\s*[:\-]\s*(.+)\s*$/i);
+        let lZip=takeLabeled(/^\s*(?:zip|zip\s*code|postal\s*code)\s*[:\-]\s*(.+)\s*$/i);
+        let lStreet=takeLabeled(/^\s*(?:street\s*address|address\s*line\s*1|address1|address\s*1|address)\s*[:\-]\s*(.+)\s*$/i);
+        let lApt=takeLabeled(/^\s*(?:address\s*line\s*2|address2|address\s*2|apt|apt\/suite|suite|unit)\s*[:\-]\s*(.+)\s*$/i);
+
+        city=isCity(lCity)?lCity:"";
+        state=normState(lState)||"";
+        zip=normZip(lZip)||"";
+        street=isStreet(lStreet)?lStreet:"";
+        apt=isApt(lApt)?lApt:"";
+
+        const popLine=()=>lines.length?lines[lines.length-1]:"";
+        const dropLine=()=>lines.pop();
+
+        // Zip: allow last line to be just the zip, or zip embedded in last 1-3 lines
+        if(!zip && lines.length){
+          let ln=popLine();
+          let z=normZip(ln);
+          if(z && aq(ln).replace(ZIP_RX,"").trim()===""){
+            zip=z; dropLine()
+          }
+        }
+        if(!zip){
+          for(let i=lines.length-1;i>=Math.max(0,lines.length-3);i--){
+            let z=normZip(lines[i]);
+            if(z){
+              zip=z;
+              let rem=a1(lines[i].replace(ZIP_RX," ").trim());
+              lines[i]=rem;
+              if(!lines[i]) lines.splice(i,1);
+              break
+            }
+          }
+        }
+
+        // State: whole-line state OR trailing state token OR trailing full state name
+        if(!state && lines.length){
+          let ln=popLine();
+          let st=normState(ln);
+          if(st && !/\d/.test(ln) && aq(ln).length<=30){
+            state=st; dropLine()
+          }
+        }
+
+        if(!state && lines.length){
+          let ln=popLine();
+          let m=ln.match(/(?:^|[,\s])([A-Za-z]{2})\s*$/);
+          let st=m?normState(m[1]):"";
+          if(st){
+            state=st;
+            ln=a1(ln.slice(0,m.index).replace(/[,\s]+$/,""));
+            if(ln) lines[lines.length-1]=ln; else dropLine()
+          } else {
+            let up=a1(ln).toUpperCase().replace(/[,\s]+$/,"");
+            for(const nm of STMAP.names){
+              const rx=new RegExp(nm.split(/\s+/).map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("\\s+")+"\\s*$","i");
+              if(rx.test(up)){
+                state=normState(nm);
+                ln=a1(ln.replace(rx,"").replace(/[,\s]+$/,""));
+                if(ln) lines[lines.length-1]=ln; else dropLine();
+                break
+              }
+            }
+          }
+        }
+
+        // City: usually a whole last line OR last comma segment OR token-scan near the end
+        if(!city && lines.length){
+          let ln=popLine();
+          if(isCity(ln) && !isStreet(ln) && !normState(ln) && !normZip(ln)){
+            city=ln; dropLine()
+          }
+        }
+
+        if(!city && (state||zip) && lines.length){
+          let ln=popLine();
+          if(/,/.test(ln)){
+            let parts=ln.split(/\s*,\s*/).filter(Boolean);
+            if(parts.length>1){
+              let c=parts.pop();
+              if(isCity(c)){
+                city=c;
+                ln=parts.join(", ").trim();
+                if(ln) lines[lines.length-1]=ln; else dropLine()
+              }
+            }
+          }
+        }
+
+        if(!city && (state||zip) && lines.length){
+          let ln=popLine();
+          let tokens=aq(ln).split(/\s+/).filter(Boolean);
+          const STSUF=new Set(["ST","STREET","AVE","AVENUE","RD","ROAD","BLVD","BOULEVARD","DR","DRIVE","LN","LANE","HWY","HIGHWAY","PKWY","PARKWAY","CT","COURT","PL","PLACE","WAY","TRL","TRAIL","CIR","CIRCLE","TER","TERRACE"]);
+          const APTTOK=new Set(["APT","APARTMENT","UNIT","STE","SUITE","BLDG","BUILDING","FL","FLOOR","RM","ROOM","LOT","TRLR","TRAILER"]);
+          const CITYPFX=new Set(["ST","SAINT","MT","MOUNT","FORT","FT","PORT"]);
+          const isNumTok=t=>/^\d+$/.test(t);
+          let cityT=[];
+          for(let i=tokens.length-1;i>=0;i--){
+            let w=tokens[i];
+            let uw=w.toUpperCase().replace(/[^\w]/g,"");
+            let left=tokens[i-1]?tokens[i-1].toUpperCase().replace(/[^\w]/g,""):"";
+            let leftLeft=tokens[i-2]?tokens[i-2].toUpperCase().replace(/[^\w]/g,""):"";
+            if(!uw) continue;
+            if(/\d/.test(uw) || uw.includes("#")) break;
+            if(APTTOK.has(uw) || (left && APTTOK.has(left) && uw.length===1)) break;
+            if(STSUF.has(uw) && cityT.length){
+              if((uw==="ST" || uw==="STREET") && CITYPFX.has(left) && !isNumTok(leftLeft)){
+                // include (city prefix) e.g., Port St Lucie
+              } else break
+            }
+            if(uw.length===1 && cityT.length) break;
+            cityT.unshift(w);
+            if(cityT.length>=6) break
+          }
+          if(cityT.length){
+            let c=a1(cityT.join(" "));
+            if(isCity(c)){
+              city=c;
+              let cut=tokens.slice(0,tokens.length-cityT.length).join(" ").trim();
+              if(cut) lines[lines.length-1]=cut; else dropLine()
+            }
+          }
+        }
+
+        // Everything remaining is street/apt
+        let streetLines=lines.slice();
+        if(!apt && streetLines.length){
+          for(let i=streetLines.length-1;i>=0;i--){
+            let ln=streetLines[i];
+            if(isApt(ln) && !isStreet(ln) && !isCity(ln) && !normState(ln) && !normZip(ln)){
+              apt=ln;
+              streetLines.splice(i,1);
+              break
+            }
+          }
+        }
+
+        street=a1(street || streetLines.join(", "));
+
+        if(street){
+          let sp=splitAptFromStreet(street);
+          street=sp[0];
+          if(!apt && sp[1]) apt=sp[1]
+        }
+
+        city=isCity(city)?city:"";
+
+        return {street:street||"",apt:apt||"",city:city||"",state:state||"",zip:zip||""}
+      };
+
+      const extractAddressFromText=(txt)=>{
+        txt=aw(txt).replace(/\r/g,"");
+        if(ab(txt)) return "";
+        let lines=txt.split(/\n+/).map(aq);
+
+        // 1) labeled blocks
+        const lbl=/^\s*(?:mail(?:ing)?\s*address|remit(?:tance)?\s*address|remit\s*to|payee\s*address|vendor\s*address|send(?:\s*check)?\s*to|mail\s*to|address)\s*[:\-]\s*(.*)$/i;
+        const lbl2=/^\s*(?:please\s+)?(?:mail(?:\s+the)?\s+check|send(?:\s*check)?|mail)\s*(?:to)?\s*[:\-]\s*(.*)$/i;
+        const addrPartLbl=/^\s*(?:city|state|zip|zip\s*code|postal\s*code|apt|apt\/suite|suite|unit|address\s*line\s*2|address2|address\s*2|attention|attn)\s*[:\-]/i;
+
+        for(let i=0;i<lines.length;i++){
+          let m=lines[i].match(lbl)||lines[i].match(lbl2);
+          if(!m) continue;
+          let block=[];
+          let first=aq(m[1]);
+          first && block.push(first);
+          for(let j=i+1;j<lines.length && block.length<6;j++){
+            let l=aq(lines[j]);
+            if(!l) break;
+            // Stop if this is clearly a new unrelated field label (but allow address-part labels)
+            if(/^\s*\w[\w\s\/&]{0,25}\s*:\s*/.test(l) && !addrPartLbl.test(l) && !/^\s*(?:c\/o|attn)\b/i.test(l)) break;
+            if(/\b(vin|pid|stock|oracle|invoice|tracking|amount)\b/i.test(l) && block.length) break;
+            block.push(l)
+          }
+          let cand=block.join("\n").trim();
+          if(cand) return cand
+        }
+
+        // 2) zip heuristic: line with zip + up to 4 lines above it
+        for(let i=0;i<lines.length;i++){
+          if(!ZIP_RX.test(lines[i])) continue;
+          let start=i;
+          let block=[];
+          while(start>0 && block.length<4){
+            let prev=aq(lines[start-1]);
+            if(!prev) break;
+            if(/:\s*$/.test(prev)) break;
+            if(/\b(vin|pid|stock|oracle|invoice|tracking|amount)\b/i.test(prev)) break;
+            start--
+          }
+          block=lines.slice(start,i+1).filter(Boolean);
+          let cand=block.join("\n").trim();
+          if(cand) return cand
+        }
+
+        return ""
+      };
+
+      const buildFullAddress=(p)=>{
+        let parts=[];
+        let st=a1(p.street||"");
+        let apt=a1(p.apt||"");
+        let city=a1(p.city||"");
+        let state=a1(p.state||"");
+        let zip=a1(p.zip||"");
+        st && parts.push(st);
+        apt && parts.push(apt);
+        let tail="";
+        if(city){
+          tail=city;
+          if(state||zip) tail+=", "
+        }
+        if(state){
+          tail+=state;
+          if(zip) tail+=" "+zip
+        } else if(zip){
+          tail+=zip
+        }
+        tail && parts.push(tail);
+        return parts.join(", ").replace(/\s{2,}/g," ").trim()
+      };
+
+      const parseAddressSmart=(args)=>{
+        args=args||{};
+        let base=parseAddressParts(args.address||"");
+
+        // Column hints (fill blanks only  don't clobber a fully-parsed Address or a vendor-rule override)
+        let cStreet=aq(args.street||"");
+        let cApt=aq(args.apt||"");
+        let cCity=aq(args.city||"");
+        let cState=normState(args.state||"");
+        let cZip=normZip(args.zip||"");
+
+        if(isStreet(cStreet) && (!base.street || !isStreet(base.street))) base.street=cStreet;
+        if(isApt(cApt) && !base.apt) base.apt=cApt;
+        if(isCity(cCity) && !base.city) base.city=cCity;
+        if(cState && !base.state) base.state=cState;
+        if(cZip && !base.zip) base.zip=cZip;
+
+        // If we're still missing key parts, try extracting from noisy text (Description, etc)
+        if((!base.street || !base.city || !base.state || !base.zip) && args.text){
+          let cand=extractAddressFromText(args.text);
+          if(cand){
+            let extra=parseAddressParts(cand);
+            if(!base.street && extra.street) base.street=extra.street;
+            if(!base.apt && extra.apt) base.apt=extra.apt;
+            if(!base.city && extra.city) base.city=extra.city;
+            if(!base.state && extra.state) base.state=extra.state;
+            if(!base.zip && extra.zip) base.zip=extra.zip
+          }
+        }
+
+        // Final normalize / split apt if needed
+        if(base.street){
+          let sp=splitAptFromStreet(base.street);
+          base.street=sp[0]||base.street;
+          if(!base.apt && sp[1]) base.apt=sp[1]
+        }
+
+        base.full=buildFullAddress(base);
+        return base
       };
 
       // Money parser (used ONLY for Fee+Tax fallback math)
@@ -453,7 +856,12 @@ if (!CVR.apProcess) {
       const iV  =ix("Vendor");
       const iOIN=ix("Oracle Invoice Number","Oracle invoice #","Oracle Invoice #");
       const iMI =ix("Mailing Instructions","Mail Instructions","Mailing");
-      const iAdr=ix("Address");
+      const iAdr=ix("Address","Mailing Address","Payee Address","Remit Address","Remittance Address","Mail To Address","Mail-To Address");
+      const iStr=ix("Street Address","Street","Address Line 1","Address1","Address 1","Address Line1","Line 1","Line1");
+      const iApt=ix("Apt/Suite","Apt","Suite","Unit","Address Line 2","Address2","Address 2","Address Line2","Line 2","Line2");
+      const iCity=ix("City","Town");
+      const iState=ix("State","Province","Region");
+      const iZip=ix("Zip","Zip Code","ZipCode","Postal Code","PostalCode","Post Code","PostCode");
 
       // Amount priority:
       //   Check Request Amount -> Amount to be Paid -> Fee+Tax (treat missing as 0)
@@ -515,7 +923,18 @@ if (!CVR.apProcess) {
 
         o[6]=iV>-1?s(row[iV]).trim():"";
         o[9]=iMI>-1?s(row[iMI]).trim():"";
-        o[16]=iAdr>-1?s(row[iAdr]).trim():"";
+        // Address inputs can come from:
+        // - A single Address column
+        // - Separate Street/Apt/City/State/Zip columns
+        // We'll capture all, then resolve later (after vendor rules may override o[16]).
+        let aAdr=iAdr>-1?s(row[iAdr]).trim():"";
+        let aStr=iStr>-1?s(row[iStr]).trim():"";
+        let aApt=iApt>-1?s(row[iApt]).trim():"";
+        let aCity=iCity>-1?s(row[iCity]).trim():"";
+        let aState=iState>-1?s(row[iState]).trim():"";
+        let aZip=iZip>-1?s(row[iZip]).trim():"";
+
+        o[16]=aAdr;
 
         // Raw columns (kept for visibility / debugging)
         let _fee=iFee>-1?row[iFee]:"";
@@ -647,12 +1066,23 @@ if (!CVR.apProcess) {
         let mi=s(o[9]);
         o[9]=/inhouse/i.test(mi)?I:/hub\s*checks/i.test(mi)?H:/misc/i.test(mi)?M:mi;
 
-        let p=pa(o[16]);
-        o[17]=p[0];
-        o[18]=p[1];
-        o[19]=p[2];
-        o[20]=p[3];
-        o[21]=p[4];
+        let ap=parseAddressSmart({
+          address:o[16],
+          street:aStr,
+          apt:aApt,
+          city:aCity,
+          state:aState,
+          zip:aZip,
+          text:txt
+        });
+
+        // Normalize Address + parts
+        if(!ab(ap.full)) o[16]=ap.full;
+        o[17]=ap.street;
+        o[18]=ap.apt;
+        o[19]=ap.city;
+        o[20]=ap.state;
+        o[21]=ap.zip;
 
         rows.push(o)
       }
