@@ -369,8 +369,10 @@ if (!CVR.apProcess) {
       const s=v=>(v??"").toString();
       const b=v=>{v=s(v).trim();return!v||/^(n\/?a|-|—)$/i.test(v)};
       const n=v=>s(v).toLowerCase().replace(/[^a-z0-9]+/g,"");
-      const hh=v=>s(v).replace(/\u00A0/g," ").replace(/[ \t]*-[ \t]*/g,"-");
-      const sid=v=>hh(v).replace(/\s+/g,"").trim();
+      const hh=v=>s(v)
+        .replace(/[\u00A0\u2007\u202F]/g," ")
+        .replace(/\s*[-\u2010\u2011\u2012\u2013\u2014\u2015\uFE58\uFE63\uFF0D]\s*/g,"-");
+      const sid=v=>hh(v).replace(/[\s\u200B\u200C\u200D\u2060\uFEFF]+/g,"").trim();
 
       const hl=v=>{
         v=s(v).trim();
@@ -575,9 +577,9 @@ if (!CVR.apProcess) {
        let vinD=anyId?(b(vin)?"VIN":sid(vin)):"";
        let pidD=anyId?(b(pid)?"PID":sid(pid)):"";
 
-       o[12]=stD;
-       o[13]=vinD;
-       o[14]=pidD;
+       o[12]=sid(stD);
+       o[13]=sid(vinD);
+       o[14]=sid(pidD);
 
        // Reference: HUB-STOCK-VIN-PID (inserted after Mailing Instructions)
        o[10]=anyId?sid("HUB-"+[stD,vinD,pidD].join("-")):"";
