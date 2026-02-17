@@ -43,23 +43,25 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 
 #### AP_INVOICES_INTERFACE Conditional Formatting Rules (Summary)
 
-| Rule ID   | Applies To Range | Applies To Headers                              | Rule Type        |
-| :-------- | :--------------- | :---------------------------------------------- | :--------------- |
-| INV-CF-01 | `$A$5:$DZ$9`     | All headers in `AP_INVOICES_INTERFACE` (`A:DZ`) | Formula          |
-| INV-CF-02 | `$X$5:$X$9`      | Accounting Date                                 | Formula          |
-| INV-CF-03 | `$W$5:$W$9`      | Invoice Received Date                           | Formula          |
-| INV-CF-04 | `$F$5:$F$9`      | \*Invoice Date                                  | Formula          |
-| INV-CF-05 | `$AA$5:$AA$9`    | Pay Alone                                       | Formula          |
-| INV-CF-06 | `$Y$5:$Y$9`      | Payment Method                                  | Formula          |
-| INV-CF-07 | `$T$5:$T$9`      | \*Payment Terms                                 | Formula          |
-| INV-CF-08 | `$M$5:$M$9`      | Import Set                                      | Duplicate values |
-| INV-CF-09 | `$D$5:$D$9`      | \*Invoice Number                                | Duplicate values |
-| INV-CF-10 | `$A$5:$A$9`      | \*Invoice ID                                    | Formula          |
-| INV-CF-11 | `$E$5:$E$9`      | \*Invoice Amount                                | Formula          |
+| Rule ID   | Applies To Range (cell refs) | Applies To Range (table mapping, recommended) | Applies To Headers                              | Rule Type        |
+| :-------- | :--------------------------- | :-------------------------------------------- | :---------------------------------------------- | :--------------- |
+| INV-CF-01 | `$A$5:$DZ$9`                | `tbl_invoices[#Data]`                         | All headers in `AP_INVOICES_INTERFACE` (`A:DZ`) | Formula          |
+| INV-CF-02 | `$X$5:$X$9`                 | `tbl_invoices[Accounting Date]`               | Accounting Date                                 | Formula          |
+| INV-CF-03 | `$W$5:$W$9`                 | `tbl_invoices[Invoice Received Date]`         | Invoice Received Date                           | Formula          |
+| INV-CF-04 | `$F$5:$F$9`                 | `tbl_invoices[*Invoice Date]`                 | \*Invoice Date                                  | Formula          |
+| INV-CF-05 | `$AA$5:$AA$9`               | `tbl_invoices[Pay Alone]`                     | Pay Alone                                       | Formula          |
+| INV-CF-06 | `$Y$5:$Y$9`                 | `tbl_invoices[Payment Method]`                | Payment Method                                  | Formula          |
+| INV-CF-07 | `$T$5:$T$9`                 | `tbl_invoices[*Payment Terms]`                | \*Payment Terms                                 | Formula          |
+| INV-CF-08 | `$M$5:$M$9`                 | `tbl_invoices[Import Set]`                    | Import Set                                      | Duplicate values |
+| INV-CF-09 | `$D$5:$D$9`                 | `tbl_invoices[*Invoice Number]`               | \*Invoice Number                                | Duplicate values |
+| INV-CF-10 | `$A$5:$A$9`                 | `tbl_invoices[*Invoice ID]`                   | \*Invoice ID                                    | Formula          |
+| INV-CF-11 | `$E$5:$E$9`                 | `tbl_invoices[*Invoice Amount]`               | \*Invoice Amount                                | Formula          |
 
 #### AP_INVOICES_INTERFACE Conditional Formatting Formulas (Formatted)
 
 ##### INV-CF-01
+
+Description: Flags unusually large invoice amounts (100,000 or greater).
 
 ```excel
 =AND(
@@ -70,56 +72,31 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 
 ##### INV-CF-02
 
+Description: Flags invalid Accounting Date values (blank, non-date, time component, or outside current month).
+
 ```excel
-=OR(
-  $X5="",
-  ISNUMBER($X5)=FALSE,
-  IF(
-    ISNUMBER($X5),
-    OR(
-      INT($X5)<>$X5,
-      EOMONTH($X5,0)<>EOMONTH(TODAY(),0)
-    ),
-    FALSE
-  )
-)
+=cf_BadMonthDate($X5)
 ```
 
 ##### INV-CF-03
 
+Description: Flags invalid Invoice Received Date values (blank, non-date, time component, or outside current month).
+
 ```excel
-=OR(
-  $W5="",
-  ISNUMBER($W5)=FALSE,
-  IF(
-    ISNUMBER($W5),
-    OR(
-      INT($W5)<>$W5,
-      EOMONTH($W5,0)<>EOMONTH(TODAY(),0)
-    ),
-    FALSE
-  )
-)
+=cf_BadMonthDate($W5)
 ```
 
 ##### INV-CF-04
 
+Description: Flags invalid Invoice Date values (blank, non-date, time component, or outside current month).
+
 ```excel
-=OR(
-  $F5="",
-  ISNUMBER($F5)=FALSE,
-  IF(
-    ISNUMBER($F5),
-    OR(
-      INT($F5)<>$F5,
-      EOMONTH($F5,0)<>EOMONTH(TODAY(),0)
-    ),
-    FALSE
-  )
-)
+=cf_BadMonthDate($F5)
 ```
 
 ##### INV-CF-05
+
+Description: Ensures Pay Alone is either set with Payment Terms and Payment Method, or blank with both blank.
 
 ```excel
 =OR(
@@ -130,6 +107,8 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 
 ##### INV-CF-06
 
+Description: Ensures Payment Method is present only when Payment Terms and Pay Alone are both present.
+
 ```excel
 =OR(
   AND($Y5="", $T5<>"", $AA5<>""),
@@ -138,6 +117,8 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 ```
 
 ##### INV-CF-07
+
+Description: Ensures Payment Terms is present only when Payment Method and Pay Alone are both present.
 
 ```excel
 =OR(
@@ -148,11 +129,15 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 
 ##### INV-CF-08
 
+Description: Highlights duplicate Import Set values.
+
 ```text
 Duplicate values
 ```
 
 ##### INV-CF-09
+
+Description: Highlights duplicate Invoice Number values.
 
 ```text
 Duplicate values
@@ -160,49 +145,47 @@ Duplicate values
 
 ##### INV-CF-10
 
+Description: Flags invalid or non-continuous Invoice ID values based on the first missing ID in the table.
+
 ```excel
 =LET(
-  note_text_1, N("TRUE if Invoice IDs are not continuous from 1..this ID within AP_INVOICES_INTERFACE."),
-  note_text_2, N("Blank Invoice ID -> ignore (FALSE). Non-integer / <1 -> invalid (TRUE)."),
-
   inv_raw, $A5,
-  inv_rng, $A$5:$A$1494,
 
   inv_blank, LEN(inv_raw&"")=0,
   inv_num, IFERROR(--inv_raw, 0),
   inv_is_pos_int, AND(inv_num>=1, inv_num=INT(inv_num)),
 
-  present_cnt,
+  IF(
+    inv_blank,
+    FALSE,
     IF(
       inv_is_pos_int,
-      SUM(--(COUNTIF(inv_rng, SEQUENCE(inv_num))>0)),
-      0
-    ),
-
-  continuity_ok, present_cnt=inv_num,
-
-  IF(inv_blank, FALSE, IF(inv_is_pos_int, NOT(continuity_ok), TRUE))
+      inv_num>=cfInv_FirstMissingID,
+      TRUE
+    )
+  )
 )
 ```
 
 ##### INV-CF-11
 
+Description: Flags invoice headers where `*Invoice Amount` does not match the sum of related line amounts.
+
 ```excel
 =LET(
-  note_text_1, N("TRUE when header Invoice Amount mismatches sum of nonblank line amounts."),
-  note_text_2, N("Blank=blank is OK; blank vs nonblank is a mismatch."),
-
   inv_id, $A5,
   header_amt, $E5,
 
-  line_ids, AP_INVOICE_LINES_INTERFACE!$A$5:$A$1489,
-  line_amts, AP_INVOICE_LINES_INTERFACE!$D$5:$D$1489,
-
-  has_nonblank_amt, COUNTIFS(line_ids, inv_id, line_amts, "<>")>0,
-  lines_total, IF(has_nonblank_amt, SUMIFS(line_amts, line_ids, inv_id), ""),
+  lines_total,
+    XLOOKUP(
+      inv_id,
+      INDEX(cfLine_TotalsByInvID,,1),
+      INDEX(cfLine_TotalsByInvID,,2),
+      ""
+    ),
 
   header_blank, LEN(header_amt&"")=0,
-  lines_blank, LEN(lines_total&"")=0,
+  lines_blank,  LEN(lines_total&"")=0,
 
   mismatch,
     IF(
@@ -250,27 +233,29 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 
 #### AP_INVOICE_LINES_INTERFACE Conditional Formatting Rules (Summary)
 
-| Rule ID    | Applies To Range | Applies To Headers        | Rule Type        |
-| :--------- | :--------------- | :------------------------ | :--------------- |
-| LINE-CF-01 | `$M$5:$M$9`      | Item Description          | Formula          |
-| LINE-CF-02 | `$X$5:$X$9`      | Accounting Date           | Formula          |
-| LINE-CF-03 | `$BN$5:$BN$9`    | Attribute Category        | Formula          |
-| LINE-CF-04 | `$DY$5:$DY$9`    | Task Number               | Formula          |
-| LINE-CF-05 | `$DZ$5:$DZ$9`    | Expenditure Type          | Formula          |
-| LINE-CF-06 | `$EA$5:$EA$9`    | Expenditure Organization  | Formula          |
-| LINE-CF-07 | `$BT$5:$BT$9`    | Attribute 6               | Formula          |
-| LINE-CF-08 | `$BT$5:$BT$9`    | Attribute 6               | Duplicate Values |
-| LINE-CF-09 | `$DX$5:$DX$9`    | Project Number            | Formula          |
-| LINE-CF-10 | `$DX$5:$DX$9`    | Project Number            | Duplicate Values |
-| LINE-CF-11 | `$A$5:$A$9`      | \*Invoice ID              | Formula          |
-| LINE-CF-12 | `$A$5:$B$9`      | \*Invoice ID, Line Number | Formula          |
-| LINE-CF-13 | `$A$5:$B$9`      | \*Invoice ID, Line Number | Formula          |
-| LINE-CF-14 | `$A$5:$A$9`      | \*Invoice ID              | Formula          |
-| LINE-CF-15 | `$A$5:$A$9`      | \*Invoice ID              | Formula          |
+| Rule ID    | Applies To Range (cell refs) | Applies To Range (table mapping, recommended) | Applies To Headers        | Rule Type        |
+| :--------- | :--------------------------- | :-------------------------------------------- | :------------------------ | :--------------- |
+| LINE-CF-01 | `$M$5:$M$9`                 | `tbl_invoice_lines[Item Description]`         | Item Description          | Formula          |
+| LINE-CF-02 | `$X$5:$X$9`                 | `tbl_invoice_lines[Accounting Date]`          | Accounting Date           | Formula          |
+| LINE-CF-03 | `$BN$5:$BN$9`               | `tbl_invoice_lines[Attribute Category]`       | Attribute Category        | Formula          |
+| LINE-CF-04 | `$DY$5:$DY$9`               | `tbl_invoice_lines[Task Number]`              | Task Number               | Formula          |
+| LINE-CF-05 | `$DZ$5:$DZ$9`               | `tbl_invoice_lines[Expenditure Type]`         | Expenditure Type          | Formula          |
+| LINE-CF-06 | `$EA$5:$EA$9`               | `tbl_invoice_lines[Expenditure Organization]` | Expenditure Organization  | Formula          |
+| LINE-CF-07 | `$BT$5:$BT$9`               | `tbl_invoice_lines[Attribute 6]`              | Attribute 6               | Formula          |
+| LINE-CF-08 | `$BT$5:$BT$9`               | `tbl_invoice_lines[Attribute 6]`              | Attribute 6               | Duplicate Values |
+| LINE-CF-09 | `$DX$5:$DX$9`               | `tbl_invoice_lines[Project Number]`           | Project Number            | Formula          |
+| LINE-CF-10 | `$DX$5:$DX$9`               | `tbl_invoice_lines[Project Number]`           | Project Number            | Duplicate Values |
+| LINE-CF-11 | `$A$5:$A$9`                 | `tbl_invoice_lines[*Invoice ID]`              | \*Invoice ID              | Formula          |
+| LINE-CF-12 | `$A$5:$B$9`                 | `tbl_invoice_lines[[*Invoice ID]:[Line Number]]` | \*Invoice ID, Line Number | Formula          |
+| LINE-CF-13 | `$A$5:$B$9`                 | `tbl_invoice_lines[[*Invoice ID]:[Line Number]]` | \*Invoice ID, Line Number | Formula          |
+| LINE-CF-14 | `$A$5:$A$9`                 | `tbl_invoice_lines[*Invoice ID]`              | \*Invoice ID              | Formula          |
+| LINE-CF-15 | `$A$5:$A$9`                 | `tbl_invoice_lines[*Invoice ID]`              | \*Invoice ID              | Formula          |
 
 #### AP_INVOICE_LINES_INTERFACE Conditional Formatting Formulas (Formatted)
 
 ##### LINE-CF-01
+
+Description: Flags rows where Item Description does not match Description.
 
 ```excel
 =$M5<>$H5
@@ -278,22 +263,15 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 
 ##### LINE-CF-02
 
+Description: Flags invalid Accounting Date values (blank, non-date, time component, or outside current month).
+
 ```excel
-=OR(
-  $X5="",
-  ISNUMBER($X5)=FALSE,
-  IF(
-    ISNUMBER($X5),
-    OR(
-      INT($X5)<>$X5,
-      EOMONTH($X5,0)<>EOMONTH(TODAY(),0)
-    ),
-    FALSE
-  )
-)
+=cf_BadMonthDate($X5)
 ```
 
 ##### LINE-CF-03
+
+Description: Ensures Attribute Category presence matches Expenditure Organization presence.
 
 ```excel
 =($EA5="")<>($BN5="")
@@ -301,17 +279,23 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 
 ##### LINE-CF-04
 
+Description: Ensures Task Number presence matches Expenditure Organization presence.
+
 ```excel
 =($EA5="")<>($DY5="")
 ```
 
 ##### LINE-CF-05
 
+Description: Ensures Expenditure Type presence matches Expenditure Organization presence.
+
 ```excel
 =($EA5="")<>($DZ5="")
 ```
 
 ##### LINE-CF-06
+
+Description: Requires all related project/cost fields when Expenditure Organization is populated.
 
 ```excel
 =AND(
@@ -322,11 +306,15 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 
 ##### LINE-CF-07
 
+Description: Ensures Attribute 6 presence matches Expenditure Organization presence.
+
 ```excel
 =($EA5="")<>($BT5="")
 ```
 
 ##### LINE-CF-08
+
+Description: Highlights duplicate Attribute 6 values.
 
 ```text
 Duplicate Values
@@ -334,11 +322,15 @@ Duplicate Values
 
 ##### LINE-CF-09
 
+Description: Ensures Project Number presence matches Expenditure Organization presence.
+
 ```excel
 =($EA5="")<>($DX5="")
 ```
 
 ##### LINE-CF-10
+
+Description: Highlights duplicate Project Number values.
 
 ```text
 Duplicate Values
@@ -346,74 +338,65 @@ Duplicate Values
 
 ##### LINE-CF-11
 
+Description: Flags invalid or non-continuous Invoice ID values based on the first missing ID in invoice lines.
+
 ```excel
 =LET(
-  note_text_1, N("TRUE if Invoice IDs are not continuous from 1..this ID within AP_INVOICE_LINES_INTERFACE."),
-  note_text_2, N("Blank Invoice ID -> ignore (FALSE). Non-integer / <1 -> invalid (TRUE)."),
-
   inv_raw, $A5,
-  inv_rng, $A$5:$A$1489,
 
   inv_blank, LEN(inv_raw&"")=0,
   inv_num, IFERROR(--inv_raw, 0),
   inv_is_pos_int, AND(inv_num>=1, inv_num=INT(inv_num)),
 
-  present_cnt,
+  IF(
+    inv_blank,
+    FALSE,
     IF(
       inv_is_pos_int,
-      SUM(--(COUNTIF(inv_rng, SEQUENCE(inv_num))>0)),
-      0
-    ),
-
-  continuity_ok, present_cnt=inv_num,
-
-  IF(inv_blank, FALSE, IF(inv_is_pos_int, NOT(continuity_ok), TRUE))
+      inv_num>=cfLine_FirstMissingInvID,
+      TRUE
+    )
+  )
 )
 ```
 
 ##### LINE-CF-12
 
+Description: Flags invalid or non-continuous Line Number values within each Invoice ID group.
+
 ```excel
 =LET(
-  note_text_1, N("TRUE when this invoice does NOT have a continuous set of line numbers from 1..this row's Line Number."),
-  note_text_2, N("If Invoice ID is blank -> ignore (FALSE). If Line Number is blank / non-integer / <1 -> invalid (TRUE)."),
-
   inv_id, $A5,
   ln_raw, $B5,
-
-  inv_rng, $A$5:$A$1489,
-  ln_rng,  $B$5:$B$1489,
 
   inv_blank, LEN(inv_id&"")=0,
 
   ln_num, IFERROR(--ln_raw, 0),
   ln_is_pos_int, AND(ln_num>=1, ln_num=INT(ln_num)),
 
-  present_count,
-    IF(
-      ln_is_pos_int,
-      SUM(--(COUNTIFS(inv_rng, inv_id, ln_rng, SEQUENCE(ln_num))>0)),
-      0
+  miss_ln,
+    XLOOKUP(
+      inv_id,
+      INDEX(cfLine_FirstMissingLineNoByInvID,,1),
+      INDEX(cfLine_FirstMissingLineNoByInvID,,2),
+      1
     ),
 
-  continuity_ok, present_count=ln_num,
-
-  IF(inv_blank, FALSE, IF(ln_is_pos_int, NOT(continuity_ok), TRUE))
+  IF(inv_blank, FALSE, IF(ln_is_pos_int, ln_num>=miss_ln, TRUE))
 )
 ```
 
 ##### LINE-CF-13
 
+Description: Flags duplicate `(Invoice ID, Line Number)` pairs.
+
 ```excel
 =LET(
-  note_text_1, N("TRUE when (Invoice ID, Line Number) appears more than once in this sheet."),
-  note_text_2, N("Blanks are ignored: if Invoice ID or Line Number is blank, returns FALSE."),
-
   inv_id, $A5,
   line_no, $B5,
 
-  inv_id_rng, $A$5:$A$1489,
-  line_no_rng, $B$5:$B$1489,
+  inv_id_rng, rngLineInvID,
+  line_no_rng, rngLineNo,
 
   inv_blank, LEN(inv_id&"")=0,
   line_blank, LEN(line_no&"")=0,
@@ -426,33 +409,36 @@ Duplicate Values
 
 ##### LINE-CF-14
 
+Description: Flags line rows whose Invoice ID is blank or missing from the invoice header table.
+
 ```excel
 =OR(
   $A5="",
-  COUNTIF(AP_INVOICES_INTERFACE!$A:$A, $A5)=0
+  COUNTIF(rngInvID, $A5)=0
 )
 ```
 
 ##### LINE-CF-15
 
+Description: Flags invoice line rows where header amount and summed line amounts are inconsistent.
+
 ```excel
 =LET(
-  note_text_1, N("TRUE highlights all lines for invoices where header amount <> sum(lines)."),
-  note_text_2, N("Blank=blank is OK; blank vs nonblank is mismatch."),
-
   inv_id, $A5,
 
-  inv_ids, AP_INVOICES_INTERFACE!$A$5:$A$1494,
-  inv_amts, AP_INVOICES_INTERFACE!$E$5:$E$1494,
-  header_amt, XLOOKUP(inv_id, inv_ids, inv_amts, ""),
+  header_amt,
+    XLOOKUP(inv_id, rngInvID, rngInvAmt, ""),
 
-  line_ids, $A$5:$A$1489,
-  line_amts, $D$5:$D$1489,
-  has_nonblank_amt, COUNTIFS(line_ids, inv_id, line_amts, "<>")>0,
-  lines_total, IF(has_nonblank_amt, SUMIFS(line_amts, line_ids, inv_id), ""),
+  lines_total,
+    XLOOKUP(
+      inv_id,
+      INDEX(cfLine_TotalsByInvID,,1),
+      INDEX(cfLine_TotalsByInvID,,2),
+      ""
+    ),
 
   header_blank, LEN(header_amt&"")=0,
-  lines_blank, LEN(lines_total&"")=0,
+  lines_blank,  LEN(lines_total&"")=0,
 
   mismatch,
     IF(
@@ -517,3 +503,22 @@ Named Values:
 | `rngLineAmt`    | Amount column in invoice lines table. Used to SUMIFS line totals per invoice.                                                  | `=tbl_invoice_lines[[#Data],[*Amount]]`           | `*Amount` (`AP_INVOICE_LINES_INTERFACE`)     |
 | `rngLineInvID`  | Invoice ID column in invoice lines table. Used for joins (COUNTIFS/SUMIFS) and line continuity checks.                         | `=tbl_invoice_lines[[#Data],[*Invoice ID]]`       | `*Invoice ID` (`AP_INVOICE_LINES_INTERFACE`) |
 | `rngLineNo`     | Line Number column in invoice lines table. Used for per-invoice 1..N continuity and duplicate pair checks.                     | `=tbl_invoice_lines[[#Data],[Line Number]]`       | `Line Number` (`AP_INVOICE_LINES_INTERFACE`) |
+
+### Workbook Named Formulas (Conditional Formatting Optimization)
+
+Add these in Name Manager as workbook-level named formulas.
+
+| Name                               | Comment                                                      | Refers To                                                                                                                                                                                                                           |
+| :--------------------------------- | :----------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cf_BadMonthDate`                  | Reusable date validation for current-month-only date fields. | `=LAMBDA(d,LET(v,d,OR(v="",NOT(ISNUMBER(v)),INT(v)<>v,v<curMonthStart,v>curMonthEnd)))`                                                                                                                                             |
+| `cf_FirstMissingPosInt`            | Returns smallest missing positive integer in a range.        | `=LAMBDA(rng,LET(nums,IFERROR(--rng,0),pos,FILTER(nums,(nums>=1)*(nums=INT(nums)),0),uniq,SORT(UNIQUE(pos)),n,ROWS(uniq),expected,SEQUENCE(n),mismatchPos,XMATCH(FALSE,uniq=expected,0),IFERROR(INDEX(expected,mismatchPos),n+1)))` |
+| `cfInv_FirstMissingID`             | Smallest missing invoice ID in `AP_INVOICES_INTERFACE`.      | `=cf_FirstMissingPosInt(rngInvID)`                                                                                                                                                                                                  |
+| `cfLine_FirstMissingInvID`         | Smallest missing invoice ID in `AP_INVOICE_LINES_INTERFACE`. | `=cf_FirstMissingPosInt(rngLineInvID)`                                                                                                                                                                                              |
+| `cfLine_TotalsByInvID`             | 2-column spill: `[Invoice ID, LinesTotalOrBlank]`.           | `=IFERROR(LET(ids,rngLineInvID,amts,rngLineAmt,uniq,UNIQUE(FILTER(ids,ids<>"")),cnt,COUNTIFS(ids,uniq,amts,"<>"),sum,SUMIFS(amts,ids,uniq),tot,IF(cnt>0,sum,""),HSTACK(uniq,tot)),HSTACK("",""))`                                   |
+| `cfLine_FirstMissingLineNoByInvID` | 2-column spill: `[Invoice ID, FirstMissingLineNumber]`.      | `=IFERROR(LET(ids,rngLineInvID,lns,rngLineNo,invList,UNIQUE(FILTER(ids,ids<>"")),miss,MAP(invList,LAMBDA(i,cf_FirstMissingPosInt(FILTER(lns,ids=i,0)))),HSTACK(invList,miss)),HSTACK("",1))`                                        |
+
+Notes:
+
+- `rngLineAmt` must refer to a real range: `=tbl_invoice_lines[[#Data],[*Amount]]`.
+- Do not wrap table references in quotes in Name Manager.
+- Prefer CF `Applies To` table ranges over full columns or static row ranges.
