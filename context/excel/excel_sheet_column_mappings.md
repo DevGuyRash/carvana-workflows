@@ -57,6 +57,8 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 | INV-CF-10 | `$A$5:$A$9`                 | `tbl_invoices[*Invoice ID]`                   | \*Invoice ID                                    | Formula          |
 | INV-CF-11 | `$E$5:$E$9`                 | `tbl_invoices[*Invoice Amount]`               | \*Invoice Amount                                | Formula          |
 
+Use the table-mapping `Applies To` references in Excel for production; the fixed `$...$5:$...$9` ranges are small-sheet examples.
+
 #### AP_INVOICES_INTERFACE Conditional Formatting Formulas (Formatted)
 
 ##### INV-CF-01
@@ -145,7 +147,7 @@ Duplicate values
 
 ##### INV-CF-10
 
-Description: Flags invalid or non-continuous Invoice ID values based on the first missing ID in the table.
+Description: Flags invalid or non-continuous Invoice ID values based on the first missing ID from the lowest present ID.
 
 ```excel
 =LET(
@@ -221,15 +223,15 @@ Named Values:
 | Expenditure Type         | DZ4            |
 | Expenditure Organization | EA4            |
 
-#### AP_INVOICE_LINES_INTERFACE Formula Source Mapping (`excel/tr_upload_sheet/invoice_lines/queries`)
+#### AP_INVOICE_LINES_INTERFACE Formula Source Mapping (`excel/tr_upload_sheet/invoice_lines`)
 
 Use the formula in each `.fx` file in the first data row (Row 5) of the mapped column; Excel table fill should propagate to the rest of the column.
 
-| Header Name    | Target Cell | Formula File Path                                                     |
-| :------------- | :---------- | :-------------------------------------------------------------------- |
-| \*Invoice ID   | A5          | `excel/tr_upload_sheet/invoice_lines/queries/invoice_id_generator.fx` |
-| Attribute 6    | BT5         | `excel/tr_upload_sheet/invoice_lines/queries/attribute_6_pid.fx`      |
-| Project Number | DX5         | `excel/tr_upload_sheet/invoice_lines/queries/project_number_stock.fx` |
+| Header Name    | Target Cell | Formula File Path                                             |
+| :------------- | :---------- | :------------------------------------------------------------ |
+| \*Invoice ID   | A5          | `excel/tr_upload_sheet/invoice_lines/invoice_id_generator.fx` |
+| Attribute 6    | BT5         | `excel/tr_upload_sheet/invoice_lines/attribute_6_pid.fx`      |
+| Project Number | DX5         | `excel/tr_upload_sheet/invoice_lines/project_number_stock.fx` |
 
 #### AP_INVOICE_LINES_INTERFACE Conditional Formatting Rules (Summary)
 
@@ -249,7 +251,9 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 | LINE-CF-12 | `$A$5:$B$9`                 | `tbl_invoice_lines[[*Invoice ID]:[Line Number]]` | \*Invoice ID, Line Number | Formula          |
 | LINE-CF-13 | `$A$5:$B$9`                 | `tbl_invoice_lines[[*Invoice ID]:[Line Number]]` | \*Invoice ID, Line Number | Formula          |
 | LINE-CF-14 | `$A$5:$A$9`                 | `tbl_invoice_lines[*Invoice ID]`              | \*Invoice ID              | Formula          |
-| LINE-CF-15 | `$A$5:$A$9`                 | `tbl_invoice_lines[*Invoice ID]`              | \*Invoice ID              | Formula          |
+| LINE-CF-15 | `$A$5:$A$9,$D$5:$D$9`       | `tbl_invoice_lines[*Invoice ID],tbl_invoice_lines[*Amount]` | \*Invoice ID, \*Amount    | Formula          |
+
+Use the table-mapping `Applies To` references in Excel for production; the fixed `$...$5:$...$9` ranges are small-sheet examples.
 
 #### AP_INVOICE_LINES_INTERFACE Conditional Formatting Formulas (Formatted)
 
@@ -338,7 +342,7 @@ Duplicate Values
 
 ##### LINE-CF-11
 
-Description: Flags invalid or non-continuous Invoice ID values based on the first missing ID in invoice lines.
+Description: Flags invalid or non-continuous Invoice ID values based on the first missing ID from the lowest present ID in invoice lines.
 
 ```excel
 =LET(
@@ -420,7 +424,7 @@ Description: Flags line rows whose Invoice ID is blank or missing from the invoi
 
 ##### LINE-CF-15
 
-Description: Flags invoice line rows where header amount and summed line amounts are inconsistent.
+Description: Flags invoice line rows where header amount and summed line amounts are inconsistent (applied to both `*Invoice ID` and `*Amount` cells).
 
 ```excel
 =LET(
@@ -511,9 +515,10 @@ Add these in Name Manager as workbook-level named formulas.
 | Name                               | Comment                                                      | Refers To                                                                                                                                                                                                                           |
 | :--------------------------------- | :----------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cf_BadMonthDate`                  | Reusable date validation for current-month-only date fields. | `=LAMBDA(d,LET(v,d,OR(v="",NOT(ISNUMBER(v)),INT(v)<>v,v<curMonthStart,v>curMonthEnd)))`                                                                                                                                             |
-| `cf_FirstMissingPosInt`            | Returns smallest missing positive integer in a range.        | `=LAMBDA(rng,LET(nums,IFERROR(--rng,0),pos,FILTER(nums,(nums>=1)*(nums=INT(nums)),0),uniq,SORT(UNIQUE(pos)),n,ROWS(uniq),expected,SEQUENCE(n),mismatchPos,XMATCH(FALSE,uniq=expected,0),IFERROR(INDEX(expected,mismatchPos),n+1)))` |
-| `cfInv_FirstMissingID`             | Smallest missing invoice ID in `AP_INVOICES_INTERFACE`.      | `=cf_FirstMissingPosInt(rngInvID)`                                                                                                                                                                                                  |
-| `cfLine_FirstMissingInvID`         | Smallest missing invoice ID in `AP_INVOICE_LINES_INTERFACE`. | `=cf_FirstMissingPosInt(rngLineInvID)`                                                                                                                                                                                              |
+| `cf_FirstMissingPosInt`            | Returns smallest missing positive integer in a range (expected to start at 1). | `=LAMBDA(rng,LET(nums,IFERROR(--rng,0),pos,FILTER(nums,(nums>=1)*(nums=INT(nums)),0),uniq,SORT(UNIQUE(pos)),n,ROWS(uniq),expected,SEQUENCE(n),mismatchPos,XMATCH(FALSE,uniq=expected,0),IFERROR(INDEX(expected,mismatchPos),n+1)))` |
+| `cf_FirstMissingPosIntFromMin`     | Returns smallest missing positive integer starting from the range minimum.       | `=LAMBDA(rng,LET(nums,IFERROR(--rng,0),pos,FILTER(nums,(nums>=1)*(nums=INT(nums)),0),uniq,SORT(UNIQUE(pos)),n,ROWS(uniq),start,INDEX(uniq,1),expected,SEQUENCE(n,,start),mismatchPos,XMATCH(FALSE,uniq=expected,0),IFERROR(INDEX(expected,mismatchPos),start+n)))` |
+| `cfInv_FirstMissingID`             | Smallest missing invoice ID in `AP_INVOICES_INTERFACE` from the lowest present ID.      | `=cf_FirstMissingPosIntFromMin(rngInvID)`                                                                                                                                                                                          |
+| `cfLine_FirstMissingInvID`         | Smallest missing invoice ID in `AP_INVOICE_LINES_INTERFACE` from the lowest present ID. | `=cf_FirstMissingPosIntFromMin(rngLineInvID)`                                                                                                                                                                                      |
 | `cfLine_TotalsByInvID`             | 2-column spill: `[Invoice ID, LinesTotalOrBlank]`.           | `=IFERROR(LET(ids,rngLineInvID,amts,rngLineAmt,uniq,UNIQUE(FILTER(ids,ids<>"")),cnt,COUNTIFS(ids,uniq,amts,"<>"),sum,SUMIFS(amts,ids,uniq),tot,IF(cnt>0,sum,""),HSTACK(uniq,tot)),HSTACK("",""))`                                   |
 | `cfLine_FirstMissingLineNoByInvID` | 2-column spill: `[Invoice ID, FirstMissingLineNumber]`.      | `=IFERROR(LET(ids,rngLineInvID,lns,rngLineNo,invList,UNIQUE(FILTER(ids,ids<>"")),miss,MAP(invList,LAMBDA(i,cf_FirstMissingPosInt(FILTER(lns,ids=i,0)))),HSTACK(invList,miss)),HSTACK("",1))`                                        |
 
