@@ -342,6 +342,7 @@ if (!CVR.apProcess) {
       [/corporate check request/i,[0,CR,I]],
       [/50 state dmv/i,[0,CR,I]],
       [/dealer account no 43259|sc dmv/i,["SC DMV",CR,I,0,"South Carolina Department of Motor / ATTN Carol Reynolds / 10311 Wilson Boulevard, Blythewood, SC 29016"]],
+      [/(?:tarrant\s*c(?:ou)?nty\s*tax\s*assessor(?:\s*-\s*col(?:lector)?)?|rick\s*d\.?\s*barnes)/i,["TARRANT COUNTY TAX ASSESSOR-COLLECTOR"]],
       [/sell to carvana/i,[0,CR]],
       [/ttstc/i,[0,CR]],
       [/customer check request/i,[0,CR,0,0,0,0,/good\s*will|goodwill|GDW/i]],
