@@ -32,6 +32,15 @@ Named Values:
 | Payment Method        | Y4             |
 | Pay Alone             | AA4            |
 
+#### AP_INVOICES_INTERFACE Formula Source Mapping (`excel/tr_upload_sheet/invoices`)
+
+Use the formula in each `.fx` file in the first data row (Row 5) of the mapped column; Excel table fill should propagate to the rest of the column.
+
+| Header Name      | Target Cell | Formula File Path                                                          |
+| :--------------- | :---------- | :------------------------------------------------------------------------- |
+| \*Invoice Number | D5          | `excel/tr_upload_sheet/invoices/invoice_number_stock_or_date_increment.fx` |
+| Import Set       | M5          | `excel/tr_upload_sheet/invoices/dated_initialed_uuid.fx`                   |
+
 #### AP_INVOICES_INTERFACE Conditional Formatting Rules (Summary)
 
 | Rule ID   | Applies To Range | Applies To Headers                              | Rule Type        |
@@ -228,6 +237,16 @@ Named Values:
 | Task Number              | DY4            |
 | Expenditure Type         | DZ4            |
 | Expenditure Organization | EA4            |
+
+#### AP_INVOICE_LINES_INTERFACE Formula Source Mapping (`excel/tr_upload_sheet/invoice_lines/queries`)
+
+Use the formula in each `.fx` file in the first data row (Row 5) of the mapped column; Excel table fill should propagate to the rest of the column.
+
+| Header Name    | Target Cell | Formula File Path                                                     |
+| :------------- | :---------- | :-------------------------------------------------------------------- |
+| \*Invoice ID   | A5          | `excel/tr_upload_sheet/invoice_lines/queries/invoice_id_generator.fx` |
+| Attribute 6    | BT5         | `excel/tr_upload_sheet/invoice_lines/queries/attribute_6_pid.fx`      |
+| Project Number | DX5         | `excel/tr_upload_sheet/invoice_lines/queries/project_number_stock.fx` |
 
 #### AP_INVOICE_LINES_INTERFACE Conditional Formatting Rules (Summary)
 
