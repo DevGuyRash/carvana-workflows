@@ -162,7 +162,7 @@ Description: Flags invalid or non-continuous Invoice ID values based on the firs
     FALSE,
     IF(
       inv_is_pos_int,
-      inv_num>=cfInv_FirstMissingID,
+      inv_num>=cfInv_FirstMissingID_Value,
       TRUE
     )
   )
@@ -357,7 +357,7 @@ Description: Flags invalid or non-continuous Invoice ID values based on the firs
     FALSE,
     IF(
       inv_is_pos_int,
-      inv_num>=cfLine_FirstMissingInvID,
+      inv_num>=cfLine_FirstMissingInvID_Value,
       TRUE
     )
   )
@@ -496,12 +496,25 @@ Named Values:
 | Expenditure Type         | W1             |
 | Expenditure Organization | X1             |
 
+---
+
+Named Values:
+
+- Table Name: `tbl_defaults_cf_helpers`
+
+| Header Name           | Cell Reference |
+| --------------------- | -------------- |
+| Inv First Missing ID  | AC1            |
+| Line First Missing ID | AD1            |
+
 ### Workbook Named Ranges
 
 | Name            | Comment                                                                                                                        | Refers To                                         | Applies To Headers                           |
 | :-------------- | :----------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------ | :------------------------------------------- |
 | `curMonthEnd`   | Last day of current month (computed once).                                                                                     | `=tbl_defaults_month_info[[#Data],[Month End]]`   | `Month End` (`tbl_defaults_month_info`)      |
 | `curMonthStart` | First day of current month (computed once).                                                                                    | `=tbl_defaults_month_info[[#Data],[Month Start]]` | `Month Start` (`tbl_defaults_month_info`)    |
+| `cfInv_FirstMissingID_Value` | Helper scalar used by invoice continuity CF to avoid per-cell dynamic-array recomputation.                       | `=INDEX(tbl_defaults_cf_helpers[Inv First Missing ID],1)` | `Inv First Missing ID` (`tbl_defaults_cf_helpers`) |
+| `cfLine_FirstMissingInvID_Value` | Helper scalar used by line continuity CF to avoid per-cell dynamic-array recomputation.                    | `=INDEX(tbl_defaults_cf_helpers[Line First Missing ID],1)` | `Line First Missing ID` (`tbl_defaults_cf_helpers`) |
 | `rngInvAmt`     | Invoice Amount column in invoices table. Used for header-vs-lines amount reconciliation CF.                                    | `=tbl_invoices[[#Data],[*Invoice Amount]]`        | `*Invoice Amount` (`AP_INVOICES_INTERFACE`)  |
 | `rngInvID`      | Invoice IDs in the invoices table data area (auto-resizes with the table). Use to avoid fixed ranges / full-column refs in CF. | `=tbl_invoices[[#Data],[*Invoice ID]]`            | `*Invoice ID` (`AP_INVOICES_INTERFACE`)      |
 | `rngLineAmt`    | Amount column in invoice lines table. Used to SUMIFS line totals per invoice.                                                  | `=tbl_invoice_lines[[#Data],[*Amount]]`           | `*Amount` (`AP_INVOICE_LINES_INTERFACE`)     |
@@ -517,8 +530,8 @@ Add these in Name Manager as workbook-level named formulas.
 | `cf_BadMonthDate`                  | Reusable date validation for current-month-only date fields. | `=LAMBDA(d,LET(v,d,OR(v="",NOT(ISNUMBER(v)),INT(v)<>v,v<curMonthStart,v>curMonthEnd)))`                                                                                                                                             |
 | `cf_FirstMissingPosInt`            | Returns smallest missing positive integer in a range (expected to start at 1). | `=LAMBDA(rng,LET(nums,IFERROR(--rng,0),pos,FILTER(nums,(nums>=1)*(nums=INT(nums)),0),uniq,SORT(UNIQUE(pos)),n,ROWS(uniq),expected,SEQUENCE(n),mismatchPos,XMATCH(FALSE,uniq=expected,0),IFERROR(INDEX(expected,mismatchPos),n+1)))` |
 | `cf_FirstMissingPosIntFromMin`     | Returns smallest missing positive integer starting from the range minimum.       | `=LAMBDA(rng,LET(nums,IFERROR(--rng,0),pos,FILTER(nums,(nums>=1)*(nums=INT(nums)),0),uniq,SORT(UNIQUE(pos)),n,ROWS(uniq),start,INDEX(uniq,1),expected,SEQUENCE(n,,start),mismatchPos,XMATCH(FALSE,uniq=expected,0),IFERROR(INDEX(expected,mismatchPos),start+n)))` |
-| `cfInv_FirstMissingID`             | Smallest missing invoice ID in `AP_INVOICES_INTERFACE` from the lowest present ID.      | `=cf_FirstMissingPosIntFromMin(rngInvID)`                                                                                                                                                                                          |
-| `cfLine_FirstMissingInvID`         | Smallest missing invoice ID in `AP_INVOICE_LINES_INTERFACE` from the lowest present ID. | `=cf_FirstMissingPosIntFromMin(rngLineInvID)`                                                                                                                                                                                      |
+| `cfInv_FirstMissingID`             | Smallest missing invoice ID in `AP_INVOICES_INTERFACE` from the lowest present ID (computation source).      | `=cf_FirstMissingPosIntFromMin(rngInvID)`                                                                                                                                                                                          |
+| `cfLine_FirstMissingInvID`         | Smallest missing invoice ID in `AP_INVOICE_LINES_INTERFACE` from the lowest present ID (computation source). | `=cf_FirstMissingPosIntFromMin(rngLineInvID)`                                                                                                                                                                                      |
 | `cfLine_TotalsByInvID`             | 2-column spill: `[Invoice ID, LinesTotalOrBlank]`.           | `=IFERROR(LET(ids,rngLineInvID,amts,rngLineAmt,uniq,UNIQUE(FILTER(ids,ids<>"")),cnt,COUNTIFS(ids,uniq,amts,"<>"),sum,SUMIFS(amts,ids,uniq),tot,IF(cnt>0,sum,""),HSTACK(uniq,tot)),HSTACK("",""))`                                   |
 | `cfLine_FirstMissingLineNoByInvID` | 2-column spill: `[Invoice ID, FirstMissingLineNumber]`.      | `=IFERROR(LET(ids,rngLineInvID,lns,rngLineNo,invList,UNIQUE(FILTER(ids,ids<>"")),miss,MAP(invList,LAMBDA(i,cf_FirstMissingPosInt(FILTER(lns,ids=i,0)))),HSTACK(invList,miss)),HSTACK("",1))`                                        |
 
@@ -527,3 +540,4 @@ Notes:
 - `rngLineAmt` must refer to a real range: `=tbl_invoice_lines[[#Data],[*Amount]]`.
 - Do not wrap table references in quotes in Name Manager.
 - Prefer CF `Applies To` table ranges over full columns or static row ranges.
+- For continuity rules (`INV-CF-10`, `LINE-CF-11`), reference helper-backed names (`cfInv_FirstMissingID_Value`, `cfLine_FirstMissingInvID_Value`) in CF formulas for reliable, low-cost recalc.
