@@ -12,7 +12,7 @@
     IFERROR(
       REGEXEXTRACT(
         relatedText,
-        "\bSTOCK(?:\s*NUMBER(?:S)?)?\b\s*(?:[#:\(\)\[\]\-]\s*)*[A-Z0-9-]{3,}\b"
+        "\bSTOCK(?:\s*NUMBER(?:S)?)?\b\s*(?:[#:\(\)\[\]\-]\s*)*[A-Z0-9&-]{3,}\b"
       ),
       ""
     ),
@@ -20,7 +20,7 @@
     IFERROR(
       REGEXEXTRACT(
         stockLabelMatch,
-        "[A-Z0-9-]{3,}$"
+        "[A-Z0-9&-]{3,}$"
       ),
       ""
     ),
@@ -31,7 +31,7 @@
       IFERROR(
         REGEXEXTRACT(
           stockByLabelRaw,
-          "^((?:[A-Z0-9]{2,5}-)?\d{7,12})"
+          "^((?:[A-Z0-9&]{2,8}-)?\d{7,12})"
         ),
         ""
       )
@@ -40,13 +40,13 @@
     IF(
       stockByLabel="",
       "",
-      REGEXREPLACE(stockByLabel, "^[A-Z0-9]{2,5}-", "")
+      REGEXREPLACE(stockByLabel, "^[A-Z0-9&]{2,8}-", "")
     ),
   stockTagByLabel,
     IFERROR(
       REGEXEXTRACT(
         stockByLabelRaw,
-        "^(?:[A-Z0-9]{2,5}-)?\d{7,12}-(?:[A-Z]{2,8}|[0-9]{1,4})$"
+        "^(?:[A-Z0-9&]{2,8}-)?\d{7,12}-(?:[A-Z]{2,8}|[0-9]{1,4})$"
       ),
       ""
     ),
@@ -54,22 +54,22 @@
     IF(
       stockTagByLabel="",
       "",
-      REGEXREPLACE(stockTagByLabel, "^(?:[A-Z0-9]{2,5}-)?\d{7,12}-", "")
+      REGEXREPLACE(stockTagByLabel, "^(?:[A-Z0-9&]{2,8}-)?\d{7,12}-", "")
     ),
   descriptorMatchRaw,
     IFERROR(
       REGEXEXTRACT(
         relatedText,
-        "(?:^|[^A-Z0-9])(?:[A-Z0-9]{2,5}-)?\d{7,12}(?:-(?:[A-Z]{2,8}|\d{1,4}))?-[A-HJ-NPR-Z0-9]{11,17}-\d{3,}(?:$|[^A-Z0-9])"
+        "(?:^|[^A-Z0-9&])(?:[A-Z0-9&]{2,8}-)?\d{7,12}(?:-(?:[A-Z]{2,8}|\d{1,4}))?-[A-HJ-NPR-Z0-9]{11,17}(?:-\d{3,})?(?:-[A-Z0-9&]{2,30})*(?:$|[^A-Z0-9&])"
       ),
       ""
     ),
-  descriptorMatch, REGEXREPLACE(descriptorMatchRaw, "^[^A-Z0-9]+|[^A-Z0-9]+$", ""),
+  descriptorMatch, REGEXREPLACE(descriptorMatchRaw, "^[^A-Z0-9&]+|[^A-Z0-9&]+$", ""),
   stockByDescriptor,
     IFERROR(
       REGEXEXTRACT(
         descriptorMatch,
-        "^((?:[A-Z0-9]{2,5}-)?\d{7,12})"
+        "^((?:[A-Z0-9&]{2,8}-)?\d{7,12})"
       ),
       ""
     ),
@@ -77,13 +77,13 @@
     IF(
       stockByDescriptor="",
       "",
-      REGEXREPLACE(stockByDescriptor, "^[A-Z0-9]{2,5}-", "")
+      REGEXREPLACE(stockByDescriptor, "^[A-Z0-9&]{2,8}-", "")
     ),
   stockTagByDescriptor,
     IFERROR(
       REGEXEXTRACT(
         descriptorMatch,
-        "^(?:[A-Z0-9]{2,5}-)?\d{7,12}-(?:[A-Z]{2,8}|\d{1,4})-[A-HJ-NPR-Z0-9]{11,17}-\d{3,}$"
+        "^(?:[A-Z0-9&]{2,8}-)?\d{7,12}-((?:[A-Z]{2,8}|\d{1,4}))-[A-HJ-NPR-Z0-9]{11,17}(?:-\d{3,})?(?:-[A-Z0-9&]{2,30})*$"
       ),
       ""
     ),
@@ -91,11 +91,7 @@
     IF(
       stockTagByDescriptor="",
       "",
-      REGEXREPLACE(
-        REGEXREPLACE(stockTagByDescriptor, "^(?:[A-Z0-9]{2,5}-)?\d{7,12}-", ""),
-        "-[A-HJ-NPR-Z0-9]{11,17}-\d{3,}$",
-        ""
-      )
+      stockTagByDescriptor
     ),
   stockBaseCandidate, IF(stockByLabelNumeric<>"", stockByLabelNumeric, stockByDescriptorNumeric),
   stockTag, IF(stockTagByLabelOnly<>"", stockTagByLabelOnly, stockTagByDescriptorOnly),
