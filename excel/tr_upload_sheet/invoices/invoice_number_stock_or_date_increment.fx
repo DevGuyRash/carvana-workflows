@@ -123,7 +123,7 @@
   dateSequence, priorDateModeCount + 1,
   dateInvoiceNumber,
     invoiceDateText &
-    IF(dateSequence=1, "", "-" & dateSequence) &
+    IF(dateSequence=1, "", "-" & (dateSequence-1)) &
     "-TR",
 
   stockInvoiceNumber, usableStock & "-TR",
