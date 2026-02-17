@@ -54,10 +54,10 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 | INV-CF-07 | `$T$5:$T$9`                 | `tbl_invoices[*Payment Terms]`                | \*Payment Terms                                 | Formula          |
 | INV-CF-08 | `$M$5:$M$9`                 | `tbl_invoices[Import Set]`                    | Import Set                                      | Duplicate values |
 | INV-CF-09 | `$D$5:$D$9`                 | `tbl_invoices[*Invoice Number]`               | \*Invoice Number                                | Duplicate values |
-| INV-CF-10 | `$A$5:$A$9`                 | `tbl_invoices[*Invoice ID]`                   | \*Invoice ID                                    | Formula          |
+| INV-CF-10 | `$A$5:$A$2000`              | `AP_INVOICES_INTERFACE!$A$5:$A$2000` (bounded) | \*Invoice ID                                  | Formula          |
 | INV-CF-11 | `$E$5:$E$9`                 | `tbl_invoices[*Invoice Amount]`               | \*Invoice Amount                                | Formula          |
 
-Use the table-mapping `Applies To` references in Excel for production; the fixed `$...$5:$...$9` ranges are small-sheet examples.
+Use bounded `Applies To` ranges for continuity rules in production (`INV-CF-10`: `$A$5:$A$2000`) to avoid table-row insert CF scope instability.
 
 #### AP_INVOICES_INTERFACE Conditional Formatting Formulas (Formatted)
 
@@ -247,13 +247,13 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 | LINE-CF-08 | `$BT$5:$BT$9`               | `tbl_invoice_lines[Attribute 6]`              | Attribute 6               | Duplicate Values |
 | LINE-CF-09 | `$DX$5:$DX$9`               | `tbl_invoice_lines[Project Number]`           | Project Number            | Formula          |
 | LINE-CF-10 | `$DX$5:$DX$9`               | `tbl_invoice_lines[Project Number]`           | Project Number            | Duplicate Values |
-| LINE-CF-11 | `$A$5:$A$9`                 | `tbl_invoice_lines[*Invoice ID]`              | \*Invoice ID              | Formula          |
+| LINE-CF-11 | `$A$5:$A$2000`              | `AP_INVOICE_LINES_INTERFACE!$A$5:$A$2000` (bounded) | \*Invoice ID         | Formula          |
 | LINE-CF-12 | `$A$5:$B$9`                 | `tbl_invoice_lines[[*Invoice ID]:[Line Number]]` | \*Invoice ID, Line Number | Formula          |
 | LINE-CF-13 | `$A$5:$B$9`                 | `tbl_invoice_lines[[*Invoice ID]:[Line Number]]` | \*Invoice ID, Line Number | Formula          |
 | LINE-CF-14 | `$A$5:$A$9`                 | `tbl_invoice_lines[*Invoice ID]`              | \*Invoice ID              | Formula          |
-| LINE-CF-15 | `$A$5:$A$9,$D$5:$D$9`       | `tbl_invoice_lines[*Invoice ID],tbl_invoice_lines[*Amount]` | \*Invoice ID, \*Amount    | Formula          |
+| LINE-CF-15 | `$A$5:$A$2000,$D$5:$D$2000` | `AP_INVOICE_LINES_INTERFACE!$A$5:$A$2000,$D$5:$D$2000` (bounded) | \*Invoice ID, \*Amount | Formula          |
 
-Use the table-mapping `Applies To` references in Excel for production; the fixed `$...$5:$...$9` ranges are small-sheet examples.
+Use bounded `Applies To` ranges for production continuity/mismatch rules (`LINE-CF-11`, `LINE-CF-15`) to avoid table-row insert CF scope instability.
 
 #### AP_INVOICE_LINES_INTERFACE Conditional Formatting Formulas (Formatted)
 
@@ -539,5 +539,6 @@ Notes:
 
 - `rngLineAmt` must refer to a real range: `=tbl_invoice_lines[[#Data],[*Amount]]`.
 - Do not wrap table references in quotes in Name Manager.
-- Prefer CF `Applies To` table ranges over full columns or static row ranges.
+- Prefer bounded CF `Applies To` ranges over full columns.
+- For this template, continuity/mismatch rules should use `$A$5:$A$2000` and `$D$5:$D$2000` where applicable to keep coverage stable when rows are inserted.
 - For continuity rules (`INV-CF-10`, `LINE-CF-11`), reference helper-backed names (`cfInv_FirstMissingID_Value`, `cfLine_FirstMissingInvID_Value`) in CF formulas for reliable, low-cost recalc.
