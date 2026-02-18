@@ -23,6 +23,12 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Run typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
       - name: Build userscripts
         env:
           US_BASE_URL: https://github.com/${{ github.repository }}/releases/latest/download
