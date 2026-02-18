@@ -1,7 +1,4 @@
 import { findAll, findOne, type SelectorSpec, type WorkflowDefinition, type WorkflowExecuteContext } from '@cv/core';
-import { dropdownCellByText } from '../shared/field-selectors';
-
-const FIELD_DELAY_MS = 650;
 const BUSINESS_UNIT_LABEL = 'Business Unit';
 const SUPPLIER_LABEL = 'Supplier';
 const SUPPLIER_NUMBER_LABEL = 'Supplier Number';
@@ -11,7 +8,7 @@ const AMOUNT_LABEL = 'Amount';
 const NUMBER_LABEL = 'Number';
 const DESCRIPTION_LABEL = 'Description';
 
-const isVisible = (el: HTMLElement | null) => {
+const isVisible = (el: Element | null) => {
   if (!el) return false;
   const rect = el.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
@@ -110,10 +107,16 @@ const openLovPopup = async (
   popupContainerId: string,
   waitFor: <T>(fn: () => T | null, timeoutMs?: number, pollMs?: number) => Promise<T | null>
 ) => {
+  const baseId = lovButton.id ? lovButton.id.replace(/::lovIconId$/, '') : '';
   const findPopup = () => {
+    const dialog =
+      (baseId ? (document.getElementById(`${baseId}::lovDialogId`) as HTMLElement | null) : null) ||
+      (baseId ? (document.getElementById(`${baseId}::lovDialogId::contentContainer`) as HTMLElement | null) : null);
+    if (dialog && isVisible(dialog)) return dialog;
     const direct =
       (document.getElementById(popupId) as HTMLElement | null) ||
-      (document.getElementById(popupContainerId) as HTMLElement | null);
+      (document.getElementById(popupContainerId) as HTMLElement | null) ||
+      (baseId ? (document.getElementById(`${baseId}lovPopupId`) as HTMLElement | null) : null);
     if (isVisible(direct)) return direct;
     const textMatch = Array.from(document.querySelectorAll<HTMLElement>('div')).find(el => {
       if (!isVisible(el)) return false;
@@ -124,12 +127,51 @@ const openLovPopup = async (
 
   lovButton.click();
   let popup = await waitFor(findPopup, 8000, 250);
-  if (popup) return popup;
+  if (popup) {
+    if (baseId) {
+      const dialog = await waitFor(() => {
+        const dialogEl =
+          (document.getElementById(`${baseId}::lovDialogId`) as HTMLElement | null) ||
+          (document.getElementById(`${baseId}::lovDialogId::contentContainer`) as HTMLElement | null);
+        return dialogEl && isVisible(dialogEl) ? dialogEl : null;
+      }, 4000, 200);
+      if (dialog) return dialog;
+    }
+    return popup;
+  }
+
+  const dropdownSearch =
+    baseId ? (document.getElementById(`${baseId}::dropdownPopup::popupsearch`) as HTMLElement | null) : null;
+  if (dropdownSearch && isVisible(dropdownSearch)) {
+    dropdownSearch.click();
+    popup = await waitFor(findPopup, 8000, 250);
+    if (popup) {
+      if (baseId) {
+        const dialog = await waitFor(() => {
+          const dialogEl =
+            (document.getElementById(`${baseId}::lovDialogId`) as HTMLElement | null) ||
+            (document.getElementById(`${baseId}::lovDialogId::contentContainer`) as HTMLElement | null);
+          return dialogEl && isVisible(dialogEl) ? dialogEl : null;
+        }, 4000, 200);
+        if (dialog) return dialog;
+      }
+      return popup;
+    }
+  }
 
   lovButton.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
   lovButton.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   lovButton.click();
   popup = await waitFor(findPopup, 8000, 250);
+  if (popup && baseId) {
+    const dialog = await waitFor(() => {
+      const dialogEl =
+        (document.getElementById(`${baseId}::lovDialogId`) as HTMLElement | null) ||
+        (document.getElementById(`${baseId}::lovDialogId::contentContainer`) as HTMLElement | null);
+      return dialogEl && isVisible(dialogEl) ? dialogEl : null;
+    }, 4000, 200);
+    return dialog || popup;
+  }
   return popup;
 };
 
@@ -147,6 +189,103 @@ const getPopupResultRoots = (popup: HTMLElement) => {
   const doc = iframe?.contentDocument || null;
   if (doc) roots.push(doc);
   return roots;
+};
+
+const queryAll = <T extends Element>(root: ParentNode, selector: string): T[] =>
+  Array.from(
+    (root as ParentNode & { querySelectorAll: (selectors: string) => NodeListOf<T> }).querySelectorAll(selector)
+  );
+
+const queryOne = <T extends Element>(root: ParentNode, selector: string): T | null =>
+  (root as ParentNode & { querySelector: (selectors: string) => T | null }).querySelector(selector);
+
+const clickLovExpandSearchButton = (root: ParentNode) => {
+  const candidates = queryAll<HTMLElement>(root, 'button, [role="button"], a');
+  const match = candidates.find(candidate => {
+    const label = normalizeText(
+      `${candidate.textContent || ''} ${candidate.getAttribute('aria-label') || ''} ${candidate.getAttribute('title') || ''}`
+    ).toLowerCase();
+    return label.includes('expand search');
+  });
+  if (match instanceof HTMLElement && isVisible(match)) {
+    match.click();
+    return true;
+  }
+  return false;
+};
+
+const clickLovSearchButton = (root: ParentNode) => {
+  const candidates = queryAll<HTMLElement>(root, 'button, [role="button"], a');
+  const match = candidates.find(candidate => {
+    const label = normalizeText(
+      `${candidate.textContent || ''} ${candidate.getAttribute('aria-label') || ''} ${candidate.getAttribute('title') || ''}`
+    ).toLowerCase();
+    if (!label.includes('search')) return false;
+    if (label.includes('expand') || label.includes('collapse')) return false;
+    return true;
+  });
+  if (match instanceof HTMLElement && isVisible(match)) {
+    match.click();
+    return true;
+  }
+  return false;
+};
+
+const findLovInput = (root: ParentNode, labelText: string): HTMLInputElement | null => {
+  const labels = queryAll<HTMLLabelElement>(root, 'label');
+  const label = findLabelByText(labels, labelText);
+  const forId = label?.getAttribute('for')?.trim() || '';
+  const byFor = forId ? queryOne<HTMLInputElement>(root, `#${CSS.escape(forId)}`) : null;
+  const inputs = queryAll<HTMLInputElement>(root, 'input');
+  const normalizedLabel = normalizeLabelText(labelText).toLowerCase();
+  const byAria = inputs.find(input => {
+    const aria = normalizeLabelText(input.getAttribute('aria-label') || '').toLowerCase();
+    const title = normalizeLabelText(input.getAttribute('data-afr-title') || '').toLowerCase();
+    const placeholder = normalizeLabelText(input.getAttribute('placeholder') || '').toLowerCase();
+    return (
+      (aria && aria.includes(normalizedLabel)) ||
+      (title && title.includes(normalizedLabel)) ||
+      (placeholder && placeholder.includes(normalizedLabel))
+    );
+  });
+  return (
+    [byFor, byAria, ...inputs].find((candidate): candidate is HTMLInputElement => {
+      if (!candidate) return false;
+      return isVisible(candidate);
+    }) || null
+  );
+};
+
+const findLovResultRows = (roots: Array<ParentNode>, headerHints: string[]) => {
+  const needles = headerHints.map(hint => normalizeLabelText(hint).toLowerCase()).filter(Boolean);
+  const isDataRow = (row: Element): row is HTMLTableRowElement => {
+    if (!(row instanceof HTMLTableRowElement)) return false;
+    const text = normalizeText(row.textContent || '');
+    if (!text) return false;
+    if (/no rows to display|no results/i.test(text)) return false;
+    if (row.querySelector('th, [role="columnheader"]')) return false;
+    return Boolean(row.querySelector('td, [role="gridcell"]'));
+  };
+
+  for (const root of roots) {
+    const tables = queryAll<HTMLTableElement>(root, 'table');
+    for (const table of tables) {
+      const headerCells = Array.from(table.querySelectorAll<HTMLElement>('th, [role="columnheader"], thead td'));
+      if (!headerCells.length) continue;
+      const headerText = normalizeText(headerCells.map(cell => cell.textContent || '').join(' ')).toLowerCase();
+      if (needles.length && !needles.some(needle => headerText.includes(needle))) continue;
+      const rows = Array.from(table.querySelectorAll('tr')).filter(isDataRow);
+      if (rows.length) return rows;
+    }
+  }
+
+  return roots.flatMap(root => queryAll<Element>(root, 'tr')).filter(isDataRow);
+};
+
+const clickLovRow = (row: HTMLElement) => {
+  const cells = Array.from(row.querySelectorAll<HTMLElement>('td, [role="gridcell"], span'));
+  const target = cells.find(cell => normalizeText(cell.textContent || '')) || row;
+  target.click();
 };
 
 const findLabelByText = (labels: HTMLLabelElement[], labelText: string) => {
@@ -197,7 +336,7 @@ const getLabelRowValue = (labelText: string) => {
   return remainder;
 };
 
-const getSupplierNumberValue = (scope?: Element | null) => {
+const getSupplierNumberValue = (scope?: ParentNode | null) => {
   const root = scope || document;
   const label = findLabelByText(Array.from(root.querySelectorAll('label')), SUPPLIER_NUMBER_LABEL);
   if (label) {
@@ -233,7 +372,7 @@ const getSupplierNumberValue = (scope?: Element | null) => {
 const waitForSupplierNumber = async (
   waitFor: <T>(fn: () => T | null, timeoutMs?: number, pollMs?: number) => Promise<T | null>,
   timeoutMs = 12000,
-  scope?: Element | null
+  scope?: ParentNode | null
 ) => {
   const result = await waitFor(() => {
     const value = getSupplierNumberValue(scope);
@@ -253,6 +392,12 @@ const attemptInlineSelection = async (
 ) => {
   await typeWithKeyboardEvents(input, text);
   triggerInlineListbox(input);
+  const waitForValue = async (timeoutMs = 5000) => {
+    await waitFor(() => {
+      const value = normalizeText(input.value || '');
+      return value ? value : null;
+    }, timeoutMs, 150);
+  };
 
   let listbox = await waitFor(() => findInlineListbox(input), 8000, 150);
   if (!listbox) {
@@ -270,7 +415,7 @@ const attemptInlineSelection = async (
       match.click();
       await waitFor(() => !findInlineListbox(input), 5000, 150);
       blur();
-      await new Promise(resolve => setTimeout(resolve, FIELD_DELAY_MS));
+      await waitForValue();
       return true;
     }
 
@@ -281,7 +426,6 @@ const attemptInlineSelection = async (
     }
     closeInlineListbox(input);
     blur();
-    await new Promise(resolve => setTimeout(resolve, FIELD_DELAY_MS));
   }
 
   const popup = await waitFor(() => getAutosuggestPopup(input), 2500, 150);
@@ -291,7 +435,7 @@ const attemptInlineSelection = async (
       option.click();
       await waitFor(() => !getAutosuggestPopup(input), 4000, 150);
       blur();
-      await new Promise(resolve => setTimeout(resolve, FIELD_DELAY_MS));
+      await waitForValue();
       return true;
     }
     if (popupHasNoResults(popup)) {
@@ -322,7 +466,7 @@ const attemptInlineSelection = async (
     if (selectedRow) {
       (selectedRow as HTMLElement).click();
       blur();
-      await new Promise(resolve => setTimeout(resolve, FIELD_DELAY_MS));
+      await waitForValue();
       return true;
     }
 
@@ -353,10 +497,85 @@ const typeWithKeyboardEvents = async (
   input.dispatchEvent(new Event('change', { bubbles: true }));
 };
 
+const waitForFieldValue = async (
+  inputId: string | null | undefined,
+  expected: string,
+  timeoutMs = 6000,
+  pollMs = 150
+) => {
+  if (!inputId) return false;
+  const target = normalizeText(expected || '').toLowerCase();
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const input = document.getElementById(inputId) as HTMLInputElement | HTMLTextAreaElement | null;
+    const value = normalizeText(String((input as HTMLInputElement | HTMLTextAreaElement | null)?.value || ''));
+    if (value) {
+      if (!target) return true;
+      if (value.toLowerCase().includes(target)) return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, pollMs));
+  }
+  return false;
+};
+
 const invoiceHeaderScope: SelectorSpec = {
-  selector: 'div[id$=":sh1"]',
+  selector: 'div[id$=":sh1"], div[id$=":sh2"], section, table, form',
   text: { includes: 'Invoice Header', caseInsensitive: true },
   visible: true
+};
+
+const HEADER_LABELS = [BUSINESS_UNIT_LABEL, SUPPLIER_LABEL, INVOICE_GROUP_LABEL];
+
+const scopeHasHeaderLabels = (scope: ParentNode) => {
+  const labels = Array.from(scope.querySelectorAll('label'));
+  if (!labels.length) return false;
+  const hits = new Set<string>();
+  for (const label of labels) {
+    const text = normalizeLabelText(label.textContent || '').toLowerCase();
+    for (const target of HEADER_LABELS) {
+      const needle = target.toLowerCase();
+      if (text.includes(needle)) hits.add(target);
+    }
+  }
+  return hits.size >= 2;
+};
+
+const findInvoiceHeaderScope = () => {
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>('div, section, table, form, fieldset'));
+  const headerCandidates = candidates.filter(el => {
+    if (!isVisible(el)) return false;
+    const text = normalizeText(el.textContent || '');
+    return /invoice header/i.test(text);
+  });
+  for (const candidate of headerCandidates) {
+    let node: HTMLElement | null = candidate;
+    while (node && node !== document.body) {
+      if (scopeHasHeaderLabels(node)) return node;
+      node = node.parentElement;
+    }
+  }
+  return null;
+};
+
+const resolveInvoiceHeaderScope = (): ParentNode | null => {
+  const fromSelector = findOne(invoiceHeaderScope, { visibleOnly: true }) as HTMLElement | null;
+  return fromSelector || findInvoiceHeaderScope();
+};
+
+const getInvoiceHeaderScopeOrDocument = (ctx?: {
+  log: (message: string, level?: 'debug' | 'info' | 'warn' | 'error') => void;
+  options?: { allowDocumentScope?: boolean };
+}) => {
+  const scope = resolveInvoiceHeaderScope();
+  if (scope) return scope;
+  const allowDocumentScope = Boolean(ctx?.options?.allowDocumentScope);
+  if (!allowDocumentScope) {
+    throw new Error(
+      'Invoice Header section not found; refusing to fall back to document scope. Enable allowDocumentScope to override.'
+    );
+  }
+  ctx?.log('Invoice Header section not found; falling back to document scope (allowDocumentScope enabled).', 'warn');
+  return document;
 };
 
 const resolvedField = (key: string): SelectorSpec => ({
@@ -387,7 +606,7 @@ const baseSelectorChecks: Array<{ label: string; spec: SelectorSpec }> = [
   { label: DESCRIPTION_LABEL, spec: descriptionTextarea }
 ];
 
-const resolveInvoiceHeaderIds = (scope: Element) => {
+const resolveInvoiceHeaderIds = (scope: ParentNode) => {
   const labels = Array.from(scope.querySelectorAll('label'));
   const findLabel = (name: string) => findLabelByText(labels, name);
   const resolveByLabel = (name: string) => {
@@ -406,15 +625,40 @@ const resolveInvoiceHeaderIds = (scope: Element) => {
   const numberId = resolveByLabel(NUMBER_LABEL);
   const descriptionId = resolveByLabel(DESCRIPTION_LABEL);
 
+  const findLovIcon = (row: Element | null, label: string) => {
+    if (!row) return null;
+    const candidates = Array.from(
+      row.querySelectorAll<HTMLElement>('[id$="::lovIconId"], [title], [aria-label]')
+    );
+    const target = label.toLowerCase();
+    const match = candidates.find(candidate => {
+      const title = (candidate.getAttribute('title') || '').toLowerCase();
+      const aria = (candidate.getAttribute('aria-label') || '').toLowerCase();
+      if (!title && !aria) return false;
+      if (title.includes('search') || aria.includes('search')) {
+        return title.includes(target) || aria.includes(target) || !target;
+      }
+      return false;
+    });
+    if (match) return match;
+    return (
+      candidates.find(candidate => {
+        const title = (candidate.getAttribute('title') || '').toLowerCase();
+        const aria = (candidate.getAttribute('aria-label') || '').toLowerCase();
+        return title.includes('search') || aria.includes('search');
+      }) || null
+    );
+  };
+
   const businessUnitInput = businessUnitId ? document.getElementById(businessUnitId) : null;
   const businessUnitRow = businessUnitInput?.closest('tr') || null;
-  const businessUnitLov = businessUnitRow?.querySelector('[title^="Search:"], [aria-label^="Search:"]') as HTMLElement | null;
+  const businessUnitLov = findLovIcon(businessUnitRow, BUSINESS_UNIT_LABEL);
   const supplierInput = supplierId ? document.getElementById(supplierId) : null;
   const supplierRow = supplierInput?.closest('tr') || null;
-  const supplierLov = supplierRow?.querySelector('[title^="Search:"], [aria-label^="Search:"]') as HTMLElement | null;
+  const supplierLov = findLovIcon(supplierRow, SUPPLIER_LABEL);
   const supplierSiteInput = supplierSiteId ? document.getElementById(supplierSiteId) : null;
   const supplierSiteRow = supplierSiteInput?.closest('tr') || null;
-  const supplierSiteLov = supplierSiteRow?.querySelector('[title^="Search:"], [aria-label^="Search:"]') as HTMLElement | null;
+  const supplierSiteLov = findLovIcon(supplierSiteRow, SUPPLIER_SITE_LABEL);
 
   return {
     businessUnit: businessUnitId,
@@ -433,22 +677,17 @@ const resolveInvoiceHeaderIds = (scope: Element) => {
 const verifyInvoiceHeaderSelectors = () => ({
   kind: 'execute' as const,
   run: (ctx: WorkflowExecuteContext) => {
-    const scope = findOne(invoiceHeaderScope, { visibleOnly: true });
-    if (!scope) {
-      throw new Error('Invoice Header section not found.');
-    }
+    const scope = getInvoiceHeaderScopeOrDocument(ctx);
 
     const skipNumber = ctx.options?.skipInvoiceNumber ?? true;
     const fieldIds = resolveInvoiceHeaderIds(scope);
     const required: Array<{ key: keyof typeof fieldIds; label: string }> = [
       { key: 'businessUnit', label: BUSINESS_UNIT_LABEL },
       { key: 'supplier', label: SUPPLIER_LABEL },
-      { key: 'supplierLov', label: `${SUPPLIER_LABEL} Search` },
       { key: 'supplierSite', label: SUPPLIER_SITE_LABEL },
       { key: 'invoiceGroup', label: INVOICE_GROUP_LABEL },
       { key: 'amount', label: AMOUNT_LABEL },
-      { key: 'description', label: DESCRIPTION_LABEL },
-      { key: 'businessUnitLov', label: `${BUSINESS_UNIT_LABEL} Search` }
+      { key: 'description', label: DESCRIPTION_LABEL }
     ];
     if (!skipNumber) {
       required.push({ key: 'number', label: NUMBER_LABEL });
@@ -472,24 +711,24 @@ const verifyInvoiceHeaderSelectors = () => ({
     const requiredIds = {
       businessUnit: requireId(fieldIds.businessUnit, BUSINESS_UNIT_LABEL),
       supplier: requireId(fieldIds.supplier, SUPPLIER_LABEL),
-      supplierLov: requireId(fieldIds.supplierLov, `${SUPPLIER_LABEL} Search`),
       supplierSite: requireId(fieldIds.supplierSite, SUPPLIER_SITE_LABEL),
       invoiceGroup: requireId(fieldIds.invoiceGroup, INVOICE_GROUP_LABEL),
       amount: requireId(fieldIds.amount, AMOUNT_LABEL),
       description: requireId(fieldIds.description, DESCRIPTION_LABEL),
-      businessUnitLov: requireId(fieldIds.businessUnitLov, `${BUSINESS_UNIT_LABEL} Search`),
-      number: fieldIds.number ? requireId(fieldIds.number, NUMBER_LABEL) : null,
-      supplierSiteLov: fieldIds.supplierSiteLov
+      number: fieldIds.number ? requireId(fieldIds.number, NUMBER_LABEL) : null
     };
 
-    ctx.setVar('invoiceFieldIds', { ...fieldIds, ...requiredIds });
+    ctx.setVar('invoiceFieldIds', {
+      ...fieldIds,
+      ...requiredIds,
+      businessUnitLov: fieldIds.businessUnitLov,
+      supplierLov: fieldIds.supplierLov,
+      supplierSiteLov: fieldIds.supplierSiteLov
+    });
 
     const checks: Array<{ label: string; spec: SelectorSpec }> = [
-      { label: 'Invoice Header section', spec: invoiceHeaderScope },
       { label: BUSINESS_UNIT_LABEL, spec: { id: requiredIds.businessUnit, visible: true } },
-      { label: `${BUSINESS_UNIT_LABEL} Search`, spec: { id: requiredIds.businessUnitLov, visible: true } },
       { label: SUPPLIER_LABEL, spec: { id: requiredIds.supplier, visible: true } },
-      { label: `${SUPPLIER_LABEL} Search`, spec: { id: requiredIds.supplierLov, visible: true } },
       { label: SUPPLIER_SITE_LABEL, spec: { id: requiredIds.supplierSite, visible: true } },
       { label: INVOICE_GROUP_LABEL, spec: { id: requiredIds.invoiceGroup, visible: true } },
       { label: AMOUNT_LABEL, spec: { id: requiredIds.amount, visible: true } },
@@ -498,16 +737,28 @@ const verifyInvoiceHeaderSelectors = () => ({
     if (!skipNumber) {
       checks.push({ label: NUMBER_LABEL, spec: { id: requiredIds.number ?? undefined, visible: true } });
     }
-    if (requiredIds.supplierSiteLov) {
-      checks.push({ label: `${SUPPLIER_SITE_LABEL} Search`, spec: { id: requiredIds.supplierSiteLov, visible: true } });
+    if (fieldIds.businessUnitLov) {
+      checks.push({ label: `${BUSINESS_UNIT_LABEL} Search`, spec: { id: fieldIds.businessUnitLov, visible: true } });
+    } else {
+      ctx.log('Business Unit search icon not found; inline entry will be used.', 'warn');
+    }
+    if (fieldIds.supplierLov) {
+      checks.push({ label: `${SUPPLIER_LABEL} Search`, spec: { id: fieldIds.supplierLov, visible: true } });
+    } else {
+      ctx.log('Supplier search icon not found; inline entry will be used.', 'warn');
+    }
+    if (fieldIds.supplierSiteLov) {
+      checks.push({ label: `${SUPPLIER_SITE_LABEL} Search`, spec: { id: fieldIds.supplierSiteLov, visible: true } });
     } else {
       ctx.log('Supplier Site search icon not found; LOV fallback will be skipped.', 'warn');
     }
     const failures: string[] = [];
     for (const check of checks) {
       const matches = findAll(check.spec, { visibleOnly: true });
-      if (matches.length !== 1) {
-        failures.push(`${check.label} (${matches.length})`);
+      if (matches.length === 0) {
+        failures.push(`${check.label} (0)`);
+      } else if (matches.length > 1) {
+        ctx.log(`Selector verification found multiple matches for ${check.label}; using first match.`, 'warn');
       }
     }
     if (failures.length) {
@@ -524,7 +775,14 @@ export const OracleInvoiceCreatorWorkflow: WorkflowDefinition = {
   label: 'Oracle: Invoice Creator (Header)',
   description: 'Captures invoice header data and fills the Oracle form.',
   options: [
-    { key: 'skipInvoiceNumber', label: 'Skip Invoice Number', type: 'boolean', default: true }
+    { key: 'skipInvoiceNumber', label: 'Skip Invoice Number', type: 'boolean', default: true },
+    { key: 'allowDocumentScope', label: 'Allow Document Scope Fallback', type: 'boolean', default: false },
+    {
+      key: 'allowSupplierSiteWithoutNumber',
+      label: 'Allow Supplier Site Fill Without Supplier Number',
+      type: 'boolean',
+      default: false
+    }
   ],
   steps: [
     verifyInvoiceHeaderSelectors(),
@@ -562,14 +820,22 @@ export const OracleInvoiceCreatorWorkflow: WorkflowDefinition = {
     {
       kind: 'execute',
       run: async (ctx) => {
-        await ctx.runWorkflow('oracle.invoice.create.businessUnit.ensure', { silent: true, shareVars: true });
+        await ctx.runWorkflow('oracle.invoice.create.businessUnit.ensure', {
+          silent: true,
+          shareVars: true,
+          shareOptions: true
+        });
         return true;
       }
     },
     {
       kind: 'execute',
       run: async (ctx) => {
-        await ctx.runWorkflow('oracle.invoice.create.supplier.lov', { silent: true, shareVars: true });
+        await ctx.runWorkflow('oracle.invoice.create.supplier.lov', {
+          silent: true,
+          shareVars: true,
+          shareOptions: true
+        });
         return true;
       }
     },
@@ -580,16 +846,20 @@ export const OracleInvoiceCreatorWorkflow: WorkflowDefinition = {
         const autoFill = !supplierSiteRaw || /^(auto|auto\\s*fill|auto\\s*fills|autofill)$/i.test(supplierSiteRaw);
         if (autoFill) {
           ctx.log('Supplier Site not provided; waiting for auto-fill.');
-          await ctx.runWorkflow('oracle.invoice.create.supplierSite.ensure', { silent: true, shareVars: true });
+          await ctx.runWorkflow('oracle.invoice.create.supplierSite.ensure', {
+            silent: true,
+            shareVars: true,
+            shareOptions: true
+          });
           return true;
         }
-        await ctx.runWorkflow('oracle.invoice.create.supplierSite.fill', { silent: true, shareVars: true });
+        await ctx.runWorkflow('oracle.invoice.create.supplierSite.fill', {
+          silent: true,
+          shareVars: true,
+          shareOptions: true
+        });
         return true;
       }
-    },
-    {
-      kind: 'delay',
-      ms: FIELD_DELAY_MS
     },
     {
       kind: 'click',
@@ -599,11 +869,18 @@ export const OracleInvoiceCreatorWorkflow: WorkflowDefinition = {
       kind: 'type',
       target: invoiceGroupInput,
       text: '{{vars.invoiceGroup}}',
-      clearFirst: true
+      clearFirst: true,
+      emitKeystrokes: true,
+      perKeystrokeDelayMs: 20
     },
     {
-      kind: 'delay',
-      ms: FIELD_DELAY_MS
+      kind: 'execute',
+      run: async (ctx) => {
+        const fieldIds = ctx.getVar<Record<string, string | null>>('invoiceFieldIds') || {};
+        const ok = await waitForFieldValue(fieldIds.invoiceGroup, ctx.getVar<string>('invoiceGroup') || '');
+        if (!ok) ctx.log('Invoice Group did not update after typing.', 'warn');
+        return true;
+      }
     },
     {
       kind: 'click',
@@ -613,11 +890,19 @@ export const OracleInvoiceCreatorWorkflow: WorkflowDefinition = {
       kind: 'type',
       target: amountInput,
       text: '{{vars.amountNumeric}}',
-      clearFirst: true
+      clearFirst: true,
+      emitKeystrokes: true,
+      perKeystrokeDelayMs: 20
     },
     {
-      kind: 'delay',
-      ms: FIELD_DELAY_MS
+      kind: 'execute',
+      run: async (ctx) => {
+        const fieldIds = ctx.getVar<Record<string, string | null>>('invoiceFieldIds') || {};
+        const expected = ctx.getVar<string>('amountNumeric') || ctx.getVar<string>('amountRaw') || '';
+        const ok = await waitForFieldValue(fieldIds.amount, expected);
+        if (!ok) ctx.log('Amount did not update after typing.', 'warn');
+        return true;
+      }
     },
     {
       kind: 'execute',
@@ -632,7 +917,11 @@ export const OracleInvoiceCreatorWorkflow: WorkflowDefinition = {
           ctx.log('Invoice number missing; skipping number field.', 'warn');
           return true;
         }
-        await ctx.runWorkflow('oracle.invoice.create.number', { silent: true, shareVars: true });
+        await ctx.runWorkflow('oracle.invoice.create.number', {
+          silent: true,
+          shareVars: true,
+          shareOptions: true
+        });
         return true;
       }
     },
@@ -644,7 +933,18 @@ export const OracleInvoiceCreatorWorkflow: WorkflowDefinition = {
       kind: 'type',
       target: descriptionTextarea,
       text: '{{vars.description}}',
-      clearFirst: true
+      clearFirst: true,
+      emitKeystrokes: true,
+      perKeystrokeDelayMs: 15
+    },
+    {
+      kind: 'execute',
+      run: async (ctx) => {
+        const fieldIds = ctx.getVar<Record<string, string | null>>('invoiceFieldIds') || {};
+        const ok = await waitForFieldValue(fieldIds.description, ctx.getVar<string>('description') || '');
+        if (!ok) ctx.log('Description did not update after typing.', 'warn');
+        return true;
+      }
     }
   ]
 };
@@ -668,7 +968,7 @@ export const OracleInvoiceCreatorBusinessUnitEnsureWorkflow: WorkflowDefinition 
         let businessUnitId = fieldIds.businessUnit;
         let lovId = fieldIds.businessUnitLov;
 
-        const scope = findOne(invoiceHeaderScope, { visibleOnly: true });
+        const scope = getInvoiceHeaderScopeOrDocument(ctx);
         if (scope && (!businessUnitId || !lovId)) {
           const resolved = resolveInvoiceHeaderIds(scope);
           businessUnitId = businessUnitId || resolved.businessUnit;
@@ -683,19 +983,6 @@ export const OracleInvoiceCreatorBusinessUnitEnsureWorkflow: WorkflowDefinition 
           return true;
         }
 
-        if (!lovId || !input) {
-          if (input) {
-            input.focus();
-            input.value = desired;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-            input.blur();
-            await new Promise(resolve => setTimeout(resolve, FIELD_DELAY_MS));
-          }
-          ctx.log('Business Unit search icon missing; filled input directly.', 'warn');
-          return true;
-        }
-
         const waitFor = async <T>(fn: () => T | null, timeoutMs = 15000, pollMs = 250) => {
           const start = Date.now();
           while (Date.now() - start < timeoutMs) {
@@ -705,6 +992,19 @@ export const OracleInvoiceCreatorBusinessUnitEnsureWorkflow: WorkflowDefinition 
           }
           return null;
         };
+
+        if (!lovId || !input) {
+          if (input) {
+            input.focus();
+            input.value = desired;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            input.blur();
+            await waitForFieldValue(businessUnitId, desired);
+          }
+          ctx.log('Business Unit search icon missing; filled input directly.', 'warn');
+          return true;
+        }
 
         const lovButton = document.getElementById(lovId) as HTMLElement | null;
         lovButton?.click?.();
@@ -739,8 +1039,6 @@ export const OracleInvoiceCreatorBusinessUnitEnsureWorkflow: WorkflowDefinition 
           const value = (input.value || '').toLowerCase();
           return value.includes(target) ? input : null;
         }, 10000);
-
-        await new Promise(resolve => setTimeout(resolve, FIELD_DELAY_MS));
         return true;
       }
     }
@@ -768,7 +1066,7 @@ export const OracleInvoiceCreatorSupplierLovWorkflow: WorkflowDefinition = {
           return true;
         }
 
-        const scope = findOne(invoiceHeaderScope, { visibleOnly: true });
+        const scope = getInvoiceHeaderScopeOrDocument(ctx);
         if (scope && (!supplierId || !supplierLovId)) {
           const resolved = resolveInvoiceHeaderIds(scope);
           supplierId = supplierId || resolved.supplier;
@@ -800,25 +1098,24 @@ export const OracleInvoiceCreatorSupplierLovWorkflow: WorkflowDefinition = {
           }
           supplierInput?.blur();
         };
-        const matches = (value: string) => normalizeText(value).toLowerCase().includes(matchTarget);
 
         if (supplierInput) {
-        const inlineSelected = await attemptInlineSelection(
-          ctx,
-          supplierInput,
-          supplierSearch,
-          waitFor,
-          SUPPLIER_LABEL,
-          matchText,
-          blur
-        );
-        if (inlineSelected) {
-          const hasSupplierNumber = await waitForSupplierNumber(waitFor, 12000, scope);
-          if (hasSupplierNumber) {
-            return true;
+          const inlineSelected = await attemptInlineSelection(
+            ctx,
+            supplierInput,
+            supplierSearch,
+            waitFor,
+            SUPPLIER_LABEL,
+            matchText,
+            blur
+          );
+          if (inlineSelected) {
+            const hasSupplierNumber = await waitForSupplierNumber(waitFor, 12000, scope);
+            if (hasSupplierNumber) {
+              return true;
+            }
+            ctx.log('Supplier selected inline but Supplier Number did not populate; falling back to LOV.', 'info');
           }
-          ctx.log('Supplier selected inline but Supplier Number did not populate; falling back to LOV.', 'warn');
-        }
         }
 
         if (!supplierLovId || !supplierId) {
@@ -842,80 +1139,94 @@ export const OracleInvoiceCreatorSupplierLovWorkflow: WorkflowDefinition = {
           return true;
         }
 
-        const popupRoot = getPopupSearchRoot(popup);
-        const inputByAria = Array.from(popupRoot.querySelectorAll<HTMLInputElement>('input')).find(el =>
-          /supplier/i.test((el.getAttribute('aria-label') || '').trim())
-        );
-        const labelFor = Array.from(popupRoot.querySelectorAll('label')).find(label =>
-          normalizeText(label.textContent || '') === 'Supplier'
-        )?.getAttribute('for')?.trim();
-        const inputByLabel = labelFor
-          ? (popupRoot.querySelector(`#${CSS.escape(labelFor)}`) as HTMLInputElement | null)
+        const dialogRoot = baseId
+          ? (document.getElementById(`${baseId}::lovDialogId`) as HTMLElement | null) ||
+            (document.getElementById(`${baseId}::lovDialogId::contentContainer`) as HTMLElement | null)
           : null;
-        const input =
-          inputByAria ||
-          inputByLabel ||
-          (popupRoot.querySelector('input') as HTMLInputElement | null);
-
-        if (!input) {
+        const searchRoot = dialogRoot ? getPopupSearchRoot(dialogRoot) : getPopupSearchRoot(popup);
+        let searchInput = findLovInput(searchRoot, SUPPLIER_LABEL) || findLovInput(searchRoot, 'Supplier Name');
+        if (!searchInput) {
+          const expanded = clickLovExpandSearchButton(searchRoot);
+          if (expanded) {
+            searchInput = await waitFor(
+              () => findLovInput(searchRoot, SUPPLIER_LABEL) || findLovInput(searchRoot, 'Supplier Name'),
+              4000,
+              200
+            );
+          }
+        }
+        if (!searchInput) {
           ctx.log('Supplier search input not found in dialog.', 'warn');
           return true;
         }
 
-        input.focus();
-        input.value = '';
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.value = supplierSearch;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        searchInput.focus();
+        searchInput.value = '';
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        searchInput.value = supplierSearch;
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        searchInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-        const searchButton = Array.from(popupRoot.querySelectorAll('button')).find(
-          button => /^search$/i.test((button.textContent || '').trim())
-        );
-        searchButton?.click?.();
+        const searchClicked = clickLovSearchButton(searchRoot);
+        if (!searchClicked) {
+          ctx.log('Supplier LOV search button not found; continuing anyway.', 'warn');
+        }
 
-        const row = await waitFor(() => {
-          const rows = getPopupResultRoots(popup).flatMap(root =>
-            Array.from(root.querySelectorAll('tr'))
-          );
-          const match = rows.find(candidate => {
-            const text = normalizeText(candidate.textContent || '');
-            if (!text || /no rows to display/i.test(text)) return false;
-            return text.toLowerCase().includes(matchTarget);
-          });
-          const first = rows.find(candidate => {
-            const text = normalizeText(candidate.textContent || '');
-            return text && !/no rows to display/i.test(text);
-          });
-          return match || first || null;
+        const resultRoots: ParentNode[] = [
+          ...(dialogRoot ? getPopupResultRoots(dialogRoot) : []),
+          ...getPopupResultRoots(popup)
+        ];
+        const rows = await waitFor(() => {
+          const found = findLovResultRows(resultRoots, [SUPPLIER_LABEL, 'Supplier Name', 'Name']);
+          return found.length ? found : null;
         }, 15000, 300);
+        const row = rows
+          ? rows.find(candidate => normalizeText(candidate.textContent || '').toLowerCase().includes(matchTarget)) ||
+            rows[0] ||
+            null
+          : null;
+
+        const actionRoots = dialogRoot ? [dialogRoot, popup] : [popup];
+        const findActionButton = (label: string) => {
+          const target = label.toLowerCase();
+          for (const root of actionRoots) {
+            for (const searchRoot of getPopupResultRoots(root)) {
+              const button = Array.from(searchRoot.querySelectorAll('button')).find(candidate =>
+                candidate.textContent?.trim().toLowerCase() === target
+              );
+              if (button) return button as HTMLElement;
+            }
+          }
+          return null;
+        };
 
         if (!row) {
           ctx.log(`Supplier search returned no rows for "${matchText}".`, 'warn');
-          const cancelButton = Array.from(popupRoot.querySelectorAll('button')).find(
-            button => /^cancel$/i.test((button.textContent || '').trim())
-          );
+          const cancelButton = findActionButton('cancel');
           cancelButton?.click?.();
           return true;
         }
 
-        row.click();
+        clickLovRow(row);
 
-        const okButton = Array.from(popupRoot.querySelectorAll('button')).find(
-          button => /^ok$/i.test((button.textContent || '').trim())
-        );
+        const okButton = findActionButton('ok');
         okButton?.click?.();
 
         if (supplierInput) {
-          await waitFor(() => {
+          const updated = await waitFor(() => {
             const value = (supplierInput.value || '').trim();
-            return value && value.toLowerCase().includes(matchTarget);
+            return value && value.toLowerCase().includes(matchTarget) ? value : null;
           }, 15000, 300);
-          await waitForSupplierNumber(waitFor, 12000, scope);
+          if (!updated) {
+            ctx.log('Supplier value did not update after LOV selection.', 'warn');
+          }
+          const hasSupplierNumber = await waitForSupplierNumber(waitFor, 12000, scope);
+          if (!hasSupplierNumber) {
+            ctx.log('Supplier Number did not populate after LOV selection.', 'warn');
+          }
           blur();
         }
 
-        await new Promise(resolve => setTimeout(resolve, FIELD_DELAY_MS));
         return true;
       }
     }
@@ -936,11 +1247,18 @@ export const OracleInvoiceCreatorNumberWorkflow: WorkflowDefinition = {
       kind: 'type',
       target: numberInput,
       text: '{{vars.invoiceNumber}}',
-      clearFirst: true
+      clearFirst: true,
+      emitKeystrokes: true,
+      perKeystrokeDelayMs: 20
     },
     {
-      kind: 'delay',
-      ms: FIELD_DELAY_MS
+      kind: 'execute',
+      run: async (ctx) => {
+        const fieldIds = ctx.getVar<Record<string, string | null>>('invoiceFieldIds') || {};
+        const ok = await waitForFieldValue(fieldIds.number, ctx.getVar<string>('invoiceNumber') || '');
+        if (!ok) ctx.log('Invoice Number did not update after typing.', 'warn');
+        return true;
+      }
     }
   ]
 };
@@ -968,7 +1286,7 @@ export const OracleInvoiceCreatorSupplierSiteFillWorkflow: WorkflowDefinition = 
           return true;
         }
 
-        const scope = findOne(invoiceHeaderScope, { visibleOnly: true });
+        const scope = getInvoiceHeaderScopeOrDocument(ctx);
         const input = document.getElementById(supplierSiteId) as HTMLInputElement | null;
         if (!input) {
           ctx.log('Supplier Site input not found; unable to fill.', 'warn');
@@ -998,9 +1316,13 @@ export const OracleInvoiceCreatorSupplierSiteFillWorkflow: WorkflowDefinition = 
         };
 
         const hasSupplierNumber = await waitForSupplierNumber(waitFor, 12000, scope);
+        const allowSiteWithoutNumber = Boolean(ctx.options?.allowSupplierSiteWithoutNumber);
         if (!hasSupplierNumber) {
-          ctx.log('Supplier Number missing; supplier not validated. Skipping Supplier Site fill.', 'warn');
-          return true;
+          if (!allowSiteWithoutNumber) {
+            ctx.log('Supplier Number missing; skipping Supplier Site fill.', 'warn');
+            return true;
+          }
+          ctx.log('Supplier Number missing; continuing Supplier Site fill (override enabled).', 'warn');
         }
 
         const inlineSelected = await attemptInlineSelection(
@@ -1032,21 +1354,22 @@ export const OracleInvoiceCreatorSupplierSiteFillWorkflow: WorkflowDefinition = 
           return true;
         }
 
-        const popupRoot = getPopupSearchRoot(popup);
-        const inputByAria = Array.from(popupRoot.querySelectorAll<HTMLInputElement>('input')).find(el =>
-          /site/i.test((el.getAttribute('aria-label') || '').trim())
-        );
-        const labelFor = Array.from(popupRoot.querySelectorAll('label')).find(label =>
-          /site/i.test(normalizeText(label.textContent || ''))
-        )?.getAttribute('for')?.trim();
-        const inputByLabel = labelFor
-          ? (popupRoot.querySelector(`#${CSS.escape(labelFor)}`) as HTMLInputElement | null)
+        const dialogRoot = baseId
+          ? (document.getElementById(`${baseId}::lovDialogId`) as HTMLElement | null) ||
+            (document.getElementById(`${baseId}::lovDialogId::contentContainer`) as HTMLElement | null)
           : null;
-        const dialogInput =
-          inputByAria ||
-          inputByLabel ||
-          (popupRoot.querySelector('input') as HTMLInputElement | null);
-
+        const searchRoot = dialogRoot ? getPopupSearchRoot(dialogRoot) : getPopupSearchRoot(popup);
+        let dialogInput = findLovInput(searchRoot, SUPPLIER_SITE_LABEL) || findLovInput(searchRoot, 'Site');
+        if (!dialogInput) {
+          const expanded = clickLovExpandSearchButton(searchRoot);
+          if (expanded) {
+            dialogInput = await waitFor(
+              () => findLovInput(searchRoot, SUPPLIER_SITE_LABEL) || findLovInput(searchRoot, 'Site'),
+              4000,
+              200
+            );
+          }
+        }
         if (!dialogInput) {
           ctx.log('Supplier Site search input not found in dialog.', 'warn');
           return true;
@@ -1060,45 +1383,55 @@ export const OracleInvoiceCreatorSupplierSiteFillWorkflow: WorkflowDefinition = 
         dialogInput.dispatchEvent(new Event('input', { bubbles: true }));
         dialogInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-        const searchButton = Array.from(popupRoot.querySelectorAll('button')).find(
-          button => /^search$/i.test((button.textContent || '').trim())
-        );
-        searchButton?.click?.();
+        const searchClicked = clickLovSearchButton(searchRoot);
+        if (!searchClicked) {
+          ctx.log('Supplier Site LOV search button not found; continuing anyway.', 'warn');
+        }
 
-        const row = await waitFor(() => {
-          const rows = getPopupResultRoots(popup).flatMap(root =>
-            Array.from(root.querySelectorAll('tr'))
-          );
-          const match = rows.find(candidate => {
-            const text = normalizeText(candidate.textContent || '');
-            if (!text || /no rows to display/i.test(text)) return false;
-            return text.toLowerCase().includes(target);
-          });
-          const first = rows.find(candidate => {
-            const text = normalizeText(candidate.textContent || '');
-            return text && !/no rows to display/i.test(text);
-          });
-          return match || first || null;
+        const resultRoots: ParentNode[] = [
+          ...(dialogRoot ? getPopupResultRoots(dialogRoot) : []),
+          ...getPopupResultRoots(popup)
+        ];
+        const rows = await waitFor(() => {
+          const found = findLovResultRows(resultRoots, [SUPPLIER_SITE_LABEL, 'Site']);
+          return found.length ? found : null;
         }, 15000, 300);
+        const row = rows
+          ? rows.find(candidate => normalizeText(candidate.textContent || '').toLowerCase().includes(target)) ||
+            rows[0] ||
+            null
+          : null;
+
+        const actionRoots = dialogRoot ? [dialogRoot, popup] : [popup];
+        const findActionButton = (label: string) => {
+          const target = label.toLowerCase();
+          for (const root of actionRoots) {
+            for (const searchRoot of getPopupResultRoots(root)) {
+              const button = Array.from(searchRoot.querySelectorAll('button')).find(candidate =>
+                candidate.textContent?.trim().toLowerCase() === target
+              );
+              if (button) return button as HTMLElement;
+            }
+          }
+          return null;
+        };
 
         if (!row) {
           ctx.log(`Supplier Site search returned no rows for "${supplierSite}".`, 'warn');
-          const cancelButton = Array.from(popupRoot.querySelectorAll('button')).find(
-            button => /^cancel$/i.test((button.textContent || '').trim())
-          );
+          const cancelButton = findActionButton('cancel');
           cancelButton?.click?.();
           return true;
         }
 
-        row.click();
-        const okButton = Array.from(popupRoot.querySelectorAll('button')).find(
-          button => /^ok$/i.test((button.textContent || '').trim())
-        );
+        clickLovRow(row);
+        const okButton = findActionButton('ok');
         okButton?.click?.();
 
-        await waitFor(() => (matches(input.value || '') ? input : null), 15000, 300);
+        const updated = await waitFor(() => (matches(input.value || '') ? input : null), 15000, 300);
+        if (!updated) {
+          ctx.log('Supplier Site did not update after LOV selection.', 'warn');
+        }
         blur();
-        await new Promise(resolve => setTimeout(resolve, FIELD_DELAY_MS));
         return true;
       }
     }
@@ -1150,7 +1483,6 @@ export const OracleInvoiceCreatorSupplierSiteEnsureWorkflow: WorkflowDefinition 
           const blurTarget = document.getElementById(blurTargetId);
           blurTarget?.click?.();
         }
-        await new Promise(resolve => setTimeout(resolve, FIELD_DELAY_MS));
         return true;
       }
     }
