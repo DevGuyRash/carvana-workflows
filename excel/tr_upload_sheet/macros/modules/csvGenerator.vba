@@ -168,16 +168,29 @@ Private Sub WriteWorksheetToInterfaceCsv(ByVal ws As Worksheet, ByVal csvPath As
     Dim hdr As Variant
     hdr = ws.Range(ws.Cells(HEADER_ROW, 1), ws.Cells(HEADER_ROW, lastCol)).Value2
 
+    Dim exportColumns As Collection
+    Set exportColumns = BuildExportColumnMap(hdr, lastCol)
+
+    Dim exportColCount As Long
+    exportColCount = exportColumns.Count
+    If exportColCount = 0 Then
+        CreateEmptyFile csvPath
+        Exit Sub
+    End If
+
     ' Date columns by header name (Oracle control file expects YYYY/MM/DD for these)
     Dim isDateCol() As Boolean
-    ReDim isDateCol(1 To lastCol) As Boolean
+    ReDim isDateCol(1 To exportColCount) As Boolean
 
-    Dim c As Long
-    For c = 1 To lastCol
+    Dim exportIndex As Long
+    For exportIndex = 1 To exportColCount
+        Dim sourceCol As Long
+        sourceCol = CLng(exportColumns(exportIndex))
+
         Dim h As String
-        h = CleanCellString(CStr(hdr(1, c)))
-        isDateCol(c) = (InStr(1, UCase$(h), "DATE", vbBinaryCompare) > 0)
-    Next c
+        h = CleanCellString(CStr(hdr(1, sourceCol)))
+        isDateCol(exportIndex) = (InStr(1, UCase$(h), "DATE", vbBinaryCompare) > 0)
+    Next exportIndex
 
     ' Read values fast
     Dim dataRng As Range
@@ -188,6 +201,7 @@ Private Sub WriteWorksheetToInterfaceCsv(ByVal ws As Worksheet, ByVal csvPath As
 
     ' Pre-clean string values in the array (fast)
     Dim r As Long
+    Dim c As Long
     For r = 1 To rowCount
         For c = 1 To lastCol
             If IsError(vals(r, c)) Then
@@ -195,6 +209,7 @@ Private Sub WriteWorksheetToInterfaceCsv(ByVal ws As Worksheet, ByVal csvPath As
                           "Excel error value found in sheet '" & ws.Name & "' at row " & (FIRST_DATA_ROW + r - 1) & _
                           ", col " & c & ". Fix #REF!/#VALUE!/etc. before exporting."
             End If
+
             If VarType(vals(r, c)) = vbString Then
                 vals(r, c) = CleanCellString(CStr(vals(r, c)))
             End If
@@ -202,20 +217,24 @@ Private Sub WriteWorksheetToInterfaceCsv(ByVal ws As Worksheet, ByVal csvPath As
     Next r
 
     ' Cache column formats when uniform (speed). If mixed, we fall back per-cell.
-    Dim colFmt As Variant, colFmtIsUniform() As Boolean, colFmtStr() As String
-    ReDim colFmtIsUniform(1 To lastCol) As Boolean
-    ReDim colFmtStr(1 To lastCol) As String
+    Dim colFmt As Variant
+    Dim colFmtIsUniform() As Boolean
+    Dim colFmtStr() As String
+    ReDim colFmtIsUniform(1 To exportColCount) As Boolean
+    ReDim colFmtStr(1 To exportColCount) As String
 
-    For c = 1 To lastCol
-        colFmt = ws.Range(ws.Cells(FIRST_DATA_ROW, c), ws.Cells(lastRow, c)).NumberFormat
+    For exportIndex = 1 To exportColCount
+        sourceCol = CLng(exportColumns(exportIndex))
+
+        colFmt = ws.Range(ws.Cells(FIRST_DATA_ROW, sourceCol), ws.Cells(lastRow, sourceCol)).NumberFormat
         If IsNull(colFmt) Then
-            colFmtIsUniform(c) = False
-            colFmtStr(c) = vbNullString
+            colFmtIsUniform(exportIndex) = False
+            colFmtStr(exportIndex) = vbNullString
         Else
-            colFmtIsUniform(c) = True
-            colFmtStr(c) = CStr(colFmt)
+            colFmtIsUniform(exportIndex) = True
+            colFmtStr(exportIndex) = CStr(colFmt)
         End If
-    Next c
+    Next exportIndex
 
     ' Write CSV as UTF-8 (no BOM)
     Dim textStream As Object, binStream As Object
@@ -225,19 +244,28 @@ Private Sub WriteWorksheetToInterfaceCsv(ByVal ws As Worksheet, ByVal csvPath As
     textStream.Open
 
     Dim fields() As String
-    ReDim fields(1 To lastCol + 1) As String ' + END
+    ReDim fields(1 To exportColCount + 1) As String ' + END
 
     For r = 1 To rowCount
+        Dim rowHasAny As Boolean
+        rowHasAny = False
 
-        For c = 1 To lastCol
+        For exportIndex = 1 To exportColCount
+            sourceCol = CLng(exportColumns(exportIndex))
+
             Dim s As String
-            s = ValueToExportString(ws, vals(r, c), isDateCol(c), colFmtIsUniform(c), colFmtStr(c), FIRST_DATA_ROW + r - 1, c)
-            fields(c) = CsvEscape(s)
-        Next c
+            s = ValueToExportString(ws, vals(r, sourceCol), isDateCol(exportIndex), _
+                                    colFmtIsUniform(exportIndex), colFmtStr(exportIndex), _
+                                    FIRST_DATA_ROW + r - 1, sourceCol)
 
-        fields(lastCol + 1) = "END" ' final marker
+            fields(exportIndex) = CsvEscape(s)
+            If Len(s) > 0 Then rowHasAny = True
+        Next exportIndex
 
-        textStream.WriteText Join(fields, ",") & vbLf
+        If rowHasAny Then
+            fields(exportColCount + 1) = "END" ' final marker
+            textStream.WriteText Join(fields, ",") & vbLf
+        End If
     Next r
 
     ' Strip BOM (skip first 3 bytes)
@@ -258,6 +286,26 @@ Private Sub WriteWorksheetToInterfaceCsv(ByVal ws As Worksheet, ByVal csvPath As
     textStream.Close
 
 End Sub
+
+Private Function BuildExportColumnMap(ByVal hdr As Variant, ByVal lastCol As Long) As Collection
+    Dim exportColumns As New Collection
+
+    Dim c As Long
+    For c = 1 To lastCol
+        Dim headerText As String
+        headerText = CleanCellString(CStr(hdr(1, c)))
+
+        If Not HeaderIsInternal(headerText) Then
+            exportColumns.Add c
+        End If
+    Next c
+
+    Set BuildExportColumnMap = exportColumns
+End Function
+
+Private Function HeaderIsInternal(ByVal headerText As String) As Boolean
+    HeaderIsInternal = (Left$(LCase$(Trim$(headerText)), 3) = "zz_")
+End Function
 
 Private Function ValueToExportString(ByVal ws As Worksheet, ByVal v As Variant, ByVal isDateColumn As Boolean, _
                                     ByVal fmtUniform As Boolean, ByVal fmtString As String, _
