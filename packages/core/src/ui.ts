@@ -67,6 +67,14 @@ const DEFAULT_THEME: ThemeConfig = {
   panelOpacity: 0.95
 };
 
+const escapeHtml = (value: string) =>
+  String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 export class MenuUI {
   private shadow: ShadowRoot;
   private container: HTMLElement;
@@ -371,6 +379,12 @@ export class MenuUI {
     }
   }
 
+  close(){
+    if (!this.open) return;
+    this.open = false;
+    this.container.classList.toggle('open', false);
+  }
+
   private bind(){
     this.shadow.querySelectorAll('[data-section]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -656,6 +670,8 @@ export class MenuUI {
       const activeProfile = profilesEnabled ? getActiveProfile(this.store, wf.id) : 'p1';
       const profileSelect = profilesEnabled ? this.renderProfileSelect(wf.id, activeProfile) : '';
       const badges = this.renderBadges(wf, prefs);
+      const safeLabel = escapeHtml(wf.label);
+      const safeDescription = escapeHtml(wf.description ?? '');
 
       const item = document.createElement('div');
       item.className = 'cv-item';
@@ -670,8 +686,8 @@ export class MenuUI {
         <div class="cv-item-row">
           ${options.allowDrag ? `<button type="button" class="cv-drag-handle" data-drag-handle title="Drag to reorder"><span aria-hidden="true">|||</span></button>` : ''}
           <div class="cv-item-main">
-            <div class="cv-item-title">${wf.label}</div>
-            <div class="cv-item-desc">${wf.description ?? ''}</div>
+            <div class="cv-item-title">${safeLabel}</div>
+            <div class="cv-item-desc">${safeDescription}</div>
             ${badges ? `<div class="cv-badges">${badges}</div>` : ''}
           </div>
         </div>
@@ -687,6 +703,7 @@ export class MenuUI {
         runBtn.addEventListener('click', (event) => {
           event.stopPropagation();
           this.dispatch('run-workflow', { workflowId: wf.id, profileId: activeProfile });
+          this.close();
         });
       }
 
@@ -730,6 +747,9 @@ export class MenuUI {
       const outcomeLabel = outcome ? outcome.status.toUpperCase() : (autoStatus?.status == 'error' ? 'ERROR' : autoStatus?.status == 'ran' ? 'OK' : '');
       const outcomeClass = outcome?.status ?? (autoStatus?.status == 'error' ? 'error' : autoStatus?.status == 'ran' ? 'ok' : '');
       const reason = this.formatAutoReason(autoStatus);
+      const safeLabel = escapeHtml(wf.label);
+      const safeDescription = escapeHtml(wf.description ?? '');
+      const safeReason = escapeHtml(reason ?? '');
       const repeatBadge = triggers.repeat.enabled ? '<span class="cv-badge cv-badge-repeat">Repeat</span>' : '';
       const statusLabel = autoAvailable ? (autoEnabled ? 'Enabled' : 'Disabled') : 'Unavailable';
       const statusClass = autoAvailable && autoEnabled ? 'on' : 'off';
@@ -741,14 +761,14 @@ export class MenuUI {
       item.dataset.automationRow = wf.id;
       item.innerHTML = `
         <div class="cv-item-main">
-          <div class="cv-item-title">${wf.label}</div>
-          <div class="cv-item-desc">${wf.description ?? ''}</div>
+          <div class="cv-item-title">${safeLabel}</div>
+          <div class="cv-item-desc">${safeDescription}</div>
           <div class="cv-status-line">
             <span class="cv-status-pill ${statusClass}">${statusLabel}</span>
             <span class="cv-status-meta">Last run: ${lastRunText}</span>
             ${outcomeLabel ? `<span class="cv-status-outcome ${outcomeClass}">${outcomeLabel}</span>` : ''}
             ${repeatBadge}
-            ${reason ? `<span class="cv-status-reason">${reason}</span>` : ''}
+            ${reason ? `<span class="cv-status-reason">${safeReason}</span>` : ''}
           </div>
         </div>
         <div class="cv-item-actions">
@@ -822,6 +842,8 @@ export class MenuUI {
     for (const wf of items){
       const prefs = getRunPrefs(this.store, wf.id);
       const badges = this.renderBadges(wf, prefs);
+      const safeLabel = escapeHtml(wf.label);
+      const safeDescription = escapeHtml(wf.description ?? '');
       const item = document.createElement('div');
       item.className = 'cv-archived-item';
       item.setAttribute('role', 'listitem');
@@ -829,8 +851,8 @@ export class MenuUI {
       item.dataset.archivedRow = wf.id;
       item.innerHTML = `
         <div class="cv-item-main">
-          <div class="cv-item-title">${wf.label}</div>
-          <div class="cv-item-desc">${wf.description ?? ''}</div>
+          <div class="cv-item-title">${safeLabel}</div>
+          <div class="cv-item-desc">${safeDescription}</div>
           ${badges ? `<div class="cv-badges">${badges}</div>` : ''}
         </div>
         <div class="cv-item-actions">
@@ -933,6 +955,10 @@ export class MenuUI {
     const reason = this.formatAutoReason(autoStatus);
     const badges = this.renderBadges(wf, runPrefs);
     const risk = wf.riskLevel ?? 'safe';
+    const safeLabel = escapeHtml(wf.label);
+    const safeDescription = escapeHtml(wf.description ?? '');
+    const safeReason = escapeHtml(reason ?? '');
+    const safeRisk = escapeHtml(risk);
 
     const profilePills = profilesEnabled
       ? PROFILE_SLOTS.map(slot => {
@@ -949,8 +975,8 @@ export class MenuUI {
       <div class="cv-detail-header">
         <button class="cv-btn secondary cv-detail-close" data-detail-back title="Close details (Esc)">${isSplit ? '&times;' : '&larr; Back'}</button>
         <div class="cv-detail-header-content">
-          <div class="cv-detail-title">${wf.label}</div>
-          <div class="cv-detail-desc">${wf.description ?? ''}</div>
+          <div class="cv-detail-title">${safeLabel}</div>
+          <div class="cv-detail-desc">${safeDescription}</div>
           ${badges ? `<div class="cv-badges">${badges}</div>` : ''}
         </div>
       </div>
@@ -962,7 +988,7 @@ export class MenuUI {
         <span class="cv-status-pill ${autoAvailable && triggers.auto.enabled ? 'on' : 'off'}">${autoAvailable ? (triggers.auto.enabled ? 'Automation enabled' : 'Automation disabled') : 'Automation unavailable'}</span>
         <span class="cv-status-meta">Last run: ${lastRunText}</span>
         ${outcomeLabel ? `<span class="cv-status-outcome ${outcomeClass}">${outcomeLabel}</span>` : ''}
-        ${reason ? `<span class="cv-status-reason">${reason}</span>` : ''}
+        ${reason ? `<span class="cv-status-reason">${safeReason}</span>` : ''}
       </div>
       <div class="cv-detail-section">
         <h4>Triggers</h4>
@@ -975,7 +1001,7 @@ export class MenuUI {
           <input type="checkbox" data-detail-repeat="${wf.id}" ${triggers.repeat.enabled ? 'checked' : ''} ${triggers.auto.enabled && repeatAvailable ? '' : 'disabled'}>
           <span>Repeat</span>
         </label>
-        <div class="cv-hint">Risk: ${risk}</div>
+        <div class="cv-hint">Risk: ${safeRisk}</div>
         ${autoAvailable ? '' : '<div class="cv-hint">Auto trigger disabled in task definition.</div>'}
         ${manualAvailable ? '' : '<div class="cv-hint">Manual trigger disabled in task definition.</div>'}
       </div>
@@ -1020,6 +1046,7 @@ export class MenuUI {
     if (runBtn) {
       runBtn.addEventListener('click', () => {
         this.dispatch('run-workflow', { workflowId: wf.id, profileId: activeProfile });
+        this.close();
       });
     }
 

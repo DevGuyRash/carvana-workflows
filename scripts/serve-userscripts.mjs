@@ -7,6 +7,14 @@ const distDir = path.join(root, 'dist');
 const host = process.env.US_HOST || 'localhost';
 const port = Number(process.env.US_PORT || '4873');
 
+const escapeHtml = (value) =>
+  String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 function send(res, status, body, headers = {}) {
   res.writeHead(status, headers);
   res.end(body);
@@ -44,7 +52,7 @@ function serveDirectory(res, dirPath, requestPath) {
       .map((entry) => {
         const href = `${base}${encodeURIComponent(entry.name)}${entry.isDirectory() ? '/' : ''}`;
         const label = `${entry.name}${entry.isDirectory() ? '/' : ''}`;
-        return `<li><a href="${href}">${label}</a></li>`;
+        return `<li><a href="${href}">${escapeHtml(label)}</a></li>`;
       })
       .join('');
     const body = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Userscripts</title></head><body><h1>Userscripts</h1><p>Select a file below:</p><ul>${listItems}</ul></body></html>`;
