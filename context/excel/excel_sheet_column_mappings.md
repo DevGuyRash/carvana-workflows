@@ -54,10 +54,10 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 | INV-CF-07 | `$T$5:$T$9`                 | `tbl_invoices[*Payment Terms]`                | \*Payment Terms                                 | Formula          |
 | INV-CF-08 | `$M$5:$M$9`                 | `tbl_invoices[Import Set]`                    | Import Set                                      | Duplicate values |
 | INV-CF-09 | `$D$5:$D$9`                 | `tbl_invoices[*Invoice Number]`               | \*Invoice Number                                | Duplicate values |
-| INV-CF-10 | `$A$5:$A$2000`              | `AP_INVOICES_INTERFACE!$A$5:$A$2000` (bounded) | \*Invoice ID                                  | Formula          |
+| INV-CF-10 | `$A$5:$A$9`                 | `tbl_invoices[*Invoice ID]`                   | \*Invoice ID                                    | Formula          |
 | INV-CF-11 | `$E$5:$E$9`                 | `tbl_invoices[*Invoice Amount]`               | \*Invoice Amount                                | Formula          |
 
-Use bounded `Applies To` ranges for continuity rules in production (`INV-CF-10`: `$A$5:$A$2000`) to avoid table-row insert CF scope instability.
+Use the table-mapping `Applies To` references in Excel for production; the fixed `$...$5:$...$9` ranges are small-sheet examples.
 
 #### AP_INVOICES_INTERFACE Conditional Formatting Formulas (Formatted)
 
@@ -147,7 +147,7 @@ Duplicate values
 
 ##### INV-CF-10
 
-Description: Flags invalid or non-continuous Invoice ID values based on the first missing ID from the lowest present ID.
+Description: Flags invalid or non-continuous Invoice ID values based on the first missing positive integer (expected sequence starts at 1).
 
 ```excel
 =LET(
@@ -247,13 +247,13 @@ Use the formula in each `.fx` file in the first data row (Row 5) of the mapped c
 | LINE-CF-08 | `$BT$5:$BT$9`               | `tbl_invoice_lines[Attribute 6]`              | Attribute 6               | Duplicate Values |
 | LINE-CF-09 | `$DX$5:$DX$9`               | `tbl_invoice_lines[Project Number]`           | Project Number            | Formula          |
 | LINE-CF-10 | `$DX$5:$DX$9`               | `tbl_invoice_lines[Project Number]`           | Project Number            | Duplicate Values |
-| LINE-CF-11 | `$A$5:$A$2000`              | `AP_INVOICE_LINES_INTERFACE!$A$5:$A$2000` (bounded) | \*Invoice ID         | Formula          |
+| LINE-CF-11 | `$A$5:$A$9`                 | `tbl_invoice_lines[*Invoice ID]`              | \*Invoice ID              | Formula          |
 | LINE-CF-12 | `$A$5:$B$9`                 | `tbl_invoice_lines[[*Invoice ID]:[Line Number]]` | \*Invoice ID, Line Number | Formula          |
 | LINE-CF-13 | `$A$5:$B$9`                 | `tbl_invoice_lines[[*Invoice ID]:[Line Number]]` | \*Invoice ID, Line Number | Formula          |
 | LINE-CF-14 | `$A$5:$A$9`                 | `tbl_invoice_lines[*Invoice ID]`              | \*Invoice ID              | Formula          |
-| LINE-CF-15 | `$A$5:$A$2000,$D$5:$D$2000` | `AP_INVOICE_LINES_INTERFACE!$A$5:$A$2000,$D$5:$D$2000` (bounded) | \*Invoice ID, \*Amount | Formula          |
+| LINE-CF-15 | `$A$5:$A$9,$D$5:$D$9`       | `tbl_invoice_lines[*Invoice ID],tbl_invoice_lines[*Amount]` | \*Invoice ID, \*Amount    | Formula          |
 
-Use bounded `Applies To` ranges for production continuity/mismatch rules (`LINE-CF-11`, `LINE-CF-15`) to avoid table-row insert CF scope instability.
+Use the table-mapping `Applies To` references in Excel for production; the fixed `$...$5:$...$9` ranges are small-sheet examples.
 
 #### AP_INVOICE_LINES_INTERFACE Conditional Formatting Formulas (Formatted)
 
@@ -342,7 +342,7 @@ Duplicate Values
 
 ##### LINE-CF-11
 
-Description: Flags invalid or non-continuous Invoice ID values based on the first missing ID from the lowest present ID in invoice lines.
+Description: Flags invalid or non-continuous Invoice ID values based on the first missing positive integer (expected sequence starts at 1) in invoice lines.
 
 ```excel
 =LET(
@@ -507,6 +507,21 @@ Named Values:
 | Inv First Missing ID  | AC1            |
 | Line First Missing ID | AD1            |
 
+Notes:
+
+- `AC2` links to `AF2` (`=$AF$2`) and `AD2` links to `AG2` (`=$AG$2`) as a stable table-backed bridge for named formulas.
+
+---
+
+Named Values:
+
+- Range Name: `rng_defaults_cf_helpers`
+
+| Header Name           | Cell Reference | Formula                                |
+| --------------------- | -------------- | -------------------------------------- |
+| Inv First Missing ID  | AF1/AF2        | `AF2: =cf_FirstMissingPosInt(rngInvID)` |
+| Line First Missing ID | AG1/AG2        | `AG2: =cf_FirstMissingPosInt(rngLineInvID)` |
+
 ### Workbook Named Ranges
 
 | Name            | Comment                                                                                                                        | Refers To                                         | Applies To Headers                           |
@@ -515,6 +530,7 @@ Named Values:
 | `curMonthStart` | First day of current month (computed once).                                                                                    | `=tbl_defaults_month_info[[#Data],[Month Start]]` | `Month Start` (`tbl_defaults_month_info`)    |
 | `cfInv_FirstMissingID_Value` | Helper scalar used by invoice continuity CF to avoid per-cell dynamic-array recomputation.                       | `=INDEX(tbl_defaults_cf_helpers[Inv First Missing ID],1)` | `Inv First Missing ID` (`tbl_defaults_cf_helpers`) |
 | `cfLine_FirstMissingInvID_Value` | Helper scalar used by line continuity CF to avoid per-cell dynamic-array recomputation.                    | `=INDEX(tbl_defaults_cf_helpers[Line First Missing ID],1)` | `Line First Missing ID` (`tbl_defaults_cf_helpers`) |
+| `rng_defaults_cf_helpers` | Optional helper inspection range for Defaults-sheet continuity threshold cells.                                           | `=Defaults!$AF$1:$AG$2`                            | Helper cells (`Defaults`)                    |
 | `rngInvAmt`     | Invoice Amount column in invoices table. Used for header-vs-lines amount reconciliation CF.                                    | `=tbl_invoices[[#Data],[*Invoice Amount]]`        | `*Invoice Amount` (`AP_INVOICES_INTERFACE`)  |
 | `rngInvID`      | Invoice IDs in the invoices table data area (auto-resizes with the table). Use to avoid fixed ranges / full-column refs in CF. | `=tbl_invoices[[#Data],[*Invoice ID]]`            | `*Invoice ID` (`AP_INVOICES_INTERFACE`)      |
 | `rngLineAmt`    | Amount column in invoice lines table. Used to SUMIFS line totals per invoice.                                                  | `=tbl_invoice_lines[[#Data],[*Amount]]`           | `*Amount` (`AP_INVOICE_LINES_INTERFACE`)     |
@@ -530,8 +546,8 @@ Add these in Name Manager as workbook-level named formulas.
 | `cf_BadMonthDate`                  | Reusable date validation for current-month-only date fields. | `=LAMBDA(d,LET(v,d,OR(v="",NOT(ISNUMBER(v)),INT(v)<>v,v<curMonthStart,v>curMonthEnd)))`                                                                                                                                             |
 | `cf_FirstMissingPosInt`            | Returns smallest missing positive integer in a range (expected to start at 1). | `=LAMBDA(rng,LET(nums,IFERROR(--rng,0),pos,FILTER(nums,(nums>=1)*(nums=INT(nums)),0),uniq,SORT(UNIQUE(pos)),n,ROWS(uniq),expected,SEQUENCE(n),mismatchPos,XMATCH(FALSE,uniq=expected,0),IFERROR(INDEX(expected,mismatchPos),n+1)))` |
 | `cf_FirstMissingPosIntFromMin`     | Returns smallest missing positive integer starting from the range minimum.       | `=LAMBDA(rng,LET(nums,IFERROR(--rng,0),pos,FILTER(nums,(nums>=1)*(nums=INT(nums)),0),uniq,SORT(UNIQUE(pos)),n,ROWS(uniq),start,INDEX(uniq,1),expected,SEQUENCE(n,,start),mismatchPos,XMATCH(FALSE,uniq=expected,0),IFERROR(INDEX(expected,mismatchPos),start+n)))` |
-| `cfInv_FirstMissingID`             | Smallest missing invoice ID in `AP_INVOICES_INTERFACE` from the lowest present ID (computation source).      | `=cf_FirstMissingPosIntFromMin(rngInvID)`                                                                                                                                                                                          |
-| `cfLine_FirstMissingInvID`         | Smallest missing invoice ID in `AP_INVOICE_LINES_INTERFACE` from the lowest present ID (computation source). | `=cf_FirstMissingPosIntFromMin(rngLineInvID)`                                                                                                                                                                                      |
+| `cfInv_FirstMissingID`             | Smallest missing invoice ID in `AP_INVOICES_INTERFACE` from the lowest present ID (legacy helper; not the active continuity threshold source).      | `=cf_FirstMissingPosIntFromMin(rngInvID)`                                                                                                                                                                                          |
+| `cfLine_FirstMissingInvID`         | Smallest missing invoice ID in `AP_INVOICE_LINES_INTERFACE` from the lowest present ID (legacy helper; not the active continuity threshold source). | `=cf_FirstMissingPosIntFromMin(rngLineInvID)`                                                                                                                                                                                      |
 | `cfLine_TotalsByInvID`             | 2-column spill: `[Invoice ID, LinesTotalOrBlank]`.           | `=IFERROR(LET(ids,rngLineInvID,amts,rngLineAmt,uniq,UNIQUE(FILTER(ids,ids<>"")),cnt,COUNTIFS(ids,uniq,amts,"<>"),sum,SUMIFS(amts,ids,uniq),tot,IF(cnt>0,sum,""),HSTACK(uniq,tot)),HSTACK("",""))`                                   |
 | `cfLine_FirstMissingLineNoByInvID` | 2-column spill: `[Invoice ID, FirstMissingLineNumber]`.      | `=IFERROR(LET(ids,rngLineInvID,lns,rngLineNo,invList,UNIQUE(FILTER(ids,ids<>"")),miss,MAP(invList,LAMBDA(i,cf_FirstMissingPosInt(FILTER(lns,ids=i,0)))),HSTACK(invList,miss)),HSTACK("",1))`                                        |
 
@@ -539,6 +555,6 @@ Notes:
 
 - `rngLineAmt` must refer to a real range: `=tbl_invoice_lines[[#Data],[*Amount]]`.
 - Do not wrap table references in quotes in Name Manager.
-- Prefer bounded CF `Applies To` ranges over full columns.
-- For this template, continuity/mismatch rules should use `$A$5:$A$2000` and `$D$5:$D$2000` where applicable to keep coverage stable when rows are inserted.
+- Prefer CF `Applies To` table ranges over full columns or static row ranges.
 - For continuity rules (`INV-CF-10`, `LINE-CF-11`), reference helper-backed names (`cfInv_FirstMissingID_Value`, `cfLine_FirstMissingInvID_Value`) in CF formulas for reliable, low-cost recalc.
+- Active continuity threshold source is `AF2/AG2` (`cf_FirstMissingPosInt(...)`), bridged through `tbl_defaults_cf_helpers` (`AC2/AD2`) for name compatibility.
