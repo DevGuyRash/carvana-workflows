@@ -7,15 +7,15 @@ Private Const SH_LINES    As String = "AP_INVOICE_LINES_INTERFACE"
 Private Const TBL_INVOICES As String = "tbl_invoices"
 Private Const TBL_LINES    As String = "tbl_invoice_lines"
 
-Private Const LINES_BUFFER_ROWS As Long = 15
-Private Const INTERNAL_PREFIX As String = "zz_"
+Private Const LINES_BUFFER_ROWS As Long = 0
 Private Const COL_LINE_KEY As String = "zzLineKey"
 Private Const COL_INVOICE_KEY As String = "zzInvoiceKey"
 '======================================================================
 
 'Resize tbl_invoices safely and remap user-entered invoice header values by stable invoice key.
 Public Sub AP_SyncInvoicesTable(Optional ByVal Silent As Boolean = True, _
-                                Optional ByVal SkipLineSync As Boolean = False)
+                                Optional ByVal SkipLineSync As Boolean = False, _
+                                Optional ByVal ManageAppState As Boolean = True)
 
     Dim prevEvents As Boolean, prevScreen As Boolean
     Dim prevCalc As XlCalculation
@@ -26,9 +26,11 @@ Public Sub AP_SyncInvoicesTable(Optional ByVal Silent As Boolean = True, _
 
     On Error GoTo EH
 
-    Application.EnableEvents = False
-    Application.ScreenUpdating = False
-    Application.Calculation = xlCalculationManual
+    If ManageAppState Then
+        Application.EnableEvents = False
+        Application.ScreenUpdating = False
+        Application.Calculation = xlCalculationManual
+    End If
 
     Dim wb As Workbook: Set wb = ThisWorkbook
     Dim wsInv As Worksheet: Set wsInv = wb.Worksheets(SH_INVOICES)
@@ -38,15 +40,17 @@ Public Sub AP_SyncInvoicesTable(Optional ByVal Silent As Boolean = True, _
     Dim loLines As ListObject: Set loLines = wsLines.ListObjects(TBL_LINES)
 
     If Not SkipLineSync Then
-        AP_SyncInvoiceLinesTable True
+        SyncInvoiceLinesCore Silent, 0, 0, 0, 0, False, False
     End If
 
     EnsureInternalColumn loLines, COL_LINE_KEY
     EnsureInternalColumn loInv, COL_INVOICE_KEY
-    EnsureLineKeys loLines
+
+    Dim usedLineRows As Long
+    usedLineRows = LastUsedNonInternalConstantRowCount(loLines)
 
     Dim invoiceKeys As Collection
-    Set invoiceKeys = InvoiceKeysFromLines(loLines)
+    Set invoiceKeys = InvoiceKeysFromLines(loLines, usedLineRows)
 
     Dim oldRows As Long
     oldRows = loInv.ListRows.Count
@@ -65,6 +69,8 @@ Public Sub AP_SyncInvoicesTable(Optional ByVal Silent As Boolean = True, _
     Set userInputColumns = GetUserInputColumns(loInv, True)
 
     SeedInvoiceKeysByPosition loInv, lcInvoiceKey, invoiceKeys
+
+    If InvoiceKeysMatchTable(lcInvoiceKey, invoiceKeys) Then GoTo CleanExit
 
     Dim oldValuesByKey As Object
     Set oldValuesByKey = SnapshotUserInputsByInvoiceKey(loInv, lcInvoiceKey, userInputColumns)
@@ -89,9 +95,11 @@ Public Sub AP_SyncInvoicesTable(Optional ByVal Silent As Boolean = True, _
     ApplyTableBottomBoundary loInv
 
 CleanExit:
-    Application.Calculation = prevCalc
-    Application.ScreenUpdating = prevScreen
-    Application.EnableEvents = prevEvents
+    If ManageAppState Then
+        Application.Calculation = prevCalc
+        Application.ScreenUpdating = prevScreen
+        Application.EnableEvents = prevEvents
+    End If
     Exit Sub
 
 EH:
@@ -100,10 +108,9 @@ EH:
     End If
     Resume CleanExit
 End Sub
-
 'Resize tbl_invoice_lines safely after edits/pastes.
 Public Sub AP_SyncInvoiceLinesTable(Optional ByVal Silent As Boolean = True)
-    SyncInvoiceLinesCore Silent, 0, 0, 0, 0, False
+    SyncInvoiceLinesCore Silent, 0, 0, 0, 0, False, True
 End Sub
 
 'Paste-aware entry-point: uses changed range bounds as a temporary floor.
@@ -113,15 +120,16 @@ Public Sub AP_SyncInvoiceLinesTable_WithTarget(Optional ByVal Silent As Boolean 
                                                Optional ByVal changedFirstCol As Long = 0, _
                                                Optional ByVal changedLastCol As Long = 0, _
                                                Optional ByVal protectChangedRows As Boolean = True)
-    SyncInvoiceLinesCore Silent, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, protectChangedRows
+    SyncInvoiceLinesCore Silent, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, protectChangedRows, True
 End Sub
 
-Private Sub SyncInvoiceLinesCore(ByVal Silent As Boolean, _
-                                 ByVal changedBottomRow As Long, _
-                                 ByVal changedTopRow As Long, _
-                                 ByVal changedFirstCol As Long, _
-                                 ByVal changedLastCol As Long, _
-                                 ByVal protectChangedRows As Boolean)
+'Single-pass sync wrapper for worksheet events: disables app state once, then runs lines + invoices sync.
+Public Sub AP_SyncAll_WithTarget(Optional ByVal Silent As Boolean = True, _
+                                 Optional ByVal changedBottomRow As Long = 0, _
+                                 Optional ByVal changedTopRow As Long = 0, _
+                                 Optional ByVal changedFirstCol As Long = 0, _
+                                 Optional ByVal changedLastCol As Long = 0, _
+                                 Optional ByVal protectChangedRows As Boolean = True)
 
     Dim prevEvents As Boolean, prevScreen As Boolean
     Dim prevCalc As XlCalculation
@@ -135,6 +143,45 @@ Private Sub SyncInvoiceLinesCore(ByVal Silent As Boolean, _
     Application.EnableEvents = False
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
+
+    SyncInvoiceLinesCore Silent, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, protectChangedRows, False
+    AP_SyncInvoicesTable Silent, True, False
+
+CleanExit:
+    Application.Calculation = prevCalc
+    Application.ScreenUpdating = prevScreen
+    Application.EnableEvents = prevEvents
+    Exit Sub
+
+EH:
+    If Not Silent Then
+        MsgBox "AP_SyncAll_WithTarget failed: " & Err.Description, vbExclamation
+    End If
+    Resume CleanExit
+End Sub
+
+Private Sub SyncInvoiceLinesCore(ByVal Silent As Boolean, _
+                                 ByVal changedBottomRow As Long, _
+                                 ByVal changedTopRow As Long, _
+                                 ByVal changedFirstCol As Long, _
+                                 ByVal changedLastCol As Long, _
+                                 ByVal protectChangedRows As Boolean, _
+                                 ByVal ManageAppState As Boolean)
+
+    Dim prevEvents As Boolean, prevScreen As Boolean
+    Dim prevCalc As XlCalculation
+
+    prevEvents = Application.EnableEvents
+    prevScreen = Application.ScreenUpdating
+    prevCalc = Application.Calculation
+
+    On Error GoTo EH
+
+    If ManageAppState Then
+        Application.EnableEvents = False
+        Application.ScreenUpdating = False
+        Application.Calculation = xlCalculationManual
+    End If
 
     Dim wb As Workbook: Set wb = ThisWorkbook
     Dim wsLines As Worksheet: Set wsLines = wb.Worksheets(SH_LINES)
@@ -159,10 +206,9 @@ Private Sub SyncInvoiceLinesCore(ByVal Silent As Boolean, _
     End If
 
     BackfillLineNumberDefaults_ForChangedRows loLines, changedTopRow, changedBottomRow
-    EnsureLineKeys loLines
 
     Dim desiredRows As Long
-    desiredRows = LastUsedUserInputRowCount(loLines) + LINES_BUFFER_ROWS
+    desiredRows = LastUsedNonInternalConstantRowCount(loLines) + LINES_BUFFER_ROWS
     desiredRows = MaxLong(desiredRows, targetFloorRows)
     If desiredRows < 1 Then desiredRows = 1
 
@@ -183,9 +229,11 @@ Private Sub SyncInvoiceLinesCore(ByVal Silent As Boolean, _
     ApplyTableBottomBoundary loLines
 
 CleanExit:
-    Application.Calculation = prevCalc
-    Application.ScreenUpdating = prevScreen
-    Application.EnableEvents = prevEvents
+    If ManageAppState Then
+        Application.Calculation = prevCalc
+        Application.ScreenUpdating = prevScreen
+        Application.EnableEvents = prevEvents
+    End If
     Exit Sub
 
 EH:
@@ -194,7 +242,6 @@ EH:
     End If
     Resume CleanExit
 End Sub
-
 'Custom undo entry-point for AP_INVOICE_LINES_INTERFACE Worksheet_Change.
 'Replays Excel's last user action, then re-syncs dependent tables.
 Public Sub AP_UndoInvoiceLinesChange()
@@ -311,29 +358,7 @@ Private Sub BackfillLineNumberDefaults_ForChangedRows(ByVal loLines As ListObjec
     Next rowIndex
 End Sub
 
-Private Sub EnsureLineKeys(ByVal loLines As ListObject)
-    If loLines.DataBodyRange Is Nothing Then Exit Sub
-
-    Dim lcLineKey As ListColumn
-    Set lcLineKey = EnsureInternalColumn(loLines, COL_LINE_KEY)
-
-    Dim userInputColumns As Collection
-    Set userInputColumns = GetUserInputColumns(loLines, True)
-
-    Dim rowIndex As Long
-    For rowIndex = 1 To loLines.ListRows.Count
-        Dim keyCell As Range
-        Set keyCell = lcLineKey.DataBodyRange.Cells(rowIndex, 1)
-
-        If RowHasAnyInput(userInputColumns, rowIndex) Then
-            If IsBlankLike(keyCell.Value2) Then keyCell.Value2 = NewStableKey()
-        Else
-            If Not IsBlankLike(keyCell.Value2) Then keyCell.ClearContents
-        End If
-    Next rowIndex
-End Sub
-
-Private Function InvoiceKeysFromLines(ByVal loLines As ListObject) As Collection
+Private Function InvoiceKeysFromLines(ByVal loLines As ListObject, Optional ByVal maxRows As Long = 0) As Collection
     Dim keys As New Collection
     Set InvoiceKeysFromLines = keys
 
@@ -350,8 +375,12 @@ Private Function InvoiceKeysFromLines(ByVal loLines As ListObject) As Collection
     Dim seen As Object
     Set seen = CreateObject("Scripting.Dictionary")
 
+    Dim limit As Long
+    limit = loLines.ListRows.Count
+    If maxRows > 0 Then limit = MinLong(limit, maxRows)
+
     Dim rowIndex As Long
-    For rowIndex = 1 To loLines.ListRows.Count
+    For rowIndex = 1 To limit
         Dim lineNumberValue As Variant
         lineNumberValue = lcLineNumber.DataBodyRange.Cells(rowIndex, 1).Value2
 
@@ -359,15 +388,18 @@ Private Function InvoiceKeysFromLines(ByVal loLines As ListObject) As Collection
             Dim lineKey As String
             lineKey = Trim$(CStr(lcLineKey.DataBodyRange.Cells(rowIndex, 1).Value2))
 
-            If Len(lineKey) > 0 Then
-                If seen.Exists(lineKey) Then
-                    lineKey = NewStableKey()
-                    lcLineKey.DataBodyRange.Cells(rowIndex, 1).Value2 = lineKey
-                End If
-
-                seen(lineKey) = True
-                keys.Add lineKey
+            If Len(lineKey) = 0 Then
+                lineKey = NewStableKey()
+                lcLineKey.DataBodyRange.Cells(rowIndex, 1).Value2 = lineKey
             End If
+
+            If seen.Exists(lineKey) Then
+                lineKey = NewStableKey()
+                lcLineKey.DataBodyRange.Cells(rowIndex, 1).Value2 = lineKey
+            End If
+
+            seen(lineKey) = True
+            keys.Add lineKey
         End If
     Next rowIndex
 End Function
@@ -389,6 +421,29 @@ Private Sub SeedInvoiceKeysByPosition(ByVal loInv As ListObject, _
         End If
     Next rowIndex
 End Sub
+
+Private Function InvoiceKeysMatchTable(ByVal lcInvoiceKey As ListColumn, ByVal invoiceKeys As Collection) As Boolean
+    If lcInvoiceKey Is Nothing Then Exit Function
+    If lcInvoiceKey.DataBodyRange Is Nothing Then Exit Function
+
+    Dim desiredRows As Long
+    desiredRows = invoiceKeys.Count
+    If desiredRows < 1 Then desiredRows = 1
+
+    If lcInvoiceKey.DataBodyRange.Rows.Count <> desiredRows Then Exit Function
+
+    If invoiceKeys.Count = 0 Then
+        InvoiceKeysMatchTable = (Len(Trim$(CStr(lcInvoiceKey.DataBodyRange.Cells(1, 1).Value2))) = 0)
+        Exit Function
+    End If
+
+    Dim i As Long
+    For i = 1 To invoiceKeys.Count
+        If CStr(lcInvoiceKey.DataBodyRange.Cells(i, 1).Value2) <> CStr(invoiceKeys(i)) Then Exit Function
+    Next i
+
+    InvoiceKeysMatchTable = True
+End Function
 
 Private Function SnapshotUserInputsByInvoiceKey(ByVal loInv As ListObject, _
                                                 ByVal lcInvoiceKey As ListColumn, _
@@ -485,29 +540,37 @@ Private Sub ClearUserInputRow(ByVal lo As ListObject, ByVal userInputColumns As 
     Next colIndex
 End Sub
 
-Private Function LastUsedUserInputRowCount(ByVal lo As ListObject) As Long
-    If lo.DataBodyRange Is Nothing Then
-        LastUsedUserInputRowCount = 0
-        Exit Function
-    End If
-
-    Dim userInputColumns As Collection
-    Set userInputColumns = GetUserInputColumns(lo, True)
-
-    If userInputColumns.Count = 0 Then
-        LastUsedUserInputRowCount = 0
-        Exit Function
-    End If
-
-    Dim rowIndex As Long
-    For rowIndex = lo.ListRows.Count To 1 Step -1
-        If RowHasAnyInput(userInputColumns, rowIndex) Then
-            LastUsedUserInputRowCount = rowIndex
+Private Function LastNonInternalColumnIndex(ByVal lo As ListObject) As Long
+    Dim c As Long
+    For c = lo.ListColumns.Count To 1 Step -1
+        If Not IsInternalHeader(CStr(lo.ListColumns(c).Name)) Then
+            LastNonInternalColumnIndex = c
             Exit Function
         End If
-    Next rowIndex
+    Next c
+End Function
 
-    LastUsedUserInputRowCount = 0
+Private Function LastUsedNonInternalConstantRowCount(ByVal lo As ListObject) As Long
+    If lo.DataBodyRange Is Nothing Then Exit Function
+
+    Dim lastCol As Long
+    lastCol = LastNonInternalColumnIndex(lo)
+    If lastCol < 1 Then Exit Function
+
+    Dim rng As Range
+    Set rng = lo.DataBodyRange.Resize(, lastCol)
+
+    Dim rngConst As Range
+    On Error Resume Next
+    Set rngConst = rng.SpecialCells(xlCellTypeConstants)
+    On Error GoTo 0
+    If rngConst Is Nothing Then Exit Function
+
+    Dim lastCell As Range
+    Set lastCell = rngConst.Find(What:="*", LookIn:=xlValues, SearchOrder:=xlByRows, SearchDirection:=xlPrevious)
+    If lastCell Is Nothing Then Exit Function
+
+    LastUsedNonInternalConstantRowCount = lastCell.Row - lo.DataBodyRange.Row + 1
 End Function
 
 Private Function RowHasAnyInput(ByVal inputColumns As Collection, ByVal rowIndex As Long) As Boolean
@@ -569,7 +632,8 @@ End Function
 Private Function IsInternalHeader(ByVal headerText As String) As Boolean
     Dim trimmedHeader As String
     trimmedHeader = LCase$(Trim$(headerText))
-    IsInternalHeader = (Left$(trimmedHeader, Len(INTERNAL_PREFIX)) = INTERNAL_PREFIX)
+
+    IsInternalHeader = (Left$(trimmedHeader, 2) = "zz")
 End Function
 
 Private Function IsLineStartValue(ByVal valueInCell As Variant) As Boolean

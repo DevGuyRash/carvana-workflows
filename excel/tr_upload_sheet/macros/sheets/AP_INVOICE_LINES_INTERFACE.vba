@@ -39,10 +39,9 @@ Private Sub Worksheet_Change(ByVal Target As Range)
     changedFirstCol = Target.Column
     changedLastCol = Target.Column + Target.Columns.Count - 1
 
-    'Run sync with changed-range protection to avoid trimming the edited block.
-    Application.Run "'" & ThisWorkbook.Name & "'!AP_SyncInvoiceLinesTable_WithTarget", _
+    'Run a single-pass sync with changed-range protection to avoid trimming the edited block.
+    Application.Run "'" & ThisWorkbook.Name & "'!AP_SyncAll_WithTarget", _
                     True, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, True
-    Application.Run "'" & ThisWorkbook.Name & "'!AP_SyncInvoicesTable", True, True
 
     Application.OnUndo "Undo last invoice-lines change", "'" & ThisWorkbook.Name & "'!AP_UndoInvoiceLinesChange"
 
