@@ -144,6 +144,11 @@ export const attribute6PidFixtures: Attribute6PidFixture[] = [
     expectedPid: '98765'
   },
   {
+    name: 'extracts pid from descriptor without suffix',
+    description: 'DMY1-1234567890-1HGCM82633A004352-76543210',
+    expectedPid: '76543210'
+  },
+  {
     name: 'returns empty when descriptor has no pid',
     description: 'H&D-2123456789-1HGCM82633A004352-CORRECTED-TITLE',
     expectedPid: ''
@@ -197,3 +202,4 @@ export const invoiceNumberFixtures: InvoiceNumberFixture[] = [
     expectedInvoiceNumber: ''
   }
 ];
+

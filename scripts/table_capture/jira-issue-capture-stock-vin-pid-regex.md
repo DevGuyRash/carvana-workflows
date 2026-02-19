@@ -147,3 +147,11 @@ Reject stock candidates that are VIN-shaped:
   - PID: `98765`
 - `Stock Number: 3456789012`
   - Stock from label path.
+
+## Implementation Note (Excel Formula Fallback)
+
+In Excel formulas, `REGEXEXTRACT` behavior can vary by environment: some return the first capture group, while others may return the full descriptor match. To keep PID extraction stable without changing the canonical grammar, formula implementations should:
+- Prefer direct numeric capture when the descriptor result is already `^\d{3,}$`.
+- Otherwise, derive PID from the segment immediately after `-VIN-` and take the leading numeric token.
+- Continue fail-closed behavior (empty output) when no valid PID is found.
+
