@@ -304,7 +304,11 @@ Private Function BuildExportColumnMap(ByVal hdr As Variant, ByVal lastCol As Lon
 End Function
 
 Private Function HeaderIsInternal(ByVal headerText As String) As Boolean
-    HeaderIsInternal = (Left$(LCase$(Trim$(headerText)), 3) = "zz_")
+    Dim trimmedHeader As String
+    trimmedHeader = LCase$(Trim$(headerText))
+
+    ' Internal helper columns are prefixed with zz (e.g. zzLineKey, zzInvoiceKey).
+    HeaderIsInternal = (Left$(trimmedHeader, 2) = "zz")
 End Function
 
 Private Function ValueToExportString(ByVal ws As Worksheet, ByVal v As Variant, ByVal isDateColumn As Boolean, _
