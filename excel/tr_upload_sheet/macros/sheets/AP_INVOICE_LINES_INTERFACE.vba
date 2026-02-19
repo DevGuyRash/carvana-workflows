@@ -39,10 +39,23 @@ Private Sub Worksheet_Change(ByVal Target As Range)
     changedFirstCol = Target.Column
     changedLastCol = Target.Column + Target.Columns.Count - 1
 
-    'Run a single-pass sync with changed-range protection to avoid trimming the edited block.
-    Application.Run "'" & ThisWorkbook.Name & "'!AP_SyncAll_WithTarget", _
-                    True, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, True
+    If changedFirstCol < firstCol Then changedFirstCol = firstCol
+    If changedLastCol > lastCol Then changedLastCol = lastCol
+    If changedFirstCol > changedLastCol Then
+        changedFirstCol = firstCol
+        changedLastCol = lastCol
+    End If
 
+    Dim protectChangedRows As Boolean
+    If lo.DataBodyRange Is Nothing Then
+        protectChangedRows = True
+    Else
+        protectChangedRows = (Intersect(Target, lo.DataBodyRange) Is Nothing)
+    End If
+
+    'Protect changed rows only for below-table edits/pastes; allow in-table deletes to shrink immediately.
+    Application.Run "'" & ThisWorkbook.Name & "'!AP_SyncAll_WithTarget", _
+                    True, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, protectChangedRows
     Application.OnUndo "Undo last invoice-lines change", "'" & ThisWorkbook.Name & "'!AP_UndoInvoiceLinesChange"
 
 SafeExit:

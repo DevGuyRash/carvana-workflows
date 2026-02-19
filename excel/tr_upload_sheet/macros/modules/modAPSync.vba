@@ -8,6 +8,7 @@ Private Const TBL_INVOICES As String = "tbl_invoices"
 Private Const TBL_LINES    As String = "tbl_invoice_lines"
 
 Private Const LINES_BUFFER_ROWS As Long = 0
+Private Const COL_LINE_NUMBER As String = "Line Number"
 Private Const COL_LINE_KEY As String = "zzLineKey"
 Private Const COL_INVOICE_KEY As String = "zzInvoiceKey"
 '======================================================================
@@ -47,7 +48,7 @@ Public Sub AP_SyncInvoicesTable(Optional ByVal Silent As Boolean = True, _
     EnsureInternalColumn loInv, COL_INVOICE_KEY
 
     Dim usedLineRows As Long
-    usedLineRows = LastUsedNonInternalConstantRowCount(loLines)
+    usedLineRows = LastUsedLineNumberRowCount(loLines)
 
     Dim invoiceKeys As Collection
     Set invoiceKeys = InvoiceKeysFromLines(loLines, usedLineRows)
@@ -199,6 +200,9 @@ Private Sub SyncInvoiceLinesCore(ByVal Silent As Boolean, _
     firstCol = loLines.Range.Column
     colCount = loLines.Range.Columns.Count
 
+    Dim tableBottomRow As Long
+    tableBottomRow = firstDataRow + initialRows - 1
+
     Dim targetFloorRows As Long
     targetFloorRows = 0
     If protectChangedRows And changedBottomRow >= firstDataRow Then
@@ -207,9 +211,20 @@ Private Sub SyncInvoiceLinesCore(ByVal Silent As Boolean, _
 
     BackfillLineNumberDefaults_ForChangedRows loLines, changedTopRow, changedBottomRow
 
+    Dim baseDesiredRows As Long
+    baseDesiredRows = LastUsedLineNumberRowCount(loLines) + LINES_BUFFER_ROWS
+
     Dim desiredRows As Long
-    desiredRows = LastUsedNonInternalConstantRowCount(loLines) + LINES_BUFFER_ROWS
-    desiredRows = MaxLong(desiredRows, targetFloorRows)
+    desiredRows = baseDesiredRows
+
+    ' Only apply changed-range floor for below-table edits that actually contain data.
+    ' This preserves append/paste behavior without recreating rows after manual deletes.
+    If protectChangedRows And targetFloorRows > 0 And changedTopRow > tableBottomRow Then
+        If RangeHasAnyContent(wsLines, changedTopRow, changedBottomRow, changedFirstCol, changedLastCol) Then
+            desiredRows = MaxLong(desiredRows, targetFloorRows)
+        End If
+    End If
+
     If desiredRows < 1 Then desiredRows = 1
 
     If loLines.ListRows.Count <> desiredRows Then
@@ -540,6 +555,32 @@ Private Sub ClearUserInputRow(ByVal lo As ListObject, ByVal userInputColumns As 
     Next colIndex
 End Sub
 
+Private Function LastUsedLineNumberRowCount(ByVal lo As ListObject) As Long
+    If lo.DataBodyRange Is Nothing Then Exit Function
+
+    Dim lcLineNumber As ListColumn
+    Set lcLineNumber = GetListColumn(lo, COL_LINE_NUMBER, "*Line Number")
+
+    If lcLineNumber Is Nothing Then
+        LastUsedLineNumberRowCount = LastUsedNonInternalConstantRowCountFallback(lo)
+        Exit Function
+    End If
+
+    Dim rngLine As Range
+    Set rngLine = lcLineNumber.DataBodyRange
+
+    Dim rngConst As Range
+    On Error Resume Next
+    Set rngConst = rngLine.SpecialCells(xlCellTypeConstants)
+    On Error GoTo 0
+    If rngConst Is Nothing Then Exit Function
+
+    Dim lastCell As Range
+    Set lastCell = rngConst.Find(What:="*", LookIn:=xlValues, SearchOrder:=xlByRows, SearchDirection:=xlPrevious)
+    If lastCell Is Nothing Then Exit Function
+
+    LastUsedLineNumberRowCount = lastCell.Row - lo.DataBodyRange.Row + 1
+End Function
 Private Function LastNonInternalColumnIndex(ByVal lo As ListObject) As Long
     Dim c As Long
     For c = lo.ListColumns.Count To 1 Step -1
@@ -550,7 +591,7 @@ Private Function LastNonInternalColumnIndex(ByVal lo As ListObject) As Long
     Next c
 End Function
 
-Private Function LastUsedNonInternalConstantRowCount(ByVal lo As ListObject) As Long
+Private Function LastUsedNonInternalConstantRowCountFallback(ByVal lo As ListObject) As Long
     If lo.DataBodyRange Is Nothing Then Exit Function
 
     Dim lastCol As Long
@@ -570,7 +611,7 @@ Private Function LastUsedNonInternalConstantRowCount(ByVal lo As ListObject) As 
     Set lastCell = rngConst.Find(What:="*", LookIn:=xlValues, SearchOrder:=xlByRows, SearchDirection:=xlPrevious)
     If lastCell Is Nothing Then Exit Function
 
-    LastUsedNonInternalConstantRowCount = lastCell.Row - lo.DataBodyRange.Row + 1
+    LastUsedNonInternalConstantRowCountFallback = lastCell.Row - lo.DataBodyRange.Row + 1
 End Function
 
 Private Function RowHasAnyInput(ByVal inputColumns As Collection, ByVal rowIndex As Long) As Boolean
@@ -719,6 +760,25 @@ Private Sub ClearOrphanedTableArea(ByVal ws As Worksheet, _
         rngClear.Clear
     End If
 End Sub
+
+Private Function RangeHasAnyContent(ByVal ws As Worksheet, _
+                                    ByVal topRow As Long, _
+                                    ByVal bottomRow As Long, _
+                                    ByVal leftCol As Long, _
+                                    ByVal rightCol As Long) As Boolean
+
+    If topRow <= 0 Or bottomRow < topRow Then Exit Function
+    If leftCol <= 0 Or rightCol < leftCol Then Exit Function
+    If topRow > ws.Rows.Count Or leftCol > ws.Columns.Count Then Exit Function
+
+    If bottomRow > ws.Rows.Count Then bottomRow = ws.Rows.Count
+    If rightCol > ws.Columns.Count Then rightCol = ws.Columns.Count
+
+    Dim rngCheck As Range
+    Set rngCheck = ws.Range(ws.Cells(topRow, leftCol), ws.Cells(bottomRow, rightCol))
+
+    RangeHasAnyContent = (Application.CountA(rngCheck) > 0)
+End Function
 
 Private Function IsBlankLike(ByVal valueInCell As Variant) As Boolean
     If IsError(valueInCell) Then
