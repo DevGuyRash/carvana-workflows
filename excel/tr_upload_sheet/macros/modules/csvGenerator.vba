@@ -41,6 +41,8 @@ Private Const PS_SCRIPT_NAME As String = "apinvoiceimport_makezip.ps1"
 Private Const WORK_ZIP_NAME As String = "apinvoiceimport.zip"
 
 ' Which tabs to export (skip first two tabs)
+Private Const INVOICES_SHEET_NAME As String = "AP_INVOICES_INTERFACE"
+Private Const LINES_SHEET_NAME As String = "AP_INVOICE_LINES_INTERFACE"
 Private Const INVOICES_SHEET_INDEX As Long = 3
 Private Const LINES_SHEET_INDEX As Long = 4
 
@@ -79,12 +81,17 @@ Public Sub GenCSV()
 
     On Error GoTo ErrHandler
 
-    '--- Enforce the "2 sheets after the first" rule
-    If wb.Worksheets.Count < LINES_SHEET_INDEX Then
+    Dim invoicesWs As Worksheet
+    Dim linesWs As Worksheet
+
+    Set invoicesWs = ResolveSourceWorksheet(wb, INVOICES_SHEET_NAME, INVOICES_SHEET_INDEX)
+    Set linesWs = ResolveSourceWorksheet(wb, LINES_SHEET_NAME, LINES_SHEET_INDEX)
+
+    If invoicesWs Is Nothing Or linesWs Is Nothing Then
         Err.Raise vbObjectError + 2000, "GenCSV", _
-                "Workbook must have at least " & LINES_SHEET_INDEX & " worksheets. " & _
-                "Sheet(1) and Sheet(2) are ignored; Sheet(" & INVOICES_SHEET_INDEX & _
-                ") and Sheet(" & LINES_SHEET_INDEX & ") are the sources."
+                "Unable to resolve export sheets." & vbCrLf & _
+                "Expected names first: '" & INVOICES_SHEET_NAME & "' and '" & LINES_SHEET_NAME & "'." & vbCrLf & _
+                "Fallback indexes: " & INVOICES_SHEET_INDEX & " and " & LINES_SHEET_INDEX & "."
     End If
 
 
@@ -108,9 +115,9 @@ Public Sub GenCSV()
     workZipPath = tempFolder & Application.PathSeparator & WORK_ZIP_NAME
     psScriptPath = tempFolder & Application.PathSeparator & PS_SCRIPT_NAME
 
-    '--- Export CSVs directly from Worksheet(3) and Worksheet(4)
-    WriteWorksheetToInterfaceCsv wb.Worksheets(INVOICES_SHEET_INDEX), csvInvPath
-    WriteWorksheetToInterfaceCsv wb.Worksheets(LINES_SHEET_INDEX), csvLinesPath
+    '--- Export CSVs from canonical sheet names (fallback to index-based tabs)
+    WriteWorksheetToInterfaceCsv invoicesWs, csvInvPath
+    WriteWorksheetToInterfaceCsv linesWs, csvLinesPath
 
     '--- Build ZIP in temp folder (reliable) then copy to user-selected destination
     CreateZipFromTwoFiles workZipPath, csvInvPath, CSV_INV, csvLinesPath, CSV_LINES, psScriptPath
@@ -309,6 +316,22 @@ Private Function HeaderIsInternal(ByVal headerText As String) As Boolean
 
     ' Internal helper columns are prefixed with zz (e.g. zzLineKey, zzInvoiceKey).
     HeaderIsInternal = (Left$(trimmedHeader, 2) = "zz")
+End Function
+
+Private Function ResolveSourceWorksheet(ByVal wb As Workbook, ByVal preferredSheetName As String, ByVal fallbackSheetIndex As Long) As Worksheet
+    Set ResolveSourceWorksheet = WorksheetByName(wb, preferredSheetName)
+
+    If ResolveSourceWorksheet Is Nothing Then
+        If wb.Worksheets.Count >= fallbackSheetIndex Then
+            Set ResolveSourceWorksheet = wb.Worksheets(fallbackSheetIndex)
+        End If
+    End If
+End Function
+
+Private Function WorksheetByName(ByVal wb As Workbook, ByVal sheetName As String) As Worksheet
+    On Error Resume Next
+    Set WorksheetByName = wb.Worksheets(sheetName)
+    On Error GoTo 0
 End Function
 
 Private Function ValueToExportString(ByVal ws As Worksheet, ByVal v As Variant, ByVal isDateColumn As Boolean, _
