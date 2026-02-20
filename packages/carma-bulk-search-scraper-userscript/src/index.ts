@@ -17,8 +17,37 @@ declare global {
 
 function applyTheme(theme: ThemeOptions): void {
   try {
-    document.documentElement.style.setProperty('--cbss-primary', theme.primary);
-    document.documentElement.style.setProperty('--cbss-accent', theme.accent);
+    const root = document.documentElement.style;
+    const vars: Array<[string, string]> = [
+      ['--cbss-primary', theme.primary],
+      ['--cbss-primary-hover', theme.primaryHover],
+      ['--cbss-primary-active', theme.primaryActive],
+      ['--cbss-primary-text', theme.primaryText],
+      ['--cbss-secondary', theme.secondary],
+      ['--cbss-secondary-hover', theme.secondaryHover],
+      ['--cbss-secondary-active', theme.secondaryActive],
+      ['--cbss-secondary-text', theme.secondaryText],
+      ['--cbss-surface', theme.surface],
+      ['--cbss-surface-alt', theme.surfaceAlt],
+      ['--cbss-surface-muted', theme.surfaceMuted],
+      ['--cbss-text', theme.text],
+      ['--cbss-text-muted', theme.textMuted],
+      ['--cbss-border', theme.border],
+      ['--cbss-focus-ring', theme.focusRing],
+      ['--cbss-status-bg', theme.statusBg],
+      ['--cbss-status-text', theme.statusText],
+      ['--cbss-tab-bg', theme.tabBg],
+      ['--cbss-tab-active-bg', theme.tabActiveBg],
+      ['--cbss-tab-text', theme.tabText],
+      ['--cbss-button-bg', theme.buttonBg],
+      ['--cbss-button-hover', theme.buttonHoverBg],
+      ['--cbss-button-active', theme.buttonActiveBg],
+      ['--cbss-button-text', theme.buttonText],
+      ['--cbss-accent', theme.accent],
+    ];
+    for (const [name, value] of vars) {
+      root.setProperty(name, value);
+    }
   } catch {
     // ignore
   }

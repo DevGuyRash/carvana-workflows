@@ -12,3 +12,4 @@ describe('main UI button feedback styles', () => {
     expect(STYLE_TEXT.includes('@keyframes cbss-click-pulse')).toBe(true);
   });
 });
+

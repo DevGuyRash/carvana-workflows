@@ -244,6 +244,9 @@ function createResultsView(params: {
     lastRowRange: null as { minRow: number; maxRow: number } | null,
     lastColRange: null as { minCol: number; maxCol: number } | null,
     lastCellRange: null as { minRow: number; maxRow: number; minCol: number; maxCol: number } | null,
+    startClientX: 0,
+    startClientY: 0,
+    thresholdPassed: false,
   };
 
   const setDragUi = (active: boolean, mode: 'cell' | 'row' | 'col' | null) => {
@@ -652,9 +655,11 @@ function createResultsView(params: {
     drag.lastCellRange = null;
     drag.anchorRow = row;
     drag.anchorCol = col;
+    drag.startClientX = clientX;
+    drag.startClientY = clientY;
+    drag.thresholdPassed = false;
 
-    setDragUi(true, mode);
-    startAutoScrollLoop();
+    setDragUi(false, null);
     clearNativeSelection();
     setMode(mode);
     if (mode === 'row') {
@@ -720,7 +725,7 @@ function createResultsView(params: {
     });
   };
 
-    const processDragCell = (cell: HTMLElement) => {
+  const processDragCell = (cell: HTMLElement) => {
     if (drag.mode === 'col') {
       const colIndex = cell.getAttribute('data-col-index');
       if (colIndex === null) return;
@@ -744,12 +749,72 @@ function createResultsView(params: {
     scheduleDragUpdate(row, col);
   };
 
+  const findColAtClientX = (clientX: number): number | null => {
+    const headers = Array.from(headRow.querySelectorAll<HTMLElement>('th[data-col-index]'));
+    if (!headers.length) return null;
+    for (const th of headers) {
+      const rect = th.getBoundingClientRect();
+      if (clientX >= rect.left && clientX <= rect.right) {
+        const value = Number.parseInt(th.getAttribute('data-col-index') || '', 10);
+        if (Number.isFinite(value)) return value;
+      }
+    }
+
+    const first = headers[0];
+    const last = headers[headers.length - 1];
+    const firstRect = first.getBoundingClientRect();
+    const lastRect = last.getBoundingClientRect();
+    if (clientX < firstRect.left) return Number.parseInt(first.getAttribute('data-col-index') || '0', 10);
+    if (clientX > lastRect.right) return Number.parseInt(last.getAttribute('data-col-index') || '0', 10);
+    return null;
+  };
+
+  const findRowAtClientY = (clientY: number): number | null => {
+    const rowHeaders = Array.from(tbody.querySelectorAll<HTMLElement>('td[data-row-header="1"][data-row-index]'));
+    if (!rowHeaders.length) return null;
+    for (const td of rowHeaders) {
+      const rect = td.getBoundingClientRect();
+      if (clientY >= rect.top && clientY <= rect.bottom) {
+        const value = Number.parseInt(td.getAttribute('data-row-index') || '', 10);
+        if (Number.isFinite(value)) return value;
+      }
+    }
+
+    const first = rowHeaders[0];
+    const last = rowHeaders[rowHeaders.length - 1];
+    const firstRect = first.getBoundingClientRect();
+    const lastRect = last.getBoundingClientRect();
+    if (clientY < firstRect.top) return Number.parseInt(first.getAttribute('data-row-index') || '0', 10);
+    if (clientY > lastRect.bottom) return Number.parseInt(last.getAttribute('data-row-index') || '0', 10);
+    return null;
+  };
+
   const updateDragFromPoint = (clientX: number, clientY: number) => {
     const elAtPoint = doc.elementFromPoint(clientX, clientY) as HTMLElement | null;
-    if (!elAtPoint) return;
-    const cell = elAtPoint.closest('td,th') as HTMLElement | null;
-    if (!cell || !table.contains(cell)) return;
-    processDragCell(cell);
+    if (elAtPoint) {
+      const cell = elAtPoint.closest('td,th') as HTMLElement | null;
+      if (cell && table.contains(cell)) {
+        processDragCell(cell);
+        return;
+      }
+    }
+
+    const col = findColAtClientX(clientX);
+    const row = findRowAtClientY(clientY);
+
+    if (drag.mode === 'col') {
+      if (col !== null) scheduleDragUpdate(drag.anchorRow, col);
+      return;
+    }
+
+    if (drag.mode === 'row') {
+      if (row !== null) scheduleDragUpdate(row, drag.anchorCol);
+      return;
+    }
+
+    if (row !== null && col !== null) {
+      scheduleDragUpdate(row, col);
+    }
   };
 
   const startAutoScrollLoop = () => {
@@ -757,7 +822,7 @@ function createResultsView(params: {
 
     const tick = () => {
       drag.autoScrollRafId = 0;
-      if (!drag.active || !drag.mode) return;
+      if (!drag.active || !drag.mode || !drag.thresholdPassed) return;
 
       const rect = tableWrap.getBoundingClientRect();
       const threshold = 28;
@@ -780,10 +845,11 @@ function createResultsView(params: {
 
       if (dx !== 0 || dy !== 0) {
         tableWrap.scrollBy(dx, dy);
-        const clampedX = Math.min(Math.max(drag.pointerClientX, rect.left + 1), rect.right - 1);
-        const clampedY = Math.min(Math.max(drag.pointerClientY, rect.top + 1), rect.bottom - 1);
-        updateDragFromPoint(clampedX, clampedY);
       }
+
+      const clampedX = Math.min(Math.max(drag.pointerClientX, rect.left + 1), rect.right - 1);
+      const clampedY = Math.min(Math.max(drag.pointerClientY, rect.top + 1), rect.bottom - 1);
+      updateDragFromPoint(clampedX, clampedY);
 
       drag.autoScrollRafId = hostWindow.requestAnimationFrame(tick);
     };
@@ -796,7 +862,37 @@ function createResultsView(params: {
     hostWindow.cancelAnimationFrame(drag.autoScrollRafId);
     drag.autoScrollRafId = 0;
   };
-const handleCellClick = (row: number, col: number, isShift: boolean, isCtrl: boolean) => {
+
+  const maybeActivateDrag = (clientX: number, clientY: number) => {
+    drag.pointerClientX = clientX;
+    drag.pointerClientY = clientY;
+    if (!drag.active || drag.thresholdPassed) return;
+    const distance = Math.max(Math.abs(clientX - drag.startClientX), Math.abs(clientY - drag.startClientY));
+    if (distance < 4) return;
+    drag.thresholdPassed = true;
+    setDragUi(true, drag.mode);
+    startAutoScrollLoop();
+  };
+
+  const ensureCellVisibleMinimally = (cell: HTMLElement) => {
+    const wrapRect = tableWrap.getBoundingClientRect();
+    const cellRect = cell.getBoundingClientRect();
+
+    let dx = 0;
+    let dy = 0;
+
+    if (cellRect.left < wrapRect.left) dx = cellRect.left - wrapRect.left;
+    else if (cellRect.right > wrapRect.right) dx = cellRect.right - wrapRect.right;
+
+    if (cellRect.top < wrapRect.top) dy = cellRect.top - wrapRect.top;
+    else if (cellRect.bottom > wrapRect.bottom) dy = cellRect.bottom - wrapRect.bottom;
+
+    if (dx !== 0 || dy !== 0) {
+      tableWrap.scrollBy(dx, dy);
+    }
+  };
+
+  const handleCellClick = (row: number, col: number, isShift: boolean, isCtrl: boolean) => {
     setMode('cell');
     const anchor = selection.anchor;
     if (isShift && anchor && anchor.mode === 'cell') {
@@ -952,6 +1048,7 @@ const handleCellClick = (row: number, col: number, isShift: boolean, isCtrl: boo
 
     event.preventDefault();
     clearNativeSelection();
+    ensureCellVisibleMinimally(cell);
 
     const isCtrl = event.ctrlKey || event.metaKey;
     const isShift = event.shiftKey;
@@ -1058,6 +1155,7 @@ const handleCellClick = (row: number, col: number, isShift: boolean, isCtrl: boo
     drag.rafId = 0;
     drag.pendingRow = null;
     drag.pendingCol = null;
+    drag.thresholdPassed = false;
     stopAutoScrollLoop();
     setDragUi(false, null);
     clearNativeSelection();
@@ -1242,6 +1340,11 @@ export function openResultsPopout(params: {
     return openResultsInline({ getRows, getRunning, logger, getPopoutOptions, setPopoutOptions });
   }
 }
+
+
+
+
+
 
 
 

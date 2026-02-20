@@ -72,9 +72,22 @@ function mergePopoutOptions(saved: unknown): PopoutOptions {
 
 function mergeThemeOptions(saved: unknown): ThemeOptions {
   if (!isRecord(saved)) return { ...DEFAULT_THEME_OPTIONS };
-  const primary = typeof saved.primary === 'string' ? saved.primary : DEFAULT_THEME_OPTIONS.primary;
-  const accent = typeof saved.accent === 'string' ? saved.accent : DEFAULT_THEME_OPTIONS.accent;
-  return { primary, accent };
+
+  const merged = { ...DEFAULT_THEME_OPTIONS };
+  const keys = Object.keys(DEFAULT_THEME_OPTIONS) as Array<keyof ThemeOptions>;
+  for (const key of keys) {
+    const value = saved[key];
+    if (typeof value === 'string' && value.trim()) {
+      merged[key] = value;
+    }
+  }
+
+  // Backwards compatibility for older state where only primary/accent existed.
+  if (!saved.primaryHover && merged.primary) merged.primaryHover = merged.primary;
+  if (!saved.primaryActive && merged.primary) merged.primaryActive = merged.primary;
+  if (!saved.primaryText) merged.primaryText = DEFAULT_THEME_OPTIONS.primaryText;
+
+  return merged;
 }
 
 function mergeUiState(saved: unknown): UiState {
@@ -134,4 +147,3 @@ export function loadState(): PersistedState {
 export function saveState(state: PersistedState): void {
   localStorage.setItem(LS_STATE_V2_KEY, JSON.stringify(state));
 }
-

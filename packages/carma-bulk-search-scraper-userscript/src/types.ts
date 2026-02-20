@@ -1,4 +1,4 @@
-﻿export type ColumnMode = 'all' | 'none' | 'key';
+export type ColumnMode = 'all' | 'none' | 'key';
 
 export type RowValue = string | number;
 export type ScrapedRow = Record<string, RowValue>;
@@ -42,6 +42,29 @@ export interface PopoutOptions {
 
 export interface ThemeOptions {
   primary: string;
+  primaryHover: string;
+  primaryActive: string;
+  primaryText: string;
+  secondary: string;
+  secondaryHover: string;
+  secondaryActive: string;
+  secondaryText: string;
+  surface: string;
+  surfaceAlt: string;
+  surfaceMuted: string;
+  text: string;
+  textMuted: string;
+  border: string;
+  focusRing: string;
+  statusBg: string;
+  statusText: string;
+  tabBg: string;
+  tabActiveBg: string;
+  tabText: string;
+  buttonBg: string;
+  buttonHoverBg: string;
+  buttonActiveBg: string;
+  buttonText: string;
   accent: string;
 }
 
@@ -110,8 +133,7 @@ export interface AppUi {
   popoutPersistSelectedColumns: HTMLInputElement;
 
   // Theme settings
-  themePrimary: HTMLInputElement;
-  themeAccent: HTMLInputElement;
+  themeInputs: Record<keyof ThemeOptions, HTMLInputElement>;
 
   // Actions
   start: HTMLButtonElement;

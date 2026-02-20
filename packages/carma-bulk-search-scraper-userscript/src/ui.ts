@@ -1,4 +1,4 @@
-import { BASE_SEARCH_URL, STYLE_ID, STYLE_TEXT } from './constants';
+import { BASE_SEARCH_URL, DEFAULT_THEME_OPTIONS, STYLE_ID, STYLE_TEXT } from './constants';
 import { el } from './dom';
 import type { AppUi, PersistedState, PopoutOptions, ScrapeOptions, ThemeOptions, UiState, UniquenessOptions } from './types';
 
@@ -23,6 +23,34 @@ export interface UiHandlers {
 
   onClose: () => void;
 }
+
+const THEME_FIELD_ORDER: Array<{ key: keyof ThemeOptions; label: string }> = [
+  { key: 'primary', label: 'Primary' },
+  { key: 'primaryHover', label: 'Primary Hover' },
+  { key: 'primaryActive', label: 'Primary Active' },
+  { key: 'primaryText', label: 'Primary Text' },
+  { key: 'secondary', label: 'Secondary' },
+  { key: 'secondaryHover', label: 'Secondary Hover' },
+  { key: 'secondaryActive', label: 'Secondary Active' },
+  { key: 'secondaryText', label: 'Secondary Text' },
+  { key: 'buttonBg', label: 'Button Bg' },
+  { key: 'buttonHoverBg', label: 'Button Hover' },
+  { key: 'buttonActiveBg', label: 'Button Active' },
+  { key: 'buttonText', label: 'Button Text' },
+  { key: 'tabBg', label: 'Tab Bg' },
+  { key: 'tabActiveBg', label: 'Tab Active' },
+  { key: 'tabText', label: 'Tab Text' },
+  { key: 'surface', label: 'Surface' },
+  { key: 'surfaceAlt', label: 'Surface Alt' },
+  { key: 'surfaceMuted', label: 'Surface Muted' },
+  { key: 'text', label: 'Text' },
+  { key: 'textMuted', label: 'Text Muted' },
+  { key: 'statusBg', label: 'Status Bg' },
+  { key: 'statusText', label: 'Status Text' },
+  { key: 'border', label: 'Border' },
+  { key: 'focusRing', label: 'Focus Ring' },
+  { key: 'accent', label: 'Accent' },
+];
 
 function addStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
@@ -88,14 +116,14 @@ function readPopoutOptionsFromUi(inputs: {
   };
 }
 
-function readThemeOptionsFromUi(inputs: {
-  primary: HTMLInputElement;
-  accent: HTMLInputElement;
-}): ThemeOptions {
-  return {
-    primary: inputs.primary.value || '#16a34a',
-    accent: inputs.accent.value || '#183558',
-  };
+function readThemeOptionsFromUi(inputs: Record<keyof ThemeOptions, HTMLInputElement>): ThemeOptions {
+  const next = { ...DEFAULT_THEME_OPTIONS };
+  const keys = Object.keys(DEFAULT_THEME_OPTIONS) as Array<keyof ThemeOptions>;
+  for (const key of keys) {
+    const value = inputs[key]?.value;
+    next[key] = value || DEFAULT_THEME_OPTIONS[key];
+  }
+  return next;
 }
 
 function createActionSection(title: string, buttons: HTMLElement[]): HTMLDivElement {
@@ -109,6 +137,7 @@ function setTabActive(buttons: HTMLButtonElement[], activeKey: string, attr: str
   for (const btn of buttons) {
     const key = btn.getAttribute(attr) || '';
     btn.classList.toggle('active', key === activeKey);
+    btn.setAttribute('aria-selected', String(key === activeKey));
   }
 }
 
@@ -159,16 +188,16 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
   const card = el('div', { class: 'cbss-card' }) as HTMLDivElement;
 
   const mainTabs = el('div', { class: 'cbss-tabs', style: 'margin-bottom:4px;' }) as HTMLDivElement;
-  const tabActions = el('button', { class: 'cbss-tab', type: 'button', 'data-main-tab': 'actions' }, 'Actions') as HTMLButtonElement;
-  const tabSettings = el('button', { class: 'cbss-tab', type: 'button', 'data-main-tab': 'settings' }, 'Settings') as HTMLButtonElement;
+  const tabActions = el('button', { class: 'cbss-tab', type: 'button', 'data-main-tab': 'actions', role: 'tab' }, 'Actions') as HTMLButtonElement;
+  const tabSettings = el('button', { class: 'cbss-tab', type: 'button', 'data-main-tab': 'settings', role: 'tab' }, 'Settings') as HTMLButtonElement;
   mainTabs.appendChild(tabActions);
   mainTabs.appendChild(tabSettings);
 
-  const actionsPanel = el('div', { id: 'cbss-actions-panel' }) as HTMLDivElement;
-  const settingsPanel = el('div', { id: 'cbss-settings-panel' }) as HTMLDivElement;
+  const mainPanels = el('div', { class: 'cbss-main-panels' }) as HTMLDivElement;
+  const actionsPanel = el('div', { id: 'cbss-actions-panel', class: 'cbss-main-panel' }) as HTMLDivElement;
+  const settingsPanel = el('div', { id: 'cbss-settings-panel', class: 'cbss-main-panel' }) as HTMLDivElement;
 
-  // --- Actions panel controls
-  const start = el('button', { class: 'cbss-btn cbss-btn-primary', onclick: handlers.onStart }, 'Start') as HTMLButtonElement;
+  const start = el('button', { class: 'cbss-btn cbss-btn-primary', onclick: handlers.onStart }, 'Run') as HTMLButtonElement;
   const cancel = el('button', {
     class: 'cbss-btn cbss-btn-secondary',
     disabled: true,
@@ -180,7 +209,7 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
   const downloadJson = el('button', { class: 'cbss-btn', onclick: handlers.onDownloadJson }, 'Download JSON') as HTMLButtonElement;
   const copyJson = el('button', { class: 'cbss-btn', onclick: handlers.onCopyJson }, 'Copy JSON') as HTMLButtonElement;
 
-  const popoutTable = el('button', { class: 'cbss-btn', onclick: handlers.onPopoutTable }, 'Popout Table') as HTMLButtonElement;
+  const popoutTable = el('button', { class: 'cbss-btn', onclick: handlers.onPopoutTable }, 'Open Popout') as HTMLButtonElement;
 
   const copyStock = el('button', { class: 'cbss-btn', onclick: handlers.onCopyStock }, 'Copy Stock') as HTMLButtonElement;
   const copyVin = el('button', { class: 'cbss-btn', onclick: handlers.onCopyVin }, 'Copy VIN') as HTMLButtonElement;
@@ -195,7 +224,6 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
 
   actionsPanel.appendChild(actionGrid);
 
-  // --- Settings panel controls
   const settingsTabs = el('div', { class: 'cbss-tabs', style: 'margin-top:2px;' }) as HTMLDivElement;
   const tabScrape = el('button', { class: 'cbss-tab', type: 'button', 'data-settings-tab': 'scrape' }, 'Scrape') as HTMLButtonElement;
   const tabUnique = el('button', { class: 'cbss-tab', type: 'button', 'data-settings-tab': 'uniqueness' }, 'Uniqueness') as HTMLButtonElement;
@@ -213,7 +241,6 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
   const panelPopout = el('div', { class: 'cbss-settings-panel', 'data-settings-panel': 'popout' }) as HTMLDivElement;
   const panelTheme = el('div', { class: 'cbss-settings-panel', 'data-settings-panel': 'theme' }) as HTMLDivElement;
 
-  // Scrape settings (existing)
   const paginate = el('input', { type: 'checkbox', id: 'cbss-paginate' }) as HTMLInputElement;
   const show100 = el('input', { type: 'checkbox', id: 'cbss-show100' }) as HTMLInputElement;
   const maxConcurrency = el('input', {
@@ -247,7 +274,7 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
     el('label', {}, [' Parallel workers ', maxConcurrency]),
   ]));
   panelScrape.appendChild(el('div', { class: 'cbss-row' }, [
-    el('label', {}, [debug, ' Debug mode (verbose)']),
+    el('label', {}, [debug, ' Debug mode (verbose + diagnostics)']),
   ]));
 
   panelScrape.appendChild(el('div', { class: 'cbss-row', style: 'margin-top:8px;align-items:flex-start;' }, [
@@ -262,7 +289,6 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
     el('label', { style: 'margin-left:10px;' }, [requireStockNumber, ' Stock Number']),
   ]));
 
-  // Uniqueness settings
   const uniqueEnabled = el('input', { type: 'checkbox', id: 'cbss-unique-enabled' }) as HTMLInputElement;
   const uniqueKeyVin = el('input', { type: 'checkbox', id: 'cbss-unique-key-vin' }) as HTMLInputElement;
   const uniqueKeyStock = el('input', { type: 'checkbox', id: 'cbss-unique-key-stock' }) as HTMLInputElement;
@@ -298,7 +324,6 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
     ]),
   ]));
 
-  // Popout settings
   const popoutIncludeHeaders = el('input', { type: 'checkbox', id: 'cbss-popout-include-headers' }) as HTMLInputElement;
   const popoutPersistSelectedColumns = el('input', { type: 'checkbox', id: 'cbss-popout-persist-cols' }) as HTMLInputElement;
 
@@ -311,15 +336,16 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
   ]));
   panelPopout.appendChild(el('div', { class: 'cbss-small' }, 'Tip: Click column headers in the popout to select columns; selection is stateful.'));
 
-  // Theme settings
-  const themePrimary = el('input', { type: 'color', id: 'cbss-theme-primary' }) as HTMLInputElement;
-  const themeAccent = el('input', { type: 'color', id: 'cbss-theme-accent' }) as HTMLInputElement;
+  const themeInputs = {} as Record<keyof ThemeOptions, HTMLInputElement>;
+  const themeGrid = el('div', { class: 'cbss-theme-grid' }) as HTMLDivElement;
+  for (const field of THEME_FIELD_ORDER) {
+    const input = el('input', { type: 'color', id: `cbss-theme-${field.key}` }) as HTMLInputElement;
+    themeInputs[field.key] = input;
+    themeGrid.appendChild(el('label', {}, [field.label, input]));
+  }
 
-  panelTheme.appendChild(el('h4', {}, 'Theme'));
-  panelTheme.appendChild(el('div', { class: 'cbss-row' }, [
-    el('label', {}, ['Primary ', themePrimary]),
-    el('label', { style: 'margin-left:12px;' }, ['Accent ', themeAccent]),
-  ]));
+  panelTheme.appendChild(el('h4', {}, 'Theme Palette'));
+  panelTheme.appendChild(themeGrid);
   panelTheme.appendChild(el('div', { class: 'cbss-small' }, 'Theme colors are saved to localStorage and apply immediately.'));
 
   settingsPanels.appendChild(panelScrape);
@@ -330,9 +356,11 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
   settingsPanel.appendChild(settingsTabs);
   settingsPanel.appendChild(settingsPanels);
 
+  mainPanels.appendChild(actionsPanel);
+  mainPanels.appendChild(settingsPanel);
+
   card.appendChild(mainTabs);
-  card.appendChild(actionsPanel);
-  card.appendChild(settingsPanel);
+  card.appendChild(mainPanels);
   right.appendChild(card);
 
   body.appendChild(left);
@@ -353,7 +381,6 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  // Initialize from persisted state
   const scrape = persisted.scrape;
   paginate.checked = !!scrape.paginateAllPages;
   show100.checked = !!scrape.setShowTo100;
@@ -377,8 +404,9 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
   popoutPersistSelectedColumns.checked = !!pop.persistSelectedColumns;
 
   const theme = persisted.theme;
-  themePrimary.value = theme.primary || '#16a34a';
-  themeAccent.value = theme.accent || '#183558';
+  for (const field of THEME_FIELD_ORDER) {
+    themeInputs[field.key].value = theme[field.key] || DEFAULT_THEME_OPTIONS[field.key];
+  }
 
   const updateUniqueUi = () => {
     const manual = uniqueDateMode.value === 'manual';
@@ -387,7 +415,6 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
   };
   updateUniqueUi();
 
-  // Wiring - options persistence
   const scrapeInputs = { paginate, show100, columns, maxConcurrency, requirePurchaseId, requireVin, requireStockNumber, debug };
   const notifyScrape = () => handlers.onScrapeOptionsChange(readScrapeOptionsFromUi(scrapeInputs));
   [paginate, show100, columns, requirePurchaseId, requireVin, requireStockNumber, debug].forEach((input) => {
@@ -413,27 +440,35 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
     input.addEventListener('change', notifyPopout);
   });
 
-  const themeInputs = { primary: themePrimary, accent: themeAccent };
   const notifyTheme = () => handlers.onThemeOptionsChange(readThemeOptionsFromUi(themeInputs));
-  themePrimary.addEventListener('input', notifyTheme);
-  themeAccent.addEventListener('input', notifyTheme);
+  for (const field of THEME_FIELD_ORDER) {
+    themeInputs[field.key].addEventListener('input', notifyTheme);
+    themeInputs[field.key].addEventListener('change', notifyTheme);
+  }
 
-  // Tabs state
   const mainTabButtons = [tabActions, tabSettings];
   const settingsTabButtons = [tabScrape, tabUnique, tabPopout, tabTheme];
 
+  let currentMainTab: UiState['mainTab'] = persisted.ui.mainTab;
+  let currentSettingsTab: UiState['settingsTab'] = persisted.ui.settingsTab;
+
   const setMainTab = (tab: UiState['mainTab']) => {
-    actionsPanel.style.display = tab === 'actions' ? 'block' : 'none';
-    settingsPanel.style.display = tab === 'settings' ? 'block' : 'none';
+    currentMainTab = tab;
+    actionsPanel.classList.toggle('active', tab === 'actions');
+    settingsPanel.classList.toggle('active', tab === 'settings');
+    actionsPanel.setAttribute('aria-hidden', String(tab !== 'actions'));
+    settingsPanel.setAttribute('aria-hidden', String(tab !== 'settings'));
     setTabActive(mainTabButtons, tab, 'data-main-tab');
   };
 
   const setSettingsTab = (tab: UiState['settingsTab']) => {
+    currentSettingsTab = tab;
     setTabActive(settingsTabButtons, tab, 'data-settings-tab');
     const panels = Array.from(settingsPanels.querySelectorAll<HTMLElement>('.cbss-settings-panel'));
     for (const p of panels) {
       const key = p.getAttribute('data-settings-panel') || '';
       p.classList.toggle('active', key === tab);
+      p.setAttribute('aria-hidden', String(key !== tab));
     }
   };
 
@@ -451,28 +486,28 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
 
   tabActions.addEventListener('click', () => {
     setMainTab('actions');
-    handlers.onUiStateChange({ mainTab: 'actions', settingsTab: persisted.ui.settingsTab });
+    handlers.onUiStateChange({ mainTab: 'actions', settingsTab: currentSettingsTab });
   });
   tabSettings.addEventListener('click', () => {
     setMainTab('settings');
-    handlers.onUiStateChange({ mainTab: 'settings', settingsTab: persisted.ui.settingsTab });
+    handlers.onUiStateChange({ mainTab: 'settings', settingsTab: currentSettingsTab });
   });
 
   tabScrape.addEventListener('click', () => {
     setSettingsTab('scrape');
-    handlers.onUiStateChange({ mainTab: 'settings', settingsTab: 'scrape' });
+    handlers.onUiStateChange({ mainTab: currentMainTab, settingsTab: 'scrape' });
   });
   tabUnique.addEventListener('click', () => {
     setSettingsTab('uniqueness');
-    handlers.onUiStateChange({ mainTab: 'settings', settingsTab: 'uniqueness' });
+    handlers.onUiStateChange({ mainTab: currentMainTab, settingsTab: 'uniqueness' });
   });
   tabPopout.addEventListener('click', () => {
     setSettingsTab('popout');
-    handlers.onUiStateChange({ mainTab: 'settings', settingsTab: 'popout' });
+    handlers.onUiStateChange({ mainTab: currentMainTab, settingsTab: 'popout' });
   });
   tabTheme.addEventListener('click', () => {
     setSettingsTab('theme');
-    handlers.onUiStateChange({ mainTab: 'settings', settingsTab: 'theme' });
+    handlers.onUiStateChange({ mainTab: currentMainTab, settingsTab: 'theme' });
   });
 
   return {
@@ -498,8 +533,7 @@ export function createUi(persisted: PersistedState, handlers: UiHandlers): AppUi
     popoutIncludeHeaders,
     popoutPersistSelectedColumns,
 
-    themePrimary,
-    themeAccent,
+    themeInputs,
 
     start,
     cancel,

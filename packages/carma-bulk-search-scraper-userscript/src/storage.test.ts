@@ -72,3 +72,4 @@ describe('storage state v2', () => {
     expect(loaded.ui.settingsTab).toBe('popout');
   });
 });
+
