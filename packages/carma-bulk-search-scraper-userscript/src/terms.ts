@@ -2,6 +2,8 @@ import { BASE_SEARCH_URL } from './constants';
 import type { TermInfo } from './types';
 import { cleanText } from './utils';
 
+const TERM_SEPARATORS_REGEX = /[\r\n,;|\t]+/;
+
 export function normalizeTermFromLine(rawLine: string): string | null {
   const line = cleanText(rawLine);
   if (!line) return null;
@@ -27,7 +29,7 @@ export function normalizeTermFromLine(rawLine: string): string | null {
 }
 
 export function parseTerms(text: string): TermInfo[] {
-  const lines = (text || '').split(/\r?\n/);
+  const lines = (text || '').split(TERM_SEPARATORS_REGEX);
   const terms: TermInfo[] = [];
   for (const raw of lines) {
     const term = normalizeTermFromLine(raw);

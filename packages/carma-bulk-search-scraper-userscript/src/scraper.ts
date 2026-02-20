@@ -4,12 +4,12 @@ import { getRowValueByHeaderLike, isMeaningfulValue, shouldKeepRow } from './fil
 import { loadIntoIframe } from './iframe';
 import type { Logger } from './logger';
 import { clickNextPage, getPaginationInfo, goToFirstPageIfNeeded } from './pagination';
-import { saveOptions } from './storage';
 import { baseTitle, getBlocksWithTables, parseCountFromTitle, scrapeCurrentPageRows } from './tables';
 import { parseTerms } from './terms';
-import type { AppState, AppUi, BlockInfo, Options, TermInfo } from './types';
+import type { AppState, AppUi, BlockInfo, ScrapeOptions, TermInfo, UniquenessOptions } from './types';
 import { cleanText, waitFor } from './utils';
 import { PURCHASE_ID_BLANK_MATCHERS, STOCK_NUMBER_BLANK_MATCHERS, VIN_BLANK_MATCHERS } from './constants';
+import { buildUniquenessKey, normalizeUniquenessOptions, parseRowDateMs, shouldReplaceDuplicate } from './uniqueness';
 
 export interface ScrapeContext {
   state: AppState;
@@ -66,11 +66,11 @@ function hasEmptyResults(doc: Document): boolean {
   return false;
 }
 
-function readOptions(ui: AppUi): Options {
+function readScrapeOptions(ui: AppUi): ScrapeOptions {
   return {
     paginateAllPages: !!ui.paginate.checked,
     setShowTo100: !!ui.show100.checked,
-    columnMode: ui.columns.value as Options['columnMode'],
+    columnMode: ui.columns.value as ScrapeOptions['columnMode'],
     requirePurchaseId: !!ui.requirePurchaseId.checked,
     requireVin: !!ui.requireVin.checked,
     requireStockNumber: !!ui.requireStockNumber.checked,
@@ -79,13 +79,31 @@ function readOptions(ui: AppUi): Options {
   };
 }
 
+
+
+function readUniquenessOptions(ui: AppUi): UniquenessOptions {
+  return {
+    enabled: !!ui.uniqueEnabled.checked,
+    keyFields: {
+      vin: !!ui.uniqueKeyVin.checked,
+      stock: !!ui.uniqueKeyStock.checked,
+      pid: !!ui.uniqueKeyPid.checked,
+    },
+    strategy: 'latest_by_date',
+    dateColumn: {
+      mode: (ui.uniqueDateMode.value === 'manual') ? 'manual' : 'auto',
+      header: ui.uniqueDateHeader.value || '',
+    },
+  };
+}
 async function scrapeBlockPages(params: {
   termInfo: TermInfo;
   blockInfo: BlockInfo;
-  opts: Options;
+  scrapeOpts: ScrapeOptions;
+  uniqueOpts: UniquenessOptions;
   ctx: ScrapeContext;
 }): Promise<{ name: string; expectedCount: number | null; totalSeen: number; totalKept: number }> {
-  const { termInfo, blockInfo, opts, ctx } = params;
+  const { termInfo, blockInfo, scrapeOpts, uniqueOpts, ctx } = params;
   const { state, logger } = ctx;
   const { block, rawTitle } = blockInfo;
   const expectedCount = parseCountFromTitle(rawTitle);
@@ -106,12 +124,12 @@ async function scrapeBlockPages(params: {
     root.querySelector('table[data-testid=\"data-table\"]') as HTMLTableElement | null
   );
 
-  if (opts.columnMode !== 'none') {
-    logger.log(`[INFO] [${rawTitle || name}] Applying columns: ${opts.columnMode}...`);
+  if (scrapeOpts.columnMode !== 'none') {
+    logger.log(`[INFO] [${rawTitle || name}] Applying columns: ${scrapeOpts.columnMode}...`);
     try {
-      const result = await applyColumns(resolveBlock(), opts.columnMode);
+      const result = await applyColumns(resolveBlock(), scrapeOpts.columnMode);
       if (result.reason === 'already_all' || result.reason === 'already_key') {
-        logger.log(`[INFO] Columns already satisfied (${opts.columnMode}).`);
+        logger.log(`[INFO] Columns already satisfied (${scrapeOpts.columnMode}).`);
       } else if (result.applied) {
         logger.log(`[OK] Columns updated (${result.reason}).`);
       } else {
@@ -126,7 +144,7 @@ async function scrapeBlockPages(params: {
     }
   }
 
-  if (opts.setShowTo100) {
+  if (scrapeOpts.setShowTo100) {
     logger.log(`[INFO] [${rawTitle || name}] Setting page size: Show 100...`);
     try {
       const result = await setPageSize(resolveBlock(), 100);
@@ -154,7 +172,7 @@ async function scrapeBlockPages(params: {
   let totalSeen = 0;
   let totalKept = 0;
 
-  if (opts.paginateAllPages && pi0.total > 1) {
+  if (scrapeOpts.paginateAllPages && pi0.total > 1) {
     try {
       await goToFirstPageIfNeeded(resolveBlock());
     } catch (error) {
@@ -163,9 +181,9 @@ async function scrapeBlockPages(params: {
   }
 
   const pi = getPaginationInfo(resolveBlock());
-  const pagesToScrape = opts.paginateAllPages ? pi.total : 1;
+  const pagesToScrape = scrapeOpts.paginateAllPages ? pi.total : 1;
 
-  if (!opts.paginateAllPages || pi.total <= 1) {
+  if (!scrapeOpts.paginateAllPages || pi.total <= 1) {
     logger.log(`[INFO] [${rawTitle || name}] Scraping current page only.`);
   } else {
     logger.log(`[INFO] [${rawTitle || name}] Scraping all pages (${pi.total}).`);
@@ -199,9 +217,9 @@ async function scrapeBlockPages(params: {
     totalSeen += rows.length;
 
     const filters = {
-      requirePurchaseId: opts.requirePurchaseId,
-      requireVin: opts.requireVin,
-      requireStockNumber: opts.requireStockNumber,
+      requirePurchaseId: scrapeOpts.requirePurchaseId,
+      requireVin: scrapeOpts.requireVin,
+      requireStockNumber: scrapeOpts.requireStockNumber,
     };
 
     for (const row of rows) {
@@ -216,8 +234,42 @@ async function scrapeBlockPages(params: {
       out.Reference = buildReference(out);
 
       if (shouldKeepRow(out, filters)) {
-        state.rows.push(out);
-        totalKept++;
+        const normalizedUnique = normalizeUniquenessOptions(uniqueOpts);
+        if (!normalizedUnique.enabled) {
+          state.rows.push(out);
+          totalKept++;
+          continue;
+        }
+
+        const key = buildUniquenessKey(out, normalizedUnique.keyFields);
+        if (!key) {
+          state.rows.push(out);
+          totalKept++;
+          continue;
+        }
+
+        const candidateTs = parseRowDateMs(out, normalizedUnique);
+        const existing = state.uniqueIndex.get(key);
+        if (!existing) {
+          state.rows.push(out);
+          state.uniqueIndex.set(key, { index: state.rows.length - 1, ts: candidateTs });
+          totalKept++;
+          continue;
+        }
+
+        const replace = shouldReplaceDuplicate({
+          existingTs: existing.ts,
+          candidateTs,
+          strategy: normalizedUnique.strategy,
+        });
+
+        if (replace) {
+          state.rows[existing.index] = out;
+          state.uniqueIndex.set(key, { index: existing.index, ts: candidateTs });
+          if (scrapeOpts.debug) logger.logDebug(`[INFO] Replaced duplicate for key: ${key}`);
+        } else {
+          if (scrapeOpts.debug) logger.logDebug(`[INFO] Ignored duplicate for key: ${key}`);
+        }
       }
     }
 
@@ -248,12 +300,14 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
   const { state, ui, logger } = ctx;
   if (state.running) return;
 
-  const opts = readOptions(ui);
-  saveOptions(opts);
+  const scrapeOpts = readScrapeOptions(ui);
+
+  const uniqueOpts = normalizeUniquenessOptions(readUniquenessOptions(ui));
 
   const terms = parseTerms(ui.terms.value);
   logger.clear();
   state.rows = [];
+  state.uniqueIndex = new Map();
   state.abort = false;
 
   if (!terms.length) {
@@ -267,17 +321,17 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
 
   logger.log(`[INFO] Starting. Terms: ${terms.length}`);
   logger.log(`[INFO] Options: ${JSON.stringify({
-    paginateAllPages: opts.paginateAllPages,
-    setShowTo100: opts.setShowTo100,
-    columnMode: opts.columnMode,
-    requirePurchaseId: opts.requirePurchaseId,
-    requireVin: opts.requireVin,
-    requireStockNumber: opts.requireStockNumber,
-    debug: opts.debug,
-    maxConcurrency: opts.maxConcurrency,
+    paginateAllPages: scrapeOpts.paginateAllPages,
+    setShowTo100: scrapeOpts.setShowTo100,
+    columnMode: scrapeOpts.columnMode,
+    requirePurchaseId: scrapeOpts.requirePurchaseId,
+    requireVin: scrapeOpts.requireVin,
+    requireStockNumber: scrapeOpts.requireStockNumber,
+    debug: scrapeOpts.debug,
+    maxConcurrency: scrapeOpts.maxConcurrency,
   })}`);
 
-  const normalizedConcurrency = Math.max(1, Math.floor(opts.maxConcurrency || 1));
+  const normalizedConcurrency = Math.max(1, Math.floor(scrapeOpts.maxConcurrency || 1));
   const workerCount = Math.min(normalizedConcurrency, terms.length);
   if (workerCount > 1) {
     logger.log(`[INFO] Parallel workers: ${workerCount}`);
@@ -359,7 +413,7 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
       for (const blockInfo of blocks) {
         if (state.abort) break;
         try {
-          await scrapeBlockPages({ termInfo, blockInfo, opts, ctx: workerCtx });
+          await scrapeBlockPages({ termInfo, blockInfo, scrapeOpts, uniqueOpts, ctx: workerCtx });
         } catch (error) {
           workerLogger.log(`[WARN] Error scraping block: ${(error as Error).message}`);
         }

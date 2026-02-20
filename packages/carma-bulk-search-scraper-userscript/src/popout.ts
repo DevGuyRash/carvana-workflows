@@ -1,6 +1,6 @@
 import { buildSelectedCellTsv } from './copy-utils';
 import type { Logger } from './logger';
-import type { ScrapedRow } from './types';
+import type { PopoutOptions, ScrapedRow } from './types';
 
 export interface PopoutHandle {
   update: () => void;
@@ -54,10 +54,12 @@ function ensureStyles(doc: Document): void {
     .cbss-popout-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#fff;border-bottom:1px solid #e2e8f0;gap:10px;}
     .cbss-popout-title{font-weight:800;font-size:16px;color:#0f172a;}
     .cbss-popout-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0;}
-    .cbss-popout-btn{border:1px solid #cbd5f5;border-radius:8px;background:#fff;padding:6px 10px;font-weight:700;cursor:pointer;}
+    .cbss-popout-btn{border:1px solid #cbd5f5;border-radius:8px;background:#fff;padding:6px 10px;font-weight:700;cursor:pointer;transition:transform .06s ease,background-color .12s ease,box-shadow .12s ease;}
     .cbss-popout-status{font-size:12px;color:#475569;white-space:nowrap;}
-    .cbss-popout-copy-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:#334155;font-weight:600;}
-    .cbss-popout-copy-toggle input{transform:translateY(1px);}
+    .cbss-popout-btn:hover{background:#f8fafc;box-shadow:0 1px 8px rgba(15,23,42,.08);}
+    .cbss-popout-btn:active{transform:translateY(1px);background:#eef2ff;}
+    .cbss-popout-btn:focus-visible{outline:2px solid #2563eb;outline-offset:2px;}
+    .cbss-popout-btn.cbss-clicked{animation:cbss-popout-click-pulse .22s ease-out;background:#dbeafe;box-shadow:0 0 0 3px rgba(37,99,235,.22);}
     .cbss-popout-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
     .cbss-popout-table-wrap{flex:1 1 auto;min-height:0;overflow:auto;border-top:1px solid #e2e8f0;}
     table{border-collapse:collapse;width:max(100%,1200px);background:#fff;}
@@ -77,6 +79,11 @@ function ensureStyles(doc: Document): void {
     .cbss-popout.cbss-drag-selecting[data-drag-mode="row"] .cbss-popout-table-wrap{box-shadow:inset 0 0 0 2px #fca5a5;}
     .cbss-inline-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:24px;}
     .cbss-inline-modal{background:#fff;border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.35);width:min(1400px,96vw);height:min(92vh,900px);overflow:hidden;}
+    @keyframes cbss-popout-click-pulse{
+      0%{transform:translateY(0) scale(1);}
+      35%{transform:translateY(1px) scale(.98);}
+      100%{transform:translateY(0) scale(1);}
+    }
     @media (max-width:900px){
       .cbss-popout-header{flex-direction:column;align-items:flex-start;padding:10px 12px;}
       .cbss-popout-actions{width:100%;}
@@ -91,6 +98,16 @@ function ensureStyles(doc: Document): void {
   doc.head.appendChild(style);
 }
 
+function addPopoutButtonClickFeedback(button: HTMLButtonElement, hostWindow: Window): void {
+  if (button.disabled) return;
+  button.classList.remove('cbss-clicked');
+  void button.getBoundingClientRect();
+  button.classList.add('cbss-clicked');
+  hostWindow.setTimeout(() => {
+    button.classList.remove('cbss-clicked');
+  }, 220);
+}
+
 function createResultsView(params: {
   hostWindow: Window;
   doc: Document;
@@ -99,6 +116,8 @@ function createResultsView(params: {
   getRows: () => ScrapedRow[];
   getRunning: () => boolean;
   logger: Logger;
+  getPopoutOptions: () => PopoutOptions;
+  setPopoutOptions: (opts: PopoutOptions) => void;
   onClose?: () => void;
 }): PopoutHandle {
   const {
@@ -109,6 +128,8 @@ function createResultsView(params: {
     getRows,
     getRunning,
     logger,
+    getPopoutOptions,
+    setPopoutOptions,
     onClose,
   } = params;
 
@@ -143,19 +164,10 @@ function createResultsView(params: {
   copySelectionBtn.className = 'cbss-popout-btn';
   copySelectionBtn.textContent = 'Copy Selection';
 
-  const includeHeaders = doc.createElement('input');
-  includeHeaders.type = 'checkbox';
-  includeHeaders.checked = false;
-  const includeHeadersLabel = doc.createElement('label');
-  includeHeadersLabel.className = 'cbss-popout-copy-toggle';
-  includeHeadersLabel.appendChild(includeHeaders);
-  includeHeadersLabel.append('Include headers');
-
   actions.appendChild(status);
   actions.appendChild(refreshBtn);
   actions.appendChild(copyVisibleBtn);
   actions.appendChild(copySelectionBtn);
-  actions.appendChild(includeHeadersLabel);
 
   let closeBtn: HTMLButtonElement | null = null;
   if (inline) {
@@ -188,6 +200,14 @@ function createResultsView(params: {
   root.appendChild(body);
   mount.appendChild(root);
 
+  root.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    const button = target.closest('button') as HTMLButtonElement | null;
+    if (!button) return;
+    addPopoutButtonClickFeedback(button, hostWindow);
+  });
+
   let closed = false;
   let cleaned = false;
 
@@ -197,6 +217,7 @@ function createResultsView(params: {
     lastRendered: 0,
     updating: false,
     queued: false,
+    persistedColSelectionApplied: false,
   };
 
   const selection = {
@@ -215,6 +236,9 @@ function createResultsView(params: {
     anchorRow: 0,
     anchorCol: 0,
     rafId: 0,
+    autoScrollRafId: 0,
+    pointerClientX: 0,
+    pointerClientY: 0,
     pendingRow: null as number | null,
     pendingCol: null as number | null,
     lastRowRange: null as { minRow: number; maxRow: number } | null,
@@ -252,6 +276,46 @@ function createResultsView(params: {
     status.textContent = `Rows: ${rows.length} | Rendered: ${rendered} | ${running ? 'Live' : 'Idle'} | ${now}${selectionLabel}${dragLabel}`;
   };
 
+  const saveSelectedColumnsToOptions = () => {
+    const opts = getPopoutOptions();
+    if (!opts.persistSelectedColumns) return;
+    const selectedColumnsByName = Array.from(selection.cols)
+      .sort((a, b) => a - b)
+      .map((index) => state.columns[index])
+      .filter((name): name is string => !!name);
+    setPopoutOptions({ ...opts, selectedColumnsByName });
+  };
+
+  const applyPersistedColumnSelection = () => {
+    if (state.persistedColSelectionApplied) return;
+
+    if (selection.cells.size || selection.rows.size || selection.cols.size) {
+      state.persistedColSelectionApplied = true;
+      return;
+    }
+
+    const opts = getPopoutOptions();
+    if (!opts.persistSelectedColumns || !opts.selectedColumnsByName.length) {
+      state.persistedColSelectionApplied = true;
+      return;
+    }
+
+    const indexes = opts.selectedColumnsByName
+      .map((name) => state.columns.indexOf(name))
+      .filter((index) => index >= 0);
+
+    if (!indexes.length) return;
+
+    setMode('col');
+    clearColSelection();
+    for (const index of indexes) {
+      setColSelected(index, true);
+    }
+    selection.anchor = { row: 0, col: indexes[0], mode: 'col' };
+    state.persistedColSelectionApplied = true;
+    setStatus();
+  };
+
   const addColumn = (col: string) => {
     const colIndex = state.columns.length;
     state.columns.push(col);
@@ -278,6 +342,7 @@ function createResultsView(params: {
     state.columns = [];
     state.seen = new Set<string>();
     state.lastRendered = 0;
+    state.persistedColSelectionApplied = false;
     headRow.textContent = '';
     tbody.textContent = '';
     selection.mode = null;
@@ -413,6 +478,7 @@ function createResultsView(params: {
       await ensureNewColumns(rows, state.lastRendered);
       await appendRows(rows, state.lastRendered);
       state.lastRendered = rows.length;
+      applyPersistedColumnSelection();
       setStatus();
     } while (state.queued);
 
@@ -574,7 +640,7 @@ function createResultsView(params: {
     drag.lastColRange = next;
   };
 
-  const startDragSelection = (mode: 'cell' | 'row' | 'col', row: number, col: number) => {
+  const startDragSelection = (mode: 'cell' | 'row' | 'col', row: number, col: number, clientX: number, clientY: number) => {
     drag.active = true;
     drag.didDrag = false;
     drag.mode = mode;
@@ -588,6 +654,7 @@ function createResultsView(params: {
     drag.anchorCol = col;
 
     setDragUi(true, mode);
+    startAutoScrollLoop();
     clearNativeSelection();
     setMode(mode);
     if (mode === 'row') {
@@ -653,7 +720,83 @@ function createResultsView(params: {
     });
   };
 
-  const handleCellClick = (row: number, col: number, isShift: boolean, isCtrl: boolean) => {
+    const processDragCell = (cell: HTMLElement) => {
+    if (drag.mode === 'col') {
+      const colIndex = cell.getAttribute('data-col-index');
+      if (colIndex === null) return;
+      const col = Number.parseInt(colIndex, 10);
+      scheduleDragUpdate(drag.anchorRow, col);
+      return;
+    }
+
+    const rowIndex = cell.getAttribute('data-row-index');
+    if (rowIndex === null) return;
+    const row = Number.parseInt(rowIndex, 10);
+
+    if (drag.mode === 'row') {
+      scheduleDragUpdate(row, drag.anchorCol);
+      return;
+    }
+
+    const colIndex = cell.getAttribute('data-col-index');
+    if (colIndex === null) return;
+    const col = Number.parseInt(colIndex, 10);
+    scheduleDragUpdate(row, col);
+  };
+
+  const updateDragFromPoint = (clientX: number, clientY: number) => {
+    const elAtPoint = doc.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    if (!elAtPoint) return;
+    const cell = elAtPoint.closest('td,th') as HTMLElement | null;
+    if (!cell || !table.contains(cell)) return;
+    processDragCell(cell);
+  };
+
+  const startAutoScrollLoop = () => {
+    if (drag.autoScrollRafId) return;
+
+    const tick = () => {
+      drag.autoScrollRafId = 0;
+      if (!drag.active || !drag.mode) return;
+
+      const rect = tableWrap.getBoundingClientRect();
+      const threshold = 28;
+      const speedMax = 24;
+
+      let dx = 0;
+      let dy = 0;
+
+      if (drag.pointerClientX < rect.left + threshold) {
+        dx = -Math.min(speedMax, Math.ceil((rect.left + threshold - drag.pointerClientX) / 3));
+      } else if (drag.pointerClientX > rect.right - threshold) {
+        dx = Math.min(speedMax, Math.ceil((drag.pointerClientX - (rect.right - threshold)) / 3));
+      }
+
+      if (drag.pointerClientY < rect.top + threshold) {
+        dy = -Math.min(speedMax, Math.ceil((rect.top + threshold - drag.pointerClientY) / 3));
+      } else if (drag.pointerClientY > rect.bottom - threshold) {
+        dy = Math.min(speedMax, Math.ceil((drag.pointerClientY - (rect.bottom - threshold)) / 3));
+      }
+
+      if (dx !== 0 || dy !== 0) {
+        tableWrap.scrollBy(dx, dy);
+        const clampedX = Math.min(Math.max(drag.pointerClientX, rect.left + 1), rect.right - 1);
+        const clampedY = Math.min(Math.max(drag.pointerClientY, rect.top + 1), rect.bottom - 1);
+        updateDragFromPoint(clampedX, clampedY);
+      }
+
+      drag.autoScrollRafId = hostWindow.requestAnimationFrame(tick);
+    };
+
+    drag.autoScrollRafId = hostWindow.requestAnimationFrame(tick);
+  };
+
+  const stopAutoScrollLoop = () => {
+    if (!drag.autoScrollRafId) return;
+    hostWindow.cancelAnimationFrame(drag.autoScrollRafId);
+    drag.autoScrollRafId = 0;
+  };
+const handleCellClick = (row: number, col: number, isShift: boolean, isCtrl: boolean) => {
     setMode('cell');
     const anchor = selection.anchor;
     if (isShift && anchor && anchor.mode === 'cell') {
@@ -715,6 +858,7 @@ function createResultsView(params: {
       setColSelected(col, isCtrl ? !isSelected : true);
       selection.anchor = { row: 0, col, mode: 'col' };
     }
+    saveSelectedColumnsToOptions();
     setStatus();
   };
 
@@ -732,7 +876,8 @@ function createResultsView(params: {
 
   const copyVisible = async () => {
     const rows = getRows().slice(0, state.lastRendered);
-    const tsv = buildTsv(rows, state.columns, true);
+    const includeHeadersInOutput = !!getPopoutOptions().copyIncludeHeaders;
+    const tsv = buildTsv(rows, state.columns, includeHeadersInOutput);
     if (!tsv) {
       logger.log('[WARN] No visible rows to copy.');
       return;
@@ -743,7 +888,7 @@ function createResultsView(params: {
 
   const copySelection = async () => {
     const rows = getRows().slice(0, state.lastRendered);
-    const includeHeadersInOutput = includeHeaders.checked;
+    const includeHeadersInOutput = !!getPopoutOptions().copyIncludeHeaders;
 
     if (selection.mode === 'row' && selection.rows.size) {
       const rowIndexes = Array.from(selection.rows).sort((a, b) => a - b);
@@ -851,7 +996,7 @@ function createResultsView(params: {
       const colIndex = cell.getAttribute('data-col-index');
       if (colIndex !== null) {
         const col = Number.parseInt(colIndex, 10);
-        startDragSelection('col', 0, col);
+        startDragSelection('col', 0, col, event.clientX, event.clientY);
       }
       return;
     }
@@ -861,14 +1006,14 @@ function createResultsView(params: {
     const row = Number.parseInt(rowIndex, 10);
 
     if (cell.getAttribute('data-row-header') === '1') {
-      startDragSelection('row', row, 0);
+      startDragSelection('row', row, 0, event.clientX, event.clientY);
       return;
     }
 
     const colIndex = cell.getAttribute('data-col-index');
     if (colIndex === null) return;
     const col = Number.parseInt(colIndex, 10);
-    startDragSelection('cell', row, col);
+    startDragSelection('cell', row, col, event.clientX, event.clientY);
   });
 
   table.addEventListener('mousemove', (event) => {
@@ -878,6 +1023,9 @@ function createResultsView(params: {
       return;
     }
 
+    drag.pointerClientX = event.clientX;
+    drag.pointerClientY = event.clientY;
+
     const target = event.target as HTMLElement | null;
     if (!target) return;
     const cell = target.closest('td,th') as HTMLElement | null;
@@ -885,36 +1033,37 @@ function createResultsView(params: {
 
     event.preventDefault();
     clearNativeSelection();
-
-    if (drag.mode === 'col') {
-      const colIndex = cell.getAttribute('data-col-index');
-      if (colIndex === null) return;
-      const col = Number.parseInt(colIndex, 10);
-      scheduleDragUpdate(drag.anchorRow, col);
-      return;
-    }
-
-    const rowIndex = cell.getAttribute('data-row-index');
-    if (rowIndex === null) return;
-    const row = Number.parseInt(rowIndex, 10);
-    if (drag.mode === 'row') {
-      scheduleDragUpdate(row, drag.anchorCol);
-      return;
-    }
-    const colIndex = cell.getAttribute('data-col-index');
-    if (colIndex === null) return;
-    const col = Number.parseInt(colIndex, 10);
-    scheduleDragUpdate(row, col);
+    processDragCell(cell);
   });
+
+  const onHostMousemove = (event: MouseEvent) => {
+    if (!drag.active || !drag.mode) return;
+    if (!(event.buttons & 1)) {
+      stopDrag();
+      return;
+    }
+
+    drag.pointerClientX = event.clientX;
+    drag.pointerClientY = event.clientY;
+    clearNativeSelection();
+    updateDragFromPoint(event.clientX, event.clientY);
+  };
+  hostWindow.addEventListener('mousemove', onHostMousemove);
 
   const stopDrag = () => {
     if (!drag.active) return;
+    const mode = drag.mode;
     drag.active = false;
+    drag.mode = null;
     drag.rafId = 0;
     drag.pendingRow = null;
     drag.pendingCol = null;
+    stopAutoScrollLoop();
     setDragUi(false, null);
     clearNativeSelection();
+    if (mode === 'col') {
+      saveSelectedColumnsToOptions();
+    }
     if (drag.didDrag) {
       drag.suppressClick = true;
       hostWindow.setTimeout(() => {
@@ -969,6 +1118,7 @@ function createResultsView(params: {
     cleaned = true;
     hostWindow.clearInterval(interval);
     hostWindow.removeEventListener('keydown', onKeydown);
+    hostWindow.removeEventListener('mousemove', onHostMousemove);
     hostWindow.removeEventListener('mouseup', stopDrag);
     hostWindow.removeEventListener('blur', stopDrag);
     hostWindow.removeEventListener('beforeunload', handleHostUnload);
@@ -1017,8 +1167,10 @@ function openResultsInline(params: {
   getRows: () => ScrapedRow[];
   getRunning: () => boolean;
   logger: Logger;
+  getPopoutOptions: () => PopoutOptions;
+  setPopoutOptions: (opts: PopoutOptions) => void;
 }): PopoutHandle {
-  const { getRows, getRunning, logger } = params;
+  const { getRows, getRunning, logger, getPopoutOptions, setPopoutOptions } = params;
   const doc = document;
   ensureStyles(doc);
   const overlay = doc.createElement('div');
@@ -1036,6 +1188,8 @@ function openResultsInline(params: {
     getRows,
     getRunning,
     logger,
+    getPopoutOptions,
+    setPopoutOptions,
     onClose: () => {
       overlay.remove();
     },
@@ -1046,12 +1200,14 @@ export function openResultsPopout(params: {
   getRows: () => ScrapedRow[];
   getRunning: () => boolean;
   logger: Logger;
+  getPopoutOptions: () => PopoutOptions;
+  setPopoutOptions: (opts: PopoutOptions) => void;
 }): PopoutHandle | null {
-  const { getRows, getRunning, logger } = params;
+  const { getRows, getRunning, logger, getPopoutOptions, setPopoutOptions } = params;
   const win = window.open('', 'cbss-results-popout', 'width=1300,height=800');
   if (!win) {
     logger.log('[WARN] Popout blocked. Opening inline view.');
-    return openResultsInline({ getRows, getRunning, logger });
+    return openResultsInline({ getRows, getRunning, logger, getPopoutOptions, setPopoutOptions });
   }
 
   try {
@@ -1066,6 +1222,8 @@ export function openResultsPopout(params: {
       getRows,
       getRunning,
       logger,
+      getPopoutOptions,
+      setPopoutOptions,
       onClose: () => {
         try {
           win.close();
@@ -1081,6 +1239,13 @@ export function openResultsPopout(params: {
       // ignore
     }
     logger.log('[WARN] Popout inaccessible. Opening inline view.');
-    return openResultsInline({ getRows, getRunning, logger });
+    return openResultsInline({ getRows, getRunning, logger, getPopoutOptions, setPopoutOptions });
   }
 }
+
+
+
+
+
+
+

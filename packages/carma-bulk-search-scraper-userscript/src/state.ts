@@ -1,4 +1,4 @@
-import type { AppState } from './types';
+﻿import type { AppState } from './types';
 
 export function createInitialState(): AppState {
   return {
@@ -7,5 +7,6 @@ export function createInitialState(): AppState {
     rows: [],
     lastCsv: '',
     lastJson: '',
+    uniqueIndex: new Map(),
   };
 }
