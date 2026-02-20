@@ -10,6 +10,10 @@ export interface UiHandlers {
   onDownloadJson: () => void;
   onCopyJson: () => void | Promise<void>;
   onPopoutTable: () => void;
+  onCopyStock: () => void | Promise<void>;
+  onCopyVin: () => void | Promise<void>;
+  onCopyPid: () => void | Promise<void>;
+  onCopyReference: () => void | Promise<void>;
   onOptionsChange: (opts: Options) => void;
   onClose: () => void;
 }
@@ -44,6 +48,13 @@ function readOptionsFromUi(inputs: {
   };
 }
 
+function createActionSection(title: string, buttons: HTMLElement[]): HTMLDivElement {
+  const section = el('div', { class: 'cbss-actions-section' }) as HTMLDivElement;
+  section.appendChild(el('div', { class: 'cbss-actions-title' }, title));
+  section.appendChild(el('div', { class: 'cbss-actions' }, buttons));
+  return section;
+}
+
 export function createUi(options: Options, handlers: UiHandlers): AppUi {
   addStyles();
 
@@ -59,7 +70,7 @@ export function createUi(options: Options, handlers: UiHandlers): AppUi {
 
   const left = el('div', { class: 'cbss-left' });
   const termsLabel = el('label', { class: 'cbss-label' }, 'Search terms (one per line)');
-  const terms = el('textarea', { class: 'cbss-textarea', placeholder: '2004200036\nJohn Doe\njohn.doe@example.com\n5551234567' });
+  const terms = el('textarea', { class: 'cbss-textarea', placeholder: 'STOCK_NUMBER\nCUSTOMER_NAME\nEMAIL_ADDRESS\nPHONE_NUMBER' });
   const hint = el('div', { class: 'cbss-hint' }, [
     el('div', {}, [
       'Each line becomes: ',
@@ -99,7 +110,7 @@ export function createUi(options: Options, handlers: UiHandlers): AppUi {
     el('option', { value: 'none' }, 'Leave columns unchanged'),
   ]) as HTMLSelectElement;
 
-  const rowFiltersTitle = el('h4', { style: 'margin-top:12px;' }, 'Row filters (if checked, the column must be non-empty)');
+  const rowFiltersTitle = el('h4', { style: 'margin-top:2px;' }, 'Row filters (if checked, the column must be non-empty)');
 
   const requirePurchaseId = el('input', { type: 'checkbox', id: 'cbss-requirePurchaseId' }) as HTMLInputElement;
   const requireVin = el('input', { type: 'checkbox', id: 'cbss-requireVin' }) as HTMLInputElement;
@@ -118,8 +129,10 @@ export function createUi(options: Options, handlers: UiHandlers): AppUi {
   const copyJson = el('button', { class: 'cbss-btn', onclick: handlers.onCopyJson }, 'Copy JSON');
   const popoutTable = el('button', { class: 'cbss-btn', onclick: handlers.onPopoutTable }, 'Popout Table') as HTMLButtonElement;
 
-  const actions = el('div', { class: 'cbss-actions' }, [start, cancel]);
-  const exports = el('div', { class: 'cbss-actions' }, [downloadCsv, copyCsv, downloadJson, copyJson, popoutTable]);
+  const copyStock = el('button', { class: 'cbss-btn', onclick: handlers.onCopyStock }, 'Copy Stock') as HTMLButtonElement;
+  const copyVin = el('button', { class: 'cbss-btn', onclick: handlers.onCopyVin }, 'Copy VIN') as HTMLButtonElement;
+  const copyPid = el('button', { class: 'cbss-btn', onclick: handlers.onCopyPid }, 'Copy PID') as HTMLButtonElement;
+  const copyReference = el('button', { class: 'cbss-btn', onclick: handlers.onCopyReference }, 'Copy Reference') as HTMLButtonElement;
 
   card.appendChild(optionsTitle);
   card.appendChild(el('div', { class: 'cbss-row' }, [
@@ -147,9 +160,13 @@ export function createUi(options: Options, handlers: UiHandlers): AppUi {
     el('label', { style: 'margin-left:10px;' }, [requireStockNumber, ' Stock Number']),
   ]));
 
-  card.appendChild(actions);
-  card.appendChild(exports);
+  const actionGrid = el('div', { class: 'cbss-actions-grid' }) as HTMLDivElement;
+  actionGrid.appendChild(createActionSection('Run', [start, cancel]));
+  actionGrid.appendChild(createActionSection('Export Data', [downloadCsv, copyCsv, downloadJson, copyJson]));
+  actionGrid.appendChild(createActionSection('Quick Copy', [copyStock, copyVin, copyPid, copyReference]));
+  actionGrid.appendChild(createActionSection('Table Tools', [popoutTable]));
 
+  card.appendChild(actionGrid);
   right.appendChild(card);
 
   body.appendChild(left);
@@ -210,6 +227,10 @@ export function createUi(options: Options, handlers: UiHandlers): AppUi {
     status,
     iframeHost,
     popout: popoutTable,
+    copyStock,
+    copyVin,
+    copyPid,
+    copyReference,
   };
 }
 

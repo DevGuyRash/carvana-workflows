@@ -50,6 +50,10 @@ export interface AppUi {
   status: HTMLPreElement;
   iframeHost: HTMLDivElement;
   popout: HTMLButtonElement;
+  copyStock: HTMLButtonElement;
+  copyVin: HTMLButtonElement;
+  copyPid: HTMLButtonElement;
+  copyReference: HTMLButtonElement;
 }
 
 export interface PaginationInfo {

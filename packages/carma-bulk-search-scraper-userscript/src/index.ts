@@ -1,12 +1,13 @@
+import { extractQuickCopyValues, type QuickCopyField } from './copy-utils';
 import { copyToClipboard } from './export';
 import type { Logger } from './logger';
 import { createLogger } from './logger';
+import { openResultsPopout } from './popout';
+import { downloadCsv, downloadJson, exportCsv, exportJson, runScrape } from './scraper';
 import { createInitialState } from './state';
 import { loadOptions, saveOptions } from './storage';
-import { downloadCsv, downloadJson, exportCsv, exportJson, runScrape } from './scraper';
 import type { AppUi } from './types';
 import { closeModal, createUi, installFab, openModal } from './ui';
-import { openResultsPopout } from './popout';
 
 declare global {
   interface Window {
@@ -61,19 +62,46 @@ declare global {
     logger.log(ok ? '[OK] Copied JSON to clipboard.' : '[ERROR] Failed to copy JSON.');
   };
 
-  const onPopoutTable = () => {
-    if (popout && !popout.isClosed()) {
-      popout.focus();
-      popout.update();
-      logger.log('[INFO] Popout refreshed.');
+  const onCopyQuickField = async (field: QuickCopyField, label: string) => {
+    const values = extractQuickCopyValues(state.rows, field);
+    if (!values.length) {
+      logger.log(`[WARN] No ${label} values available to copy.`);
       return;
     }
+
+    const ok = await copyToClipboard(values.join('\n'));
+    if (ok) {
+      logger.log(`[OK] Copied ${values.length} ${label} value(s).`);
+    } else {
+      logger.log(`[ERROR] Failed to copy ${label} values.`);
+    }
+  };
+
+  const onPopoutTable = () => {
+    const stale = !!(popout && popout.isClosed());
+    if (stale) {
+      popout = null;
+    }
+
+    if (popout) {
+      popout.focus();
+      popout.update();
+      logger.log('[INFO] Popout focused and refreshed.');
+      return;
+    }
+
     popout = openResultsPopout({
       getRows: () => state.rows,
       getRunning: () => state.running,
       logger,
     });
     if (!popout) return;
+
+    if (stale) {
+      logger.log('[INFO] Popout reopened.');
+      return;
+    }
+
     if (state.running) {
       logger.log('[INFO] Popout opened (live updates while running).');
     } else {
@@ -90,6 +118,10 @@ declare global {
     onDownloadJson,
     onCopyJson,
     onPopoutTable,
+    onCopyStock: () => onCopyQuickField('stock', 'stock'),
+    onCopyVin: () => onCopyQuickField('vin', 'VIN'),
+    onCopyPid: () => onCopyQuickField('pid', 'PID'),
+    onCopyReference: () => onCopyQuickField('reference', 'reference'),
     onOptionsChange: saveOptions,
     onClose,
   });
