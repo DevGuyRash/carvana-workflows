@@ -54,7 +54,7 @@ Private Sub Worksheet_Change(ByVal Target As Range)
     End If
 
     'Protect changed rows only for below-table edits/pastes; allow in-table deletes to shrink immediately.
-    Application.Run "'" & ThisWorkbook.Name & "'!AP_SyncAll_WithTarget", _
+    Application.Run "'" & ThisWorkbook.Name & "'!AP_QueueSyncAll_WithTarget", _
                     True, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, protectChangedRows
     Application.OnUndo "Undo last invoice-lines change", "'" & ThisWorkbook.Name & "'!AP_UndoInvoiceLinesChange"
 

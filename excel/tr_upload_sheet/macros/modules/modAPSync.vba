@@ -11,6 +11,34 @@ Private Const LINES_BUFFER_ROWS As Long = 0
 Private Const COL_LINE_NUMBER As String = "Line Number"
 Private Const COL_LINE_KEY As String = "zzLineKey"
 Private Const COL_INVOICE_KEY As String = "zzInvoiceKey"
+Private Const SYNC_DEBOUNCE_MS As Long = 250
+Private Const STATUS_SYNC_PENDING As String = "AP sync pending..."
+Private Const STATUS_SYNC_RUNNING As String = "AP sync running..."
+Private Const STATUS_SYNC_FAST_EDIT As String = "AP edit mode: fast"
+
+Private Const COL_INV_ID_FORMULA As String = "*Invoice ID"
+Private Const COL_ATTR6_FORMULA As String = "Attribute 6"
+Private Const COL_PROJECT_FORMULA As String = "Project Number"
+
+Private mSyncPending As Boolean
+Private mSyncInFlight As Boolean
+Private mSyncRunScheduled As Boolean
+Private mScheduledRunAt As Date
+Private mPendingBottomRow As Long
+Private mPendingTopRow As Long
+Private mPendingFirstCol As Long
+Private mPendingLastCol As Long
+Private mPendingProtectRows As Boolean
+Private mPendingRunInvoiceSync As Boolean
+Private mPendingSilent As Boolean
+
+Private mDeferredLineFormulasPending As Boolean
+Private mDeferredLineCfPending As Boolean
+Private mEditPerfModeEnabled As Boolean
+Private mSavedAutoFillFormulasInLists As Variant
+Private mSavedLineCfCalcEnabled As Variant
+Private mHaveSavedAutoFill As Boolean
+Private mHaveSavedLineCf As Boolean
 '======================================================================
 
 'Resize tbl_invoices safely and remap user-entered invoice header values by stable invoice key.
@@ -69,19 +97,31 @@ Public Sub AP_SyncInvoicesTable(Optional ByVal Silent As Boolean = True, _
     Dim userInputColumns As Collection
     Set userInputColumns = GetUserInputColumns(loInv, True)
 
-    SeedInvoiceKeysByPosition loInv, lcInvoiceKey, invoiceKeys
-
-    If InvoiceKeysMatchTable(lcInvoiceKey, invoiceKeys) Then GoTo CleanExit
-
-    Dim oldValuesByKey As Object
-    Set oldValuesByKey = SnapshotUserInputsByInvoiceKey(loInv, lcInvoiceKey, userInputColumns)
-
     Dim desiredRows As Long
     desiredRows = invoiceKeys.Count
     If desiredRows < 1 Then desiredRows = 1
 
+    SeedInvoiceKeysByPosition loInv, lcInvoiceKey, invoiceKeys
+
+    If InvoiceKeysMatchTable(lcInvoiceKey, invoiceKeys) Then GoTo CleanExit
+
+    If desiredRows > oldRows Then
+        If InvoiceKeysMatchPrefix(lcInvoiceKey, invoiceKeys, oldRows) Then
+            ResizeListObjectDataRows loInv, desiredRows
+            Set lcInvoiceKey = GetListColumn(loInv, COL_INVOICE_KEY)
+
+            ApplyInvoiceKeyAppend loInv, lcInvoiceKey, userInputColumns, invoiceKeys, oldRows + 1, desiredRows
+            ApplyTableBottomBoundary loInv
+            GoTo CleanExit
+        End If
+    End If
+
+    Dim oldValuesByKey As Object
+    Set oldValuesByKey = SnapshotUserInputsByInvoiceKey(loInv, lcInvoiceKey, userInputColumns)
+
     If oldRows <> desiredRows Then
         ResizeListObjectDataRows loInv, desiredRows
+        Set lcInvoiceKey = GetListColumn(loInv, COL_INVOICE_KEY)
     End If
 
     ApplyInvoiceKeyRemap loInv, lcInvoiceKey, userInputColumns, invoiceKeys, oldValuesByKey
@@ -130,7 +170,8 @@ Public Sub AP_SyncAll_WithTarget(Optional ByVal Silent As Boolean = True, _
                                  Optional ByVal changedTopRow As Long = 0, _
                                  Optional ByVal changedFirstCol As Long = 0, _
                                  Optional ByVal changedLastCol As Long = 0, _
-                                 Optional ByVal protectChangedRows As Boolean = True)
+                                 Optional ByVal protectChangedRows As Boolean = True, _
+                                 Optional ByVal runInvoiceSync As Boolean = True)
 
     Dim prevEvents As Boolean, prevScreen As Boolean
     Dim prevCalc As XlCalculation
@@ -146,7 +187,14 @@ Public Sub AP_SyncAll_WithTarget(Optional ByVal Silent As Boolean = True, _
     Application.Calculation = xlCalculationManual
 
     SyncInvoiceLinesCore Silent, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, protectChangedRows, False
-    AP_SyncInvoicesTable Silent, True, False
+
+    If runInvoiceSync Then
+        AP_SyncInvoicesTable Silent, True, False
+    End If
+
+    If prevCalc = xlCalculationAutomatic Then
+        CalculateTouchedTables runInvoiceSync, (Not mDeferredLineFormulasPending And Not mDeferredLineCfPending)
+    End If
 
 CleanExit:
     Application.Calculation = prevCalc
@@ -160,6 +208,510 @@ EH:
     End If
     Resume CleanExit
 End Sub
+
+Public Sub AP_QueueSyncAll_WithTarget(Optional ByVal Silent As Boolean = True, _
+                                      Optional ByVal changedBottomRow As Long = 0, _
+                                      Optional ByVal changedTopRow As Long = 0, _
+                                      Optional ByVal changedFirstCol As Long = 0, _
+                                      Optional ByVal changedLastCol As Long = 0, _
+                                      Optional ByVal protectChangedRows As Boolean = True)
+
+    On Error GoTo EH
+
+    Dim boundaryAffecting As Boolean
+    If mSyncPending And mPendingRunInvoiceSync Then
+        boundaryAffecting = False
+    Else
+        boundaryAffecting = DetectBoundaryAffectingChange(changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, protectChangedRows)
+    End If
+
+    If IsLikelyLinesGrowthChange(changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, protectChangedRows) Then
+        MarkDeferredLineWork
+    End If
+
+    If Not mSyncPending Then
+        mPendingBottomRow = changedBottomRow
+        mPendingTopRow = changedTopRow
+        mPendingFirstCol = changedFirstCol
+        mPendingLastCol = changedLastCol
+        mPendingProtectRows = protectChangedRows
+        mPendingRunInvoiceSync = boundaryAffecting
+        mPendingSilent = Silent
+    Else
+        MergePendingSyncBounds changedBottomRow, changedTopRow, changedFirstCol, changedLastCol
+        mPendingProtectRows = (mPendingProtectRows Or protectChangedRows)
+
+        If Not mPendingRunInvoiceSync Then
+            mPendingRunInvoiceSync = boundaryAffecting
+        End If
+
+        mPendingSilent = (mPendingSilent And Silent)
+    End If
+
+    mSyncPending = True
+    Application.StatusBar = STATUS_SYNC_PENDING
+    ScheduleQueuedSyncRun
+    Exit Sub
+
+EH:
+    AP_ResetPerfModeSafety
+    AP_SyncAll_WithTarget Silent, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, protectChangedRows, True
+End Sub
+
+Public Sub AP_RunQueuedSync()
+    Dim runSilent As Boolean
+    runSilent = True
+
+    On Error GoTo EH
+
+    If mSyncInFlight Then Exit Sub
+    If Not mSyncPending Then
+        mSyncRunScheduled = False
+        If mDeferredLineFormulasPending Or mDeferredLineCfPending Then
+            AP_FlushDeferredLineWork True
+        Else
+            Application.StatusBar = False
+        End If
+        Exit Sub
+    End If
+
+    Dim changedBottomRow As Long
+    Dim changedTopRow As Long
+    Dim changedFirstCol As Long
+    Dim changedLastCol As Long
+    Dim protectChangedRows As Boolean
+    Dim runInvoiceSync As Boolean
+
+    changedBottomRow = mPendingBottomRow
+    changedTopRow = mPendingTopRow
+    changedFirstCol = mPendingFirstCol
+    changedLastCol = mPendingLastCol
+    protectChangedRows = mPendingProtectRows
+    runInvoiceSync = mPendingRunInvoiceSync
+    runSilent = mPendingSilent
+
+    ResetQueuedSyncState
+    mSyncInFlight = True
+    Application.StatusBar = STATUS_SYNC_RUNNING
+
+    AP_SyncAll_WithTarget runSilent, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, protectChangedRows, runInvoiceSync
+
+CleanExit:
+    mSyncInFlight = False
+
+    If mSyncPending Then
+        Application.StatusBar = STATUS_SYNC_PENDING
+        ScheduleQueuedSyncRun
+    ElseIf mDeferredLineFormulasPending Or mDeferredLineCfPending Then
+        AP_FlushDeferredLineWork True
+    Else
+        Application.StatusBar = False
+    End If
+    Exit Sub
+
+EH:
+    mSyncInFlight = False
+    AP_ResetPerfModeSafety
+
+    If Not runSilent Then
+        MsgBox "AP_RunQueuedSync failed: " & Err.Description, vbExclamation
+    End If
+
+    If mSyncPending Then
+        Application.StatusBar = STATUS_SYNC_PENDING
+        ScheduleQueuedSyncRun
+    Else
+        Application.StatusBar = False
+    End If
+End Sub
+
+Public Sub AP_FlushQueuedSync(Optional ByVal Silent As Boolean = True, Optional ByVal forceDeferredWork As Boolean = True)
+    If Not mSyncPending Then
+        If forceDeferredWork Then AP_FlushDeferredLineWork Silent
+        Exit Sub
+    End If
+
+    If Not Silent Then
+        mPendingSilent = False
+    End If
+
+    CancelQueuedSyncRun
+    AP_RunQueuedSync
+
+    If forceDeferredWork Then AP_FlushDeferredLineWork Silent
+End Sub
+
+Private Sub CancelQueuedSyncRun()
+    Dim procName As String
+    procName = "'" & ThisWorkbook.Name & "'!AP_RunQueuedSync"
+
+    If mSyncRunScheduled Then
+        On Error Resume Next
+        Application.OnTime EarliestTime:=mScheduledRunAt, Procedure:=procName, Schedule:=False
+        On Error GoTo 0
+    End If
+
+    mSyncRunScheduled = False
+End Sub
+
+Private Sub ScheduleQueuedSyncRun()
+    Dim procName As String
+    procName = "'" & ThisWorkbook.Name & "'!AP_RunQueuedSync"
+
+    If mSyncRunScheduled Then
+        On Error Resume Next
+        Application.OnTime EarliestTime:=mScheduledRunAt, Procedure:=procName, Schedule:=False
+        On Error GoTo 0
+    End If
+
+    mScheduledRunAt = Now + (CDbl(SYNC_DEBOUNCE_MS) / 86400000#)
+    mSyncRunScheduled = True
+
+    On Error Resume Next
+    Application.OnTime EarliestTime:=mScheduledRunAt, Procedure:=procName, Schedule:=True
+
+    If Err.Number <> 0 Then
+        Err.Clear
+        mScheduledRunAt = Now + (1# / 86400#)
+        Application.OnTime EarliestTime:=mScheduledRunAt, Procedure:=procName, Schedule:=True
+    End If
+    On Error GoTo 0
+End Sub
+
+Private Sub ResetQueuedSyncState()
+    mSyncPending = False
+    mSyncRunScheduled = False
+    mPendingBottomRow = 0
+    mPendingTopRow = 0
+    mPendingFirstCol = 0
+    mPendingLastCol = 0
+    mPendingProtectRows = False
+    mPendingRunInvoiceSync = False
+    mPendingSilent = True
+End Sub
+
+Private Sub MergePendingSyncBounds(ByVal changedBottomRow As Long, _
+                                   ByVal changedTopRow As Long, _
+                                   ByVal changedFirstCol As Long, _
+                                   ByVal changedLastCol As Long)
+
+    mPendingTopRow = MergeMinPositiveLong(mPendingTopRow, changedTopRow)
+    mPendingBottomRow = MaxLong(mPendingBottomRow, changedBottomRow)
+    mPendingFirstCol = MergeMinPositiveLong(mPendingFirstCol, changedFirstCol)
+    mPendingLastCol = MaxLong(mPendingLastCol, changedLastCol)
+End Sub
+
+Private Function MergeMinPositiveLong(ByVal existingValue As Long, ByVal incomingValue As Long) As Long
+    If existingValue <= 0 Then
+        MergeMinPositiveLong = incomingValue
+    ElseIf incomingValue <= 0 Then
+        MergeMinPositiveLong = existingValue
+    Else
+        MergeMinPositiveLong = MinLong(existingValue, incomingValue)
+    End If
+End Function
+
+Private Sub MarkDeferredLineWork()
+    mDeferredLineFormulasPending = True
+    mDeferredLineCfPending = True
+    AP_SetPerformanceEditMode True
+End Sub
+
+Public Sub AP_SetPerformanceEditMode(ByVal enabled As Boolean)
+    On Error GoTo SafeExit
+
+    Dim wsLines As Worksheet
+    Set wsLines = ThisWorkbook.Worksheets(SH_LINES)
+
+    If enabled Then
+        If mEditPerfModeEnabled Then Exit Sub
+
+        If Not mHaveSavedAutoFill Then
+            On Error Resume Next
+            mSavedAutoFillFormulasInLists = Application.AutoCorrect.AutoFillFormulasInLists
+            mHaveSavedAutoFill = (Err.Number = 0)
+            Err.Clear
+            On Error GoTo SafeExit
+        End If
+
+        If mHaveSavedAutoFill Then
+            On Error Resume Next
+            Application.AutoCorrect.AutoFillFormulasInLists = False
+            Err.Clear
+            On Error GoTo SafeExit
+        End If
+
+        If Not mHaveSavedLineCf Then
+            On Error Resume Next
+            mSavedLineCfCalcEnabled = wsLines.EnableFormatConditionsCalculation
+            mHaveSavedLineCf = (Err.Number = 0)
+            Err.Clear
+            On Error GoTo SafeExit
+        End If
+
+        On Error Resume Next
+        wsLines.EnableFormatConditionsCalculation = False
+        Err.Clear
+        On Error GoTo SafeExit
+
+        mEditPerfModeEnabled = True
+        Application.StatusBar = STATUS_SYNC_FAST_EDIT
+    Else
+        If mHaveSavedAutoFill Then
+            On Error Resume Next
+            Application.AutoCorrect.AutoFillFormulasInLists = CBool(mSavedAutoFillFormulasInLists)
+            Err.Clear
+            On Error GoTo SafeExit
+        End If
+
+        If mHaveSavedLineCf Then
+            On Error Resume Next
+            wsLines.EnableFormatConditionsCalculation = CBool(mSavedLineCfCalcEnabled)
+            Err.Clear
+            On Error GoTo SafeExit
+        End If
+
+        mEditPerfModeEnabled = False
+
+        If Not mSyncPending Then
+            Application.StatusBar = False
+        End If
+    End If
+
+SafeExit:
+End Sub
+
+Public Sub AP_FlushDeferredLineWork(Optional ByVal Silent As Boolean = True)
+    If Not mDeferredLineFormulasPending And Not mDeferredLineCfPending Then Exit Sub
+
+    Dim prevEvents As Boolean, prevScreen As Boolean
+    Dim prevCalc As XlCalculation
+
+    prevEvents = Application.EnableEvents
+    prevScreen = Application.ScreenUpdating
+    prevCalc = Application.Calculation
+
+    On Error GoTo EH
+
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+
+    Dim wsLines As Worksheet
+    Set wsLines = ThisWorkbook.Worksheets(SH_LINES)
+
+    Dim loLines As ListObject
+    Set loLines = wsLines.ListObjects(TBL_LINES)
+
+    If mDeferredLineFormulasPending Then
+        ApplyDeferredLineFormulas loLines
+    End If
+
+    If mDeferredLineCfPending Then
+        On Error Resume Next
+        wsLines.EnableFormatConditionsCalculation = True
+        On Error GoTo EH
+    End If
+
+    If Not loLines.DataBodyRange Is Nothing Then
+        loLines.DataBodyRange.Calculate
+    End If
+
+    mDeferredLineFormulasPending = False
+    mDeferredLineCfPending = False
+    AP_SetPerformanceEditMode False
+
+CleanExit:
+    Application.Calculation = prevCalc
+    Application.ScreenUpdating = prevScreen
+    Application.EnableEvents = prevEvents
+    Exit Sub
+
+EH:
+    AP_ResetPerfModeSafety
+    If Not Silent Then
+        MsgBox "AP_FlushDeferredLineWork failed: " & Err.Description, vbExclamation
+    End If
+    Resume CleanExit
+End Sub
+
+Public Sub AP_BeforeExportFlush(Optional ByVal Silent As Boolean = True)
+    AP_FlushQueuedSync Silent, True
+End Sub
+
+Public Sub AP_ResetPerfModeSafety()
+    On Error Resume Next
+    mDeferredLineFormulasPending = False
+    mDeferredLineCfPending = False
+    AP_SetPerformanceEditMode False
+    On Error GoTo 0
+End Sub
+
+Private Sub ApplyDeferredLineFormulas(ByVal loLines As ListObject)
+    If loLines Is Nothing Then Exit Sub
+    If loLines.DataBodyRange Is Nothing Then Exit Sub
+
+    Dim usedRows As Long
+    usedRows = LastUsedLineNumberRowCount(loLines)
+    If usedRows < 1 Then usedRows = 1
+
+    ApplyColumnFormulaToUsedRows GetListColumn(loLines, COL_INV_ID_FORMULA), usedRows
+    ApplyColumnFormulaToUsedRows GetListColumn(loLines, COL_ATTR6_FORMULA), usedRows
+    ApplyColumnFormulaToUsedRows GetListColumn(loLines, COL_PROJECT_FORMULA), usedRows
+End Sub
+
+Private Sub ApplyColumnFormulaToUsedRows(ByVal lc As ListColumn, ByVal usedRows As Long)
+    If lc Is Nothing Then Exit Sub
+    If lc.DataBodyRange Is Nothing Then Exit Sub
+
+    Dim rowCount As Long
+    rowCount = lc.DataBodyRange.Rows.Count
+    If rowCount < 1 Then Exit Sub
+
+    If usedRows > rowCount Then usedRows = rowCount
+    If usedRows < 1 Then Exit Sub
+
+    Dim formulaText As String
+    On Error Resume Next
+    formulaText = CStr(lc.DataBodyRange.Cells(1, 1).Formula2)
+    On Error GoTo 0
+
+    If Len(formulaText) = 0 Then
+        formulaText = CStr(lc.DataBodyRange.Cells(1, 1).Formula)
+    End If
+    If Len(formulaText) = 0 Then Exit Sub
+
+    Dim rngTarget As Range
+    Set rngTarget = lc.DataBodyRange.Cells(1, 1).Resize(usedRows, 1)
+
+    On Error Resume Next
+    rngTarget.Formula2 = formulaText
+    If Err.Number <> 0 Then
+        Err.Clear
+        rngTarget.Formula = formulaText
+    End If
+    On Error GoTo 0
+End Sub
+
+Private Function IsLikelyLinesGrowthChange(ByVal changedBottomRow As Long, _
+                                          ByVal changedTopRow As Long, _
+                                          ByVal changedFirstCol As Long, _
+                                          ByVal changedLastCol As Long, _
+                                          ByVal protectChangedRows As Boolean) As Boolean
+
+    On Error GoTo ConservativeFalse
+
+    If changedBottomRow <= 0 Or changedTopRow <= 0 Then Exit Function
+
+    Dim wsLines As Worksheet
+    Set wsLines = ThisWorkbook.Worksheets(SH_LINES)
+
+    Dim loLines As ListObject
+    Set loLines = wsLines.ListObjects(TBL_LINES)
+
+    Dim firstDataRow As Long
+    firstDataRow = loLines.HeaderRowRange.Row + 1
+
+    Dim tableBottomRow As Long
+    tableBottomRow = firstDataRow + loLines.ListRows.Count - 1
+
+    If protectChangedRows And changedTopRow > tableBottomRow Then
+        If RangeHasAnyContent(wsLines, changedTopRow, changedBottomRow, changedFirstCol, changedLastCol) Then
+            IsLikelyLinesGrowthChange = True
+            Exit Function
+        End If
+    End If
+
+    If changedBottomRow > tableBottomRow Then
+        IsLikelyLinesGrowthChange = True
+        Exit Function
+    End If
+
+    If changedTopRow >= firstDataRow And changedBottomRow > changedTopRow Then
+        IsLikelyLinesGrowthChange = True
+        Exit Function
+    End If
+
+ConservativeFalse:
+End Function
+
+Private Function DetectBoundaryAffectingChange(ByVal changedBottomRow As Long, _
+                                                ByVal changedTopRow As Long, _
+                                                ByVal changedFirstCol As Long, _
+                                                ByVal changedLastCol As Long, _
+                                                ByVal protectChangedRows As Boolean) As Boolean
+
+    On Error GoTo ConservativeTrue
+
+    If changedBottomRow <= 0 Or changedTopRow <= 0 Then
+        DetectBoundaryAffectingChange = True
+        Exit Function
+    End If
+
+    Dim wsLines As Worksheet
+    Set wsLines = ThisWorkbook.Worksheets(SH_LINES)
+
+    Dim loLines As ListObject
+    Set loLines = wsLines.ListObjects(TBL_LINES)
+
+    Dim firstDataRow As Long
+    firstDataRow = loLines.HeaderRowRange.Row + 1
+
+    Dim tableBottomRow As Long
+    tableBottomRow = firstDataRow + loLines.ListRows.Count - 1
+
+    If changedBottomRow > tableBottomRow Then
+        DetectBoundaryAffectingChange = True
+        Exit Function
+    End If
+
+    Dim lcLineNumber As ListColumn
+    Set lcLineNumber = GetListColumn(loLines, COL_LINE_NUMBER, "*Line Number")
+
+    If lcLineNumber Is Nothing Then
+        DetectBoundaryAffectingChange = True
+        Exit Function
+    End If
+
+    Dim lineNumberAbsCol As Long
+    lineNumberAbsCol = lcLineNumber.Range.Column
+
+    If changedFirstCol <= lineNumberAbsCol And changedLastCol >= lineNumberAbsCol Then
+        DetectBoundaryAffectingChange = True
+        Exit Function
+    End If
+
+    If changedTopRow <= tableBottomRow And changedBottomRow >= firstDataRow Then
+        Dim startIx As Long
+        Dim endIx As Long
+
+        startIx = MaxLong(1, changedTopRow - firstDataRow + 1)
+        endIx = MinLong(loLines.ListRows.Count, changedBottomRow - firstDataRow + 1)
+
+        If endIx >= startIx Then
+            Dim rngLineSlice As Range
+            Set rngLineSlice = lcLineNumber.DataBodyRange.Cells(startIx, 1).Resize(endIx - startIx + 1, 1)
+
+            If Application.CountBlank(rngLineSlice) > 0 Then
+                DetectBoundaryAffectingChange = True
+                Exit Function
+            End If
+        End If
+    End If
+
+    If protectChangedRows And changedTopRow > tableBottomRow Then
+        If RangeHasAnyContent(wsLines, changedTopRow, changedBottomRow, changedFirstCol, changedLastCol) Then
+            DetectBoundaryAffectingChange = True
+            Exit Function
+        End If
+    End If
+
+    DetectBoundaryAffectingChange = False
+    Exit Function
+
+ConservativeTrue:
+    DetectBoundaryAffectingChange = True
+End Function
 
 Private Sub SyncInvoiceLinesCore(ByVal Silent As Boolean, _
                                  ByVal changedBottomRow As Long, _
@@ -265,6 +817,10 @@ Public Sub AP_UndoInvoiceLinesChange()
 
     On Error GoTo CleanExit
     Application.EnableEvents = False
+
+    CancelQueuedSyncRun
+    ResetQueuedSyncState
+    AP_ResetPerfModeSafety
 
     Application.Undo
     AP_SyncInvoiceLinesTable True
@@ -477,23 +1033,48 @@ Private Function SnapshotUserInputsByInvoiceKey(ByVal loInv As ListObject, _
         Exit Function
     End If
 
+    Dim rowCount As Long
+    rowCount = loInv.ListRows.Count
+    If rowCount < 1 Then
+        Set SnapshotUserInputsByInvoiceKey = snapshot
+        Exit Function
+    End If
+
+    Dim keyValues As Variant
+    keyValues = lcInvoiceKey.DataBodyRange.Value2
+
+    Dim userColumnCount As Long
+    userColumnCount = userInputColumns.Count
+
+    Dim userColumnValues() As Variant
+    If userColumnCount > 0 Then
+        ReDim userColumnValues(1 To userColumnCount) As Variant
+
+        Dim sourceColIndex As Long
+        For sourceColIndex = 1 To userColumnCount
+            Dim sourceLc As ListColumn
+            Set sourceLc = userInputColumns(sourceColIndex)
+            userColumnValues(sourceColIndex) = sourceLc.DataBodyRange.Value2
+        Next sourceColIndex
+    End If
+
     Dim rowIndex As Long
-    For rowIndex = 1 To loInv.ListRows.Count
+    For rowIndex = 1 To rowCount
         Dim keyValue As String
-        keyValue = Trim$(CStr(lcInvoiceKey.DataBodyRange.Cells(rowIndex, 1).Value2))
+        keyValue = Trim$(CStr(keyValues(rowIndex, 1)))
 
         If Len(keyValue) > 0 Then
-            If userInputColumns.Count = 0 Then
+            If userColumnCount = 0 Then
                 snapshot(keyValue) = Empty
             Else
                 Dim rowValues() As Variant
-                ReDim rowValues(1 To userInputColumns.Count) As Variant
+                ReDim rowValues(1 To userColumnCount) As Variant
 
                 Dim colIndex As Long
-                For colIndex = 1 To userInputColumns.Count
-                    Dim lcUser As ListColumn
-                    Set lcUser = userInputColumns(colIndex)
-                    rowValues(colIndex) = lcUser.DataBodyRange.Cells(rowIndex, 1).Value2
+                For colIndex = 1 To userColumnCount
+                    Dim colValues As Variant
+                    colValues = userColumnValues(colIndex)
+                    rowValues(colIndex) = colValues(rowIndex, 1)
                 Next colIndex
 
                 snapshot(keyValue) = rowValues
@@ -517,33 +1098,112 @@ Private Sub ApplyInvoiceKeyRemap(ByVal loInv As ListObject, _
         lcInvoiceKey.DataBodyRange.Cells(1, 1).ClearContents
         Exit Sub
     End If
+
+    Dim rowCount As Long
+    rowCount = loInv.ListRows.Count
+
+    Dim keyOutput() As Variant
+    ReDim keyOutput(1 To rowCount, 1 To 1) As Variant
+
     Dim rowIndex As Long
-    For rowIndex = 1 To loInv.ListRows.Count
-        Dim keyValue As String
+    For rowIndex = 1 To rowCount
         If rowIndex <= invoiceKeys.Count Then
-            keyValue = CStr(invoiceKeys(rowIndex))
+            keyOutput(rowIndex, 1) = CStr(invoiceKeys(rowIndex))
         Else
-            keyValue = ""
+            keyOutput(rowIndex, 1) = ""
         End If
+    Next rowIndex
 
-        lcInvoiceKey.DataBodyRange.Cells(rowIndex, 1).Value2 = keyValue
+    lcInvoiceKey.DataBodyRange.Value2 = keyOutput
 
-        If userInputColumns.Count > 0 Then
+    Dim userColumnCount As Long
+    userColumnCount = userInputColumns.Count
+    If userColumnCount = 0 Then Exit Sub
+
+    Dim colIndex As Long
+    For colIndex = 1 To userColumnCount
+        Dim lcUser As ListColumn
+        Set lcUser = userInputColumns(colIndex)
+
+        Dim columnOutput() As Variant
+        ReDim columnOutput(1 To rowCount, 1 To 1) As Variant
+
+        For rowIndex = 1 To rowCount
+            Dim keyValue As String
+            keyValue = CStr(keyOutput(rowIndex, 1))
+
             If Len(keyValue) > 0 And oldValuesByKey.Exists(keyValue) Then
                 Dim rowValues As Variant
                 rowValues = oldValuesByKey(keyValue)
 
-                Dim colIndex As Long
-                For colIndex = 1 To userInputColumns.Count
-                    Dim lcUser As ListColumn
-                    Set lcUser = userInputColumns(colIndex)
-                    lcUser.DataBodyRange.Cells(rowIndex, 1).Value2 = rowValues(colIndex)
-                Next colIndex
+                If IsArray(rowValues) Then
+                    columnOutput(rowIndex, 1) = rowValues(colIndex)
+                Else
+                    columnOutput(rowIndex, 1) = Empty
+                End If
             Else
-                ClearUserInputRow loInv, userInputColumns, rowIndex
+                columnOutput(rowIndex, 1) = Empty
             End If
-        End If
+        Next rowIndex
+
+        lcUser.DataBodyRange.Value2 = columnOutput
+    Next colIndex
+End Sub
+
+Private Function InvoiceKeysMatchPrefix(ByVal lcInvoiceKey As ListColumn, _
+                                        ByVal invoiceKeys As Collection, _
+                                        ByVal prefixRows As Long) As Boolean
+
+    If prefixRows <= 0 Then
+        InvoiceKeysMatchPrefix = True
+        Exit Function
+    End If
+
+    If lcInvoiceKey Is Nothing Then Exit Function
+    If lcInvoiceKey.DataBodyRange Is Nothing Then Exit Function
+    If lcInvoiceKey.DataBodyRange.Rows.Count < prefixRows Then Exit Function
+    If invoiceKeys.Count < prefixRows Then Exit Function
+
+    Dim rowIndex As Long
+    For rowIndex = 1 To prefixRows
+        If CStr(lcInvoiceKey.DataBodyRange.Cells(rowIndex, 1).Value2) <> CStr(invoiceKeys(rowIndex)) Then Exit Function
     Next rowIndex
+
+    InvoiceKeysMatchPrefix = True
+End Function
+
+Private Sub ApplyInvoiceKeyAppend(ByVal loInv As ListObject, _
+                                  ByVal lcInvoiceKey As ListColumn, _
+                                  ByVal userInputColumns As Collection, _
+                                  ByVal invoiceKeys As Collection, _
+                                  ByVal startRow As Long, _
+                                  ByVal endRow As Long)
+
+    If lcInvoiceKey Is Nothing Then Exit Sub
+    If loInv.DataBodyRange Is Nothing Then Exit Sub
+    If startRow < 1 Or endRow < startRow Then Exit Sub
+
+    Dim writeRows As Long
+    writeRows = endRow - startRow + 1
+
+    Dim keyOutput() As Variant
+    ReDim keyOutput(1 To writeRows, 1 To 1) As Variant
+
+    Dim offsetIx As Long
+    For offsetIx = 1 To writeRows
+        keyOutput(offsetIx, 1) = CStr(invoiceKeys(startRow + offsetIx - 1))
+    Next offsetIx
+
+    lcInvoiceKey.DataBodyRange.Cells(startRow, 1).Resize(writeRows, 1).Value2 = keyOutput
+
+    If userInputColumns.Count > 0 Then
+        Dim colIndex As Long
+        For colIndex = 1 To userInputColumns.Count
+            Dim lcUser As ListColumn
+            Set lcUser = userInputColumns(colIndex)
+            lcUser.DataBodyRange.Cells(startRow, 1).Resize(writeRows, 1).ClearContents
+        Next colIndex
+    End If
 End Sub
 
 Private Sub ClearUserInputRow(ByVal lo As ListObject, ByVal userInputColumns As Collection, ByVal rowIndex As Long)
@@ -761,6 +1421,35 @@ Private Sub ClearOrphanedTableArea(ByVal ws As Worksheet, _
     End If
 End Sub
 
+Private Sub CalculateTouchedTables(ByVal includeInvoices As Boolean, Optional ByVal includeLines As Boolean = True)
+    On Error Resume Next
+
+    Dim wsLines As Worksheet
+    Set wsLines = ThisWorkbook.Worksheets(SH_LINES)
+
+    Dim loLines As ListObject
+    Set loLines = wsLines.ListObjects(TBL_LINES)
+
+    If includeLines Then
+        If Not loLines.DataBodyRange Is Nothing Then
+            loLines.DataBodyRange.Calculate
+        End If
+    End If
+
+    If includeInvoices Then
+        Dim wsInv As Worksheet
+        Set wsInv = ThisWorkbook.Worksheets(SH_INVOICES)
+
+        Dim loInv As ListObject
+        Set loInv = wsInv.ListObjects(TBL_INVOICES)
+
+        If Not loInv.DataBodyRange Is Nothing Then
+            loInv.DataBodyRange.Calculate
+        End If
+    End If
+
+    On Error GoTo 0
+End Sub
 Private Function RangeHasAnyContent(ByVal ws As Worksheet, _
                                     ByVal topRow As Long, _
                                     ByVal bottomRow As Long, _

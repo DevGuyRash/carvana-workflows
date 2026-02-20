@@ -81,6 +81,9 @@ Public Sub GenCSV()
 
     On Error GoTo ErrHandler
 
+    Application.Run "'" & ThisWorkbook.Name & "'!AP_BeforeExportFlush", True
+
+
     Dim invoicesWs As Worksheet
     Dim linesWs As Worksheet
 
