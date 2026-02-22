@@ -833,6 +833,9 @@ if (!CVR.apProcess) {
 
       // Patterns (kept compact + compiled once per run)
       const VVP='([A-HJ-NPR-Z0-9]{11,17})\\b', SVP='((?:[A-Z0-9&]{2,8}-)?\\d{7,12}(?:-(?:[A-Z]{2,8}|\\d{1,4}))?)\\b', PVP='(\\d{3,})\\b';
+      // Descriptor matcher groups:
+      // 1) stock base, 2) stock suffix (alpha/numeric), 3) VIN, 4) PID (optional).
+      // Remaining `-TOKEN` segments are tolerated as status/noise suffixes.
       const DVP=/(?:^|[^A-Z0-9&])((?:[A-Z0-9&]{2,8}-)?\d{7,12})(?:-([A-Z]{2,8}|\d{1,4}))?-([A-HJ-NPR-Z0-9]{11,17})(?:-(\d{3,}))?(?:-[A-Z0-9&]{2,30})*(?:$|[^A-Z0-9&])/i;
       const SXP=/^((?:[A-Z0-9&]{2,8}-)?\d{7,12})(?:-([A-Z]{2,8}|\d{1,4}))?$/i;
       const VCHK=/^[A-HJ-NPR-Z0-9]{11,17}$/i;
