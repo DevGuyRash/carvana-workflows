@@ -61,6 +61,16 @@ describe('uniqueness helpers', () => {
     expect(ts).toBe(Date.parse('2026-02-20T10:30:00Z'));
   });
 
+  it('keeps scanning lower-priority patterns when top pattern is non-date', () => {
+    const row = {
+      'Created By': 'jane.doe',
+      Timestamp: '2026-02-21T09:45:00Z',
+    } as ScrapedRow;
+
+    const ts = parseRowDateMs(row, defaultUniq);
+    expect(ts).toBe(Date.parse('2026-02-21T09:45:00Z'));
+  });
+
   it('chooses replacement correctly for latest_by_date', () => {
     expect(shouldReplaceDuplicate({ existingTs: 100, candidateTs: 200, strategy: 'latest_by_date' })).toBe(true);
     expect(shouldReplaceDuplicate({ existingTs: 200, candidateTs: 100, strategy: 'latest_by_date' })).toBe(false);

@@ -83,11 +83,14 @@ function tryParseDateMs(text: string): number | null {
 }
 
 export function findAutoDateHeader(keys: string[], row?: ScrapedRow): string | null {
+  let firstMatch: string | null = null;
+
   for (const pattern of AUTO_DATE_PATTERNS) {
     const re = typeof pattern === 'string' ? new RegExp(`^${pattern}$`, 'i') : pattern;
     const matches = keys.filter((k) => re.test(cleanText(k)));
     if (matches.length === 0) continue;
     if (!row) return matches[0];
+    if (!firstMatch) firstMatch = matches[0];
 
     const parseable = matches.find((k) => {
       const raw = row[k];
@@ -95,9 +98,8 @@ export function findAutoDateHeader(keys: string[], row?: ScrapedRow): string | n
       return tryParseDateMs(text) !== null;
     });
     if (parseable) return parseable;
-    return matches[0];
   }
-  return null;
+  return firstMatch;
 }
 
 function parseUsDateTime(text: string): number | null {
