@@ -956,30 +956,45 @@ Private Function InvoiceKeysFromLines(ByVal loLines As ListObject, Optional ByVa
     Dim limit As Long
     limit = loLines.ListRows.Count
     If maxRows > 0 Then limit = MinLong(limit, maxRows)
+    If limit < 1 Then Exit Function
+
+    Dim lineNumberValues As Variant
+    lineNumberValues = ColumnRangeValue2D(lcLineNumber.DataBodyRange.Resize(limit, 1), limit)
+
+    Dim lineKeyValues As Variant
+    lineKeyValues = ColumnRangeValue2D(lcLineKey.DataBodyRange.Resize(limit, 1), limit)
+
+    Dim didUpdateKeys As Boolean
 
     Dim rowIndex As Long
     For rowIndex = 1 To limit
         Dim lineNumberValue As Variant
-        lineNumberValue = lcLineNumber.DataBodyRange.Cells(rowIndex, 1).Value2
+        lineNumberValue = lineNumberValues(rowIndex, 1)
 
         If IsLineStartValue(lineNumberValue) Then
             Dim lineKey As String
-            lineKey = Trim$(CStr(lcLineKey.DataBodyRange.Cells(rowIndex, 1).Value2))
+            lineKey = Trim$(CStr(lineKeyValues(rowIndex, 1)))
 
             If Len(lineKey) = 0 Then
                 lineKey = NewStableKey()
-                lcLineKey.DataBodyRange.Cells(rowIndex, 1).Value2 = lineKey
+                lineKeyValues(rowIndex, 1) = lineKey
+                didUpdateKeys = True
             End If
 
             If seen.Exists(lineKey) Then
                 lineKey = NewStableKey()
-                lcLineKey.DataBodyRange.Cells(rowIndex, 1).Value2 = lineKey
+                lineKeyValues(rowIndex, 1) = lineKey
+                didUpdateKeys = True
             End If
 
             seen(lineKey) = True
             keys.Add lineKey
         End If
     Next rowIndex
+
+    If didUpdateKeys Then
+        lcLineKey.DataBodyRange.Resize(limit, 1).Value2 = lineKeyValues
+    End If
 End Function
 
 Private Sub SeedInvoiceKeysByPosition(ByVal loInv As ListObject, _
