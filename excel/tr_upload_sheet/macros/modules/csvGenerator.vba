@@ -58,6 +58,8 @@ Private Type TAppState
     EnableCancelKey As XlEnableCancelKey
 End Type
 
+Private mRandomSeeded As Boolean
+
 '========================
 ' MAIN
 '========================
@@ -944,7 +946,7 @@ Private Sub CopyFileOverwrite(ByVal src As String, ByVal dest As String)
 End Sub
 
 Private Function CreateTempFolder(ByVal prefix As String) As String
-    Randomize
+    EnsureRandomSeeded
 
     Dim base As String
     base = Environ$("TEMP")
@@ -959,6 +961,12 @@ Private Function CreateTempFolder(ByVal prefix As String) As String
     MkDir folderPath
     CreateTempFolder = folderPath
 End Function
+
+Private Sub EnsureRandomSeeded()
+    If mRandomSeeded Then Exit Sub
+    Randomize
+    mRandomSeeded = True
+End Sub
 
 Private Function EnsureExtension(ByVal path As String, ByVal ext As String) As String
     If Len(path) = 0 Then

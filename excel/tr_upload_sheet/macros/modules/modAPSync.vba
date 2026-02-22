@@ -39,6 +39,7 @@ Private mSavedAutoFillFormulasInLists As Variant
 Private mSavedLineCfCalcEnabled As Variant
 Private mHaveSavedAutoFill As Boolean
 Private mHaveSavedLineCf As Boolean
+Private mRandomSeeded As Boolean
 '======================================================================
 
 'Resize tbl_invoices safely and remap user-entered invoice header values by stable invoice key.
@@ -364,7 +365,7 @@ Private Sub ScheduleQueuedSyncRun()
         On Error GoTo 0
     End If
 
-    mScheduledRunAt = Now + (CDbl(SYNC_DEBOUNCE_MS) / 86400000#)
+    mScheduledRunAt = DateAdd("s", DebounceDelaySeconds(), Now)
     mSyncRunScheduled = True
 
     On Error Resume Next
@@ -377,6 +378,12 @@ Private Sub ScheduleQueuedSyncRun()
     End If
     On Error GoTo 0
 End Sub
+
+Private Function DebounceDelaySeconds() As Long
+    ' Application.OnTime uses Date precision and effectively schedules at second granularity.
+    DebounceDelaySeconds = CLng((SYNC_DEBOUNCE_MS + 999) \ 1000)
+    If DebounceDelaySeconds < 1 Then DebounceDelaySeconds = 1
+End Function
 
 Private Sub ResetQueuedSyncState()
     mSyncPending = False
@@ -1041,7 +1048,7 @@ Private Function SnapshotUserInputsByInvoiceKey(ByVal loInv As ListObject, _
     End If
 
     Dim keyValues As Variant
-    keyValues = lcInvoiceKey.DataBodyRange.Value2
+    keyValues = ColumnRangeValue2D(lcInvoiceKey.DataBodyRange, rowCount)
 
     Dim userColumnCount As Long
     userColumnCount = userInputColumns.Count
@@ -1054,7 +1061,7 @@ Private Function SnapshotUserInputsByInvoiceKey(ByVal loInv As ListObject, _
         For sourceColIndex = 1 To userColumnCount
             Dim sourceLc As ListColumn
             Set sourceLc = userInputColumns(sourceColIndex)
-            userColumnValues(sourceColIndex) = sourceLc.DataBodyRange.Value2
+            userColumnValues(sourceColIndex) = ColumnRangeValue2D(sourceLc.DataBodyRange, rowCount)
         Next sourceColIndex
     End If
 
@@ -1083,6 +1090,19 @@ Private Function SnapshotUserInputsByInvoiceKey(ByVal loInv As ListObject, _
     Next rowIndex
 
     Set SnapshotUserInputsByInvoiceKey = snapshot
+End Function
+
+Private Function ColumnRangeValue2D(ByVal dataRange As Range, ByVal rowCount As Long) As Variant
+    Dim values As Variant
+    values = dataRange.Value2
+
+    If rowCount = 1 Then
+        Dim wrapped(1 To 1, 1 To 1) As Variant
+        wrapped(1, 1) = values
+        ColumnRangeValue2D = wrapped
+    Else
+        ColumnRangeValue2D = values
+    End If
 End Function
 
 Private Sub ApplyInvoiceKeyRemap(ByVal loInv As ListObject, _
@@ -1357,12 +1377,18 @@ Private Function NewStableKey() As String
     If Len(guid) >= 38 Then
         NewStableKey = Mid$(guid, 2, 36)
     Else
-        Randomize
+        EnsureRandomSeeded
         NewStableKey = Format$(Now, "yyyymmddhhnnss") & _
                        "-" & Right$("00000000" & Hex$(CLng(Rnd() * 2147483647#)), 8) & _
                        "-" & Right$("00000000" & Hex$(CLng(Rnd() * 2147483647#)), 8)
     End If
 End Function
+
+Private Sub EnsureRandomSeeded()
+    If mRandomSeeded Then Exit Sub
+    Randomize
+    mRandomSeeded = True
+End Sub
 
 Private Function EnsureInternalColumn(ByVal lo As ListObject, ByVal headerName As String) As ListColumn
     Set EnsureInternalColumn = GetListColumn(lo, headerName)

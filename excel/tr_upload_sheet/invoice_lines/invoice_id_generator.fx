@@ -68,7 +68,7 @@
 
         IF(
           ln=0,
-          IF(candidateInv="", baseInv, markerInv),
+          IF(candidateInv="", baseInv, candidateInv),
           baseInv
         )
       )
