@@ -75,11 +75,27 @@ export function buildUniquenessKey(row: ScrapedRow, keyFields: UniquenessKeyFiel
   return parts.join('|');
 }
 
-export function findAutoDateHeader(keys: string[]): string | null {
+function tryParseDateMs(text: string): number | null {
+  if (!text) return null;
+  const parsed = Date.parse(text);
+  if (Number.isFinite(parsed)) return parsed;
+  return parseUsDateTime(text);
+}
+
+export function findAutoDateHeader(keys: string[], row?: ScrapedRow): string | null {
   for (const pattern of AUTO_DATE_PATTERNS) {
     const re = typeof pattern === 'string' ? new RegExp(`^${pattern}$`, 'i') : pattern;
-    const match = keys.find((k) => re.test(cleanText(k)));
-    if (match) return match;
+    const matches = keys.filter((k) => re.test(cleanText(k)));
+    if (matches.length === 0) continue;
+    if (!row) return matches[0];
+
+    const parseable = matches.find((k) => {
+      const raw = row[k];
+      const text = cleanText(raw);
+      return tryParseDateMs(text) !== null;
+    });
+    if (parseable) return parseable;
+    return matches[0];
   }
   return null;
 }
@@ -124,7 +140,7 @@ export function parseRowDateMs(row: ScrapedRow, opts: UniquenessOptions): number
   }
 
   if (!header) {
-    header = findAutoDateHeader(keys);
+    header = findAutoDateHeader(keys, row);
   }
 
   if (!header) return null;
@@ -133,10 +149,7 @@ export function parseRowDateMs(row: ScrapedRow, opts: UniquenessOptions): number
   const text = cleanText(raw);
   if (!text) return null;
 
-  const parsed = Date.parse(text);
-  if (Number.isFinite(parsed)) return parsed;
-
-  return parseUsDateTime(text);
+  return tryParseDateMs(text);
 }
 
 export function shouldReplaceDuplicate(params: {

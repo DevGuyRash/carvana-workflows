@@ -51,6 +51,16 @@ describe('uniqueness helpers', () => {
     expect(manualTs).toBe(Date.parse('2026-02-19T15:12:00Z'));
   });
 
+  it('prefers parseable date header over non-date text in auto mode', () => {
+    const row = {
+      'Created By': 'jane.doe',
+      'Created Date': '2026-02-20T10:30:00Z',
+    } as ScrapedRow;
+
+    const ts = parseRowDateMs(row, defaultUniq);
+    expect(ts).toBe(Date.parse('2026-02-20T10:30:00Z'));
+  });
+
   it('chooses replacement correctly for latest_by_date', () => {
     expect(shouldReplaceDuplicate({ existingTs: 100, candidateTs: 200, strategy: 'latest_by_date' })).toBe(true);
     expect(shouldReplaceDuplicate({ existingTs: 200, candidateTs: 100, strategy: 'latest_by_date' })).toBe(false);
