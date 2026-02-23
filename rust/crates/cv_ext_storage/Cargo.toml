@@ -1,0 +1,8 @@
+[package]
+name = "cv_ext_storage"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde.workspace = true
+cv_ext_contract = { path = "../cv_ext_contract" }

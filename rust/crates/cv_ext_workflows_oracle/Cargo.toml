@@ -1,0 +1,7 @@
+[package]
+name = "cv_ext_workflows_oracle"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cv_ext_contract = { path = "../cv_ext_contract" }
