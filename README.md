@@ -1,99 +1,50 @@
-# Carvana Automation Userscripts — Foundation
+# Carvana Workflows
 
-Production-ready skeleton for DRY, SOLID, KISS, YAGNI Tampermonkey automation targeting:
+Unified Chrome + Firefox WebExtension runtime powered by Rust + WebAssembly.
 
-- **Jira** - `https://jira.carvana.com/*`
-- **Oracle (Carvana)** - `https://edsk.fa.us2.oraclecloud.com/*`
-- **Carma** - `https://carma.cvnacorp.com/*`
+## Runtime Direction
 
-Shared TypeScript core:
-- Non‑brittle selectors (`css/id/role/tag/type/attributes/text`, `and/or/not/within/nth`, `visible`)
-- Wait utilities with MutationObserver + polling + stability time
-- Declarative workflows (click/type/wait/extract/branch/error) with persistence/resume
-- Dynamic menu (Shadow DOM): **Actions**, **Automations**, **Settings** (Theme/Storage/Logs) + **Developer mode** for selectors/JSON
+- WebExtension only (no userscript runtime).
+- Rust owns workflow contracts, site registries, and execution logic.
+- TypeScript is minimal extension glue for browser APIs and bootstrap.
 
-> Looking to build your own pages/workflows? See **[AGENTS.md](./AGENTS.md)**.
+## Supported Sites
 
----
+- Jira: `https://jira.carvana.com/*`
+- Oracle FA: `https://*.fa.us2.oraclecloud.com/*`
+- Carma: `https://carma.cvnacorp.com/*`
 
-## Quick Start
+## Prerequisites
 
-Requirements: Node 18+, npm.
+- Node.js 20+
+- Rust stable toolchain
+- `wasm-pack` (`cargo install wasm-pack`)
+
+## Build
 
 ```bash
-npm i
+npm install
 npm run build
 ```
 
-This outputs userscripts in `dist/` (one per `packages/*-userscript`):
+Outputs:
 
-* `jira.user.js`
-* `oracle.user.js`
-* `carma-bulk-search-scraper.user.js`
+- `dist/chrome-extension`
+- `dist/firefox-extension`
 
-Install each in Tampermonkey (drag into the browser or paste into a new script).
-
----
-
-## Development (Auto-Update)
-
-To enable Tampermonkey auto-update during development, run the local userscript server
-and build with a local `US_BASE_URL` so `@downloadURL` / `@updateURL` point to localhost.
-
-Recommended (one command):
+## Check + Test
 
 ```bash
-npm run dev
+npm run typecheck
+npm test
 ```
 
-This runs the userscript server and a build watcher in parallel.
-If you prefer separate terminals:
+## Load Extension Locally
 
-Terminal 1:
-```bash
-npm run serve:userscripts
-```
+1. Chrome: open `chrome://extensions`, enable Developer Mode, click **Load unpacked**, select `dist/chrome-extension`.
+2. Firefox: open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, select `dist/firefox-extension/manifest.json`.
 
-Terminal 2:
-```bash
-npm run build:watch
-```
+## Repository Notes
 
-Then install the script from `http://localhost:4873/<script>.user.js` (e.g. open the
-root `http://localhost:4873/` and click the file). After rebuilds, Tampermonkey
-will auto-update from the local server.
-
-Optional overrides:
-
-```bash
-US_HOST=localhost US_PORT=4873 npm run serve:userscripts
-US_BASE_URL=http://localhost:4873 npm run build
-```
-
----
-
-## Release build (GitHub links)
-
-To build userscripts with `@downloadURL`/`@updateURL` pointing at the latest GitHub
-release artifacts (mirrors CI behavior):
-
-```bash
-npm run build:release
-```
-
-If your git remote is not GitHub, you can set the repository explicitly:
-
-```bash
-GITHUB_REPOSITORY=owner/repo npm run build:release
-```
-
----
-
-## First Run / Demo Workflows
-
-The default registry is **demo‑only**. On a matching site, click the **gear**:
-
-* Run **Demo: Title → Clipboard** to copy the page title and show a preview.
-* Try **Demo: Page Info** and **Demo: List Links** to validate extraction & presentation.
-
-Then jump to **AGENTS.md** to add your own pages and real workflows.
+- `excel/` remains in-repo and is intentionally outside extension runtime scope.
+- Legacy userscript/runtime packages were removed as part of the big-bang migration.

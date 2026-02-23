@@ -1,4 +1,4 @@
-name: Release userscripts
+name: Release Extensions
 
 on:
   release:
@@ -12,37 +12,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@v4
 
       - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+
       - name: Install deps
         run: npm ci
 
-      - name: Run typecheck
+      - name: Typecheck
         run: npm run typecheck
 
-      - name: Run tests
+      - name: Test
         run: npm test
 
-      - name: Build userscripts
-        env:
-          US_BASE_URL: https://github.com/${{ github.repository }}/releases/latest/download
-          US_VERSION: ${{ github.ref_name }}
+      - name: Build extensions
         run: npm run build
 
-      - name: Upload artifacts to release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
+      - name: Package extensions
+        run: |
+          cd dist
+          zip -r chrome-extension.zip chrome-extension
+          zip -r firefox-extension.zip firefox-extension
+
+      - name: Upload extension artifacts
+        uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.user.js
-      - name: Upload sourcemaps to release
-        if: ${{ env.PUBLISH_SOURCEMAPS == '1' }}
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
-        with:
-          files: |
-            dist/*.user.js.map
+            dist/chrome-extension.zip
+            dist/firefox-extension.zip
