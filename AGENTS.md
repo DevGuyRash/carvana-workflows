@@ -481,3 +481,14 @@ Note that AI reviewers will often comment on or create review threads on your PR
 - @codex
   - May appear as `chatgpt-codex-connector`, but only responds to `@codex`
 
+
+---
+
+## Rust WebExtension Direction (2026-02-23 onward)
+
+- Browser runtime target is now **WebExtensions only** for **Chrome + Firefox**. Userscript/Tampermonkey/Violentmonkey runtime is deprecated and must not be reintroduced.
+- Prefer **Rust-first implementation** for workflow engine, selector logic, automation actions, extraction, state models, and site modules.
+- JS/TS is allowed only as minimal browser integration glue (manifest wiring, message bridge, wasm bootstrap, extension page bootstraps).
+- Avoid wrapper-heavy frameworks/shims. Use direct browser APIs and focused glue modules.
+- Keep files short and focused. Favor small modules over large multi-concern files.
+- Keep `excel/` artifacts in-repo; they are out-of-scope for extension runtime execution for now.
