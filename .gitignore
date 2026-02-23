@@ -46,3 +46,4 @@ vba_dump/
 
 # rust
 rust/target/
+apps/webextension/pkg/

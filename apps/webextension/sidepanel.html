@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Carvana Workflows Control Center</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: #020617; color: #e2e8f0; }
+      main { padding: 14px; display: grid; gap: 10px; }
+      h1 { margin: 0; font-size: 15px; }
+      .meta { font-size: 12px; color: #94a3b8; }
+      select, button { border: 1px solid #334155; background: #0f172a; color: #e2e8f0; border-radius: 6px; padding: 8px; }
+      button { cursor: pointer; }
+      button:hover { background: #1e293b; }
+      pre { margin: 0; padding: 10px; border-radius: 8px; background: #0b1220; border: 1px solid #1e293b; overflow: auto; max-height: 45vh; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Carvana Workflow Control Center</h1>
+      <div id="site" class="meta">Site: detecting...</div>
+      <label for="workflow-select">Workflow</label>
+      <select id="workflow-select"></select>
+      <button id="run-workflow">Run Workflow</button>
+      <button id="capture-table">Capture Jira Table</button>
+      <pre id="output">Ready.</pre>
+    </main>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>
