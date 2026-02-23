@@ -1,12 +1,103 @@
 import type { ColumnMode } from './types';
 import { cleanText, sleep, waitFor } from './utils';
 
-interface CheckboxInfo {
-  label: HTMLLabelElement;
+export interface CheckboxInfo {
   input: HTMLInputElement;
   text: string;
   checked: boolean;
   disabled: boolean;
+  isAllToggle: boolean;
+  clickable: HTMLElement;
+}
+
+function normalizedToken(value: string): string {
+  return cleanText(value).toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function clickElement(element: HTMLElement): void {
+  element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+}
+
+function closestClickable(element: HTMLElement): HTMLElement {
+  const clickable = element.closest('label,button,[role="menuitemcheckbox"],[role="radio"],.form-check,.radio,[data-testid]') as HTMLElement | null;
+  return clickable || element;
+}
+
+export function isKeyColumnText(text: string): boolean {
+  const normalized = normalizedToken(text);
+  if (!normalized) return false;
+  return [
+    'latestpurchasepurchaseid',
+    'latestpurchasevin',
+    'latestpurchasestocknumber',
+    'purchaseid',
+    'vin',
+    'stocknumber',
+  ].includes(normalized);
+}
+
+export function getPresetSelection(menu: ParentNode): 'default' | 'custom' | 'unknown' {
+  const radios = Array.from(menu.querySelectorAll('input[type="radio"]')) as HTMLInputElement[];
+  const checked = radios.find((radio) => radio.checked);
+  if (!checked) return 'unknown';
+
+  const text = cleanText(`${checked.value || ''} ${checked.closest('label,div')?.textContent || ''}`);
+  if (/default/i.test(text)) return 'default';
+  if (/custom/i.test(text)) return 'custom';
+  return 'unknown';
+}
+
+function findPresetRadio(menu: ParentNode, preset: 'default' | 'custom'): HTMLInputElement | null {
+  const radios = Array.from(menu.querySelectorAll('input[type="radio"]')) as HTMLInputElement[];
+  for (const radio of radios) {
+    const text = cleanText(`${radio.value || ''} ${radio.closest('label,div')?.textContent || ''}`);
+    if (preset === 'default' && /default/i.test(text)) return radio;
+    if (preset === 'custom' && /custom/i.test(text)) return radio;
+  }
+  return null;
+}
+
+async function ensureCustomPreset(menu: ParentNode): Promise<boolean> {
+  const customRadio = findPresetRadio(menu, 'custom');
+  if (!customRadio) return false;
+  if (customRadio.checked) return false;
+
+  clickElement(closestClickable(customRadio));
+  await waitFor(() => customRadio.checked, {
+    timeoutMs: 5000,
+    intervalMs: 50,
+    debugLabel: 'custom preset select',
+  });
+
+  await waitFor(() => {
+    const checkbox = menu.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+    return checkbox && checkbox.offsetParent !== null ? checkbox : checkbox;
+  }, {
+    timeoutMs: 5000,
+    intervalMs: 50,
+    debugLabel: 'custom preset checkbox render',
+  });
+
+  return true;
+}
+
+function checkboxInfoFromInput(input: HTMLInputElement): CheckboxInfo {
+  const clickable = closestClickable(input);
+  const text = cleanText(clickable.textContent || input.closest('label,div')?.textContent || '');
+  const token = normalizedToken(text);
+  return {
+    input,
+    text,
+    checked: !!input.checked,
+    disabled: !!input.disabled,
+    isAllToggle: token === 'all',
+    clickable,
+  };
+}
+
+function getCheckboxInfos(menu: ParentNode): CheckboxInfo[] {
+  const checkboxes = Array.from(menu.querySelectorAll('input[type="checkbox"]')) as HTMLInputElement[];
+  return checkboxes.map((input) => checkboxInfoFromInput(input));
 }
 
 export function findButtonByText(root: ParentNode, text: string): HTMLButtonElement | null {
@@ -49,7 +140,7 @@ export async function openDropdown(button: HTMLButtonElement, options: { timeout
 }
 
 export async function closeDropdown(menu: Element): Promise<void> {
-  const closeBtn = menu.querySelector('#close-edit-columns-dropdown') as HTMLButtonElement | null;
+  const closeBtn = menu.querySelector('#close-edit-columns-dropdown, button[aria-label="Close"]') as HTMLButtonElement | null;
   if (closeBtn) {
     closeBtn.click();
     return;
@@ -57,17 +148,45 @@ export async function closeDropdown(menu: Element): Promise<void> {
   document.body.click();
 }
 
-function checkboxInfoFromLabel(label: HTMLLabelElement): CheckboxInfo | null {
-  const input = label.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
-  if (!input) return null;
-  const text = cleanText(label.textContent);
-  return {
-    label,
-    input,
-    text,
-    checked: !!input.checked,
-    disabled: !!input.disabled,
-  };
+async function ensureAllColumns(actionable: CheckboxInfo[], allToggle: CheckboxInfo | null): Promise<{ changed: boolean; reason: string }> {
+  const allChecked = actionable.length > 0 && actionable.every((x) => x.input.checked);
+  if (allChecked) {
+    return { changed: false, reason: 'already_all' };
+  }
+
+  if (allToggle && !allToggle.input.disabled && !allToggle.input.checked) {
+    clickElement(allToggle.clickable);
+    try {
+      await waitFor(() => actionable.every((x) => x.input.checked), {
+        timeoutMs: 8000,
+        intervalMs: 50,
+        debugLabel: 'columns select all toggle',
+      });
+      return { changed: true, reason: 'checked_all_toggle' };
+    } catch {
+      // fallback below when toggle does not settle all actionable columns
+    }
+  }
+
+  let clicked = 0;
+  for (const info of actionable) {
+    if (!info.input.checked) {
+      clickElement(info.clickable);
+      clicked++;
+      await sleep(20);
+    }
+  }
+
+  if (!clicked) {
+    return { changed: false, reason: 'no_action' };
+  }
+
+  await waitFor(() => actionable.every((x) => x.input.checked), {
+    timeoutMs: 8000,
+    intervalMs: 50,
+    debugLabel: 'columns select all fallback',
+  });
+  return { changed: true, reason: `clicked_${clicked}` };
 }
 
 export async function applyColumns(blockRoot: ParentNode, mode: ColumnMode): Promise<{ applied: boolean; reason: string }> {
@@ -81,67 +200,50 @@ export async function applyColumns(blockRoot: ParentNode, mode: ColumnMode): Pro
   const { menu } = await openDropdown(editBtn);
 
   try {
-    const labels = Array.from(menu.querySelectorAll('label'))
-      .map((label) => checkboxInfoFromLabel(label as HTMLLabelElement))
-      .filter(Boolean) as CheckboxInfo[];
+    await ensureCustomPreset(menu);
 
-    const allToggle = labels.find((x) => /^all$/i.test(x.text) || /^all\b/i.test(x.text));
-    const actionable = labels.filter((x) => !x.disabled && x !== allToggle);
+    const infos = getCheckboxInfos(menu).filter((info) => !info.disabled);
+    if (!infos.length) {
+      return { applied: false, reason: 'no_checkboxes' };
+    }
+
+    const allToggle = infos.find((info) => info.isAllToggle) || null;
+    const actionable = infos.filter((info) => !info.isAllToggle);
 
     if (mode === 'all') {
-      const allChecked = actionable.length > 0 && actionable.every((x) => x.input.checked);
-      if (allChecked) {
-        return { applied: false, reason: 'already_all' };
-      }
-
-      if (allToggle) {
-        allToggle.label.click();
-        await waitFor(() => actionable.every((x) => x.input.checked), {
-          timeoutMs: 8000,
-          intervalMs: 50,
-          debugLabel: 'columns select all',
-        });
-        return { applied: true, reason: 'clicked_all' };
-      }
-
-      let clicked = 0;
-      for (const x of actionable) {
-        if (!x.input.checked) {
-          x.label.click();
-          clicked++;
-          await sleep(20);
-        }
-      }
-      if (clicked) {
-        await sleep(200);
-        return { applied: true, reason: `clicked_${clicked}` };
-      }
-      return { applied: false, reason: 'no_action' };
+      const result = await ensureAllColumns(actionable, allToggle);
+      return {
+        applied: result.changed,
+        reason: result.reason,
+      };
     }
 
     if (mode === 'key') {
-      const wantMatchers = [
-        /latestpurchasepurchaseid/i,
-        /latestpurchasevin/i,
-        /latestpurchasestocknumber/i,
-        /^purchase\s*id$/i,
-        /^vin$/i,
-        /^stock\s*number$/i,
-      ];
-      const wanted = actionable.filter((x) => wantMatchers.some((re) => re.test(x.text)));
+      const wanted = actionable.filter((info) => isKeyColumnText(info.text));
+      if (!wanted.length) {
+        return { applied: false, reason: 'no_key_columns_found' };
+      }
+
       let changed = 0;
-      for (const x of wanted) {
-        if (!x.input.checked) {
-          x.label.click();
+      for (const info of wanted) {
+        if (!info.input.checked) {
+          clickElement(info.clickable);
           changed++;
           await sleep(30);
         }
       }
-      if (changed) {
-        await sleep(200);
-        return { applied: true, reason: `enabled_${changed}_key_cols` };
+
+      if (!changed) {
+        return { applied: false, reason: 'already_key' };
       }
-      return { applied: false, reason: 'already_key' };
+
+      await waitFor(() => wanted.every((info) => info.input.checked), {
+        timeoutMs: 8000,
+        intervalMs: 50,
+        debugLabel: 'key column enable',
+      });
+
+      return { applied: true, reason: `enabled_${changed}_key_cols` };
     }
 
     return { applied: false, reason: `unknown_mode_${mode}` };

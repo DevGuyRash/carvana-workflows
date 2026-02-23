@@ -15,6 +15,12 @@ This document is the hands-on guide for building and evolving automations (pages
 
 ---
 
+## Repo Safety Guards
+
+- Do not use the `apply_patch` command/tool in this repository. Use direct file writes or scripted edits instead.
+- Before any commit, you MUST scan staged and unstaged diffs for sensitive content (PII/secrets/production identifiers). At minimum review `git diff -- .` and `git diff --cached -- .` and remove/redact anything sensitive before committing.
+
+---
 ## SelectorSpec (robust selection)
 
 Available fields (you can combine them):
@@ -474,3 +480,4 @@ Note that AI reviewers will often comment on or create review threads on your PR
 - @gemini-code-assist
 - @codex
   - May appear as `chatgpt-codex-connector`, but only responds to `@codex`
+

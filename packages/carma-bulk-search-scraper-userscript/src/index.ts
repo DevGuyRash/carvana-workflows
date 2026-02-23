@@ -1,16 +1,55 @@
+import { extractQuickCopyValues, type QuickCopyField } from './copy-utils';
 import { copyToClipboard } from './export';
 import type { Logger } from './logger';
 import { createLogger } from './logger';
-import { createInitialState } from './state';
-import { loadOptions, saveOptions } from './storage';
-import { downloadCsv, downloadJson, exportCsv, exportJson, runScrape } from './scraper';
-import type { AppUi } from './types';
-import { closeModal, createUi, installFab, openModal } from './ui';
 import { openResultsPopout } from './popout';
+import { downloadCsv, downloadJson, exportCsv, exportJson, runScrape } from './scraper';
+import { createInitialState } from './state';
+import { loadState, saveState } from './storage';
+import type { PersistedState, PopoutOptions, ScrapeOptions, ThemeOptions, UiState, UniquenessOptions } from './types';
+import { closeModal, createUi, installFab, openModal } from './ui';
 
 declare global {
   interface Window {
     __carmaBulkSearchScraper__?: { loadedAt: number };
+  }
+}
+
+function applyTheme(theme: ThemeOptions): void {
+  try {
+    const root = document.documentElement.style;
+    const vars: Array<[string, string]> = [
+      ['--cbss-primary', theme.primary],
+      ['--cbss-primary-hover', theme.primaryHover],
+      ['--cbss-primary-active', theme.primaryActive],
+      ['--cbss-primary-text', theme.primaryText],
+      ['--cbss-secondary', theme.secondary],
+      ['--cbss-secondary-hover', theme.secondaryHover],
+      ['--cbss-secondary-active', theme.secondaryActive],
+      ['--cbss-secondary-text', theme.secondaryText],
+      ['--cbss-surface', theme.surface],
+      ['--cbss-surface-alt', theme.surfaceAlt],
+      ['--cbss-surface-muted', theme.surfaceMuted],
+      ['--cbss-text', theme.text],
+      ['--cbss-text-muted', theme.textMuted],
+      ['--cbss-border', theme.border],
+      ['--cbss-focus-ring', theme.focusRing],
+      ['--cbss-status-bg', theme.statusBg],
+      ['--cbss-status-text', theme.statusText],
+      ['--cbss-tab-bg', theme.tabBg],
+      ['--cbss-tab-active-bg', theme.tabActiveBg],
+      ['--cbss-tab-text', theme.tabText],
+      ['--cbss-button-bg', theme.buttonBg],
+      ['--cbss-button-hover', theme.buttonHoverBg],
+      ['--cbss-button-active', theme.buttonActiveBg],
+      ['--cbss-button-text', theme.buttonText],
+      ['--cbss-accent', theme.accent],
+    ];
+    for (const [name, value] of vars) {
+      root.setProperty(name, value);
+    }
+  } catch {
+    // ignore
   }
 }
 
@@ -19,9 +58,17 @@ declare global {
   window.__carmaBulkSearchScraper__ = { loadedAt: Date.now() };
 
   const state = createInitialState();
-  let ui!: AppUi;
+  let ui!: ReturnType<typeof createUi>;
   let logger!: Logger;
   let popout: ReturnType<typeof openResultsPopout> | null = null;
+
+  let persisted: PersistedState = loadState();
+  applyTheme(persisted.theme);
+
+  const persist = (next: PersistedState) => {
+    persisted = next;
+    saveState(persisted);
+  };
 
   const onOpen = () => openModal(ui);
   const onClose = () => {
@@ -33,6 +80,34 @@ declare global {
   };
 
   const onStart = () => {
+    // Ensure latest values are stored (some controls fire on blur)
+    const scrape: ScrapeOptions = {
+      paginateAllPages: !!ui.paginate.checked,
+      setShowTo100: !!ui.show100.checked,
+      columnMode: ui.columns.value as ScrapeOptions['columnMode'],
+      requirePurchaseId: !!ui.requirePurchaseId.checked,
+      requireVin: !!ui.requireVin.checked,
+      requireStockNumber: !!ui.requireStockNumber.checked,
+      debug: !!ui.debug.checked,
+      maxConcurrency: Math.max(1, Number.parseInt(ui.maxConcurrency.value || '1', 10) || 1),
+    };
+
+    const uniqueness: UniquenessOptions = {
+      enabled: !!ui.uniqueEnabled.checked,
+      keyFields: {
+        vin: !!ui.uniqueKeyVin.checked,
+        stock: !!ui.uniqueKeyStock.checked,
+        pid: !!ui.uniqueKeyPid.checked,
+      },
+      strategy: 'latest_by_date',
+      dateColumn: {
+        mode: ui.uniqueDateMode.value === 'manual' ? 'manual' : 'auto',
+        header: ui.uniqueDateHeader.value || '',
+      },
+    };
+
+    persist({ ...persisted, scrape, uniqueness });
+
     void runScrape({ state, ui, logger });
   };
 
@@ -61,19 +136,50 @@ declare global {
     logger.log(ok ? '[OK] Copied JSON to clipboard.' : '[ERROR] Failed to copy JSON.');
   };
 
-  const onPopoutTable = () => {
-    if (popout && !popout.isClosed()) {
-      popout.focus();
-      popout.update();
-      logger.log('[INFO] Popout refreshed.');
+  const onCopyQuickField = async (field: QuickCopyField, label: string) => {
+    const values = extractQuickCopyValues(state.rows, field);
+    if (!values.length) {
+      logger.log(`[WARN] No ${label} values available to copy.`);
       return;
     }
+
+    const ok = await copyToClipboard(values.join('\n'));
+    if (ok) {
+      logger.log(`[OK] Copied ${values.length} ${label} value(s).`);
+    } else {
+      logger.log(`[ERROR] Failed to copy ${label} values.`);
+    }
+  };
+
+  const onPopoutTable = () => {
+    const stale = !!(popout && popout.isClosed());
+    if (stale) {
+      popout = null;
+    }
+
+    if (popout) {
+      popout.focus();
+      popout.update();
+      logger.log('[INFO] Popout focused and refreshed.');
+      return;
+    }
+
     popout = openResultsPopout({
       getRows: () => state.rows,
       getRunning: () => state.running,
       logger,
+      getPopoutOptions: () => persisted.popout,
+      setPopoutOptions: (next: PopoutOptions) => {
+        persist({ ...persisted, popout: next });
+      },
     });
     if (!popout) return;
+
+    if (stale) {
+      logger.log('[INFO] Popout reopened.');
+      return;
+    }
+
     if (state.running) {
       logger.log('[INFO] Popout opened (live updates while running).');
     } else {
@@ -81,8 +187,7 @@ declare global {
     }
   };
 
-  const options = loadOptions();
-  ui = createUi(options, {
+  ui = createUi(persisted, {
     onStart,
     onCancel,
     onDownloadCsv,
@@ -90,7 +195,36 @@ declare global {
     onDownloadJson,
     onCopyJson,
     onPopoutTable,
-    onOptionsChange: saveOptions,
+    onCopyStock: () => onCopyQuickField('stock', 'stock'),
+    onCopyVin: () => onCopyQuickField('vin', 'VIN'),
+    onCopyPid: () => onCopyQuickField('pid', 'PID'),
+    onCopyReference: () => onCopyQuickField('reference', 'reference'),
+
+    onScrapeOptionsChange: (opts: ScrapeOptions) => {
+      persist({ ...persisted, scrape: opts });
+    },
+    onUniquenessOptionsChange: (opts: UniquenessOptions) => {
+      persist({ ...persisted, uniqueness: opts });
+    },
+    onPopoutOptionsChange: (opts: PopoutOptions) => {
+      // Preserve selectedColumnsByName so UI changes don't wipe state
+      persist({
+        ...persisted,
+        popout: {
+          ...persisted.popout,
+          copyIncludeHeaders: opts.copyIncludeHeaders,
+          persistSelectedColumns: opts.persistSelectedColumns,
+        },
+      });
+    },
+    onThemeOptionsChange: (opts: ThemeOptions) => {
+      persist({ ...persisted, theme: opts });
+      applyTheme(opts);
+    },
+    onUiStateChange: (uiState: UiState) => {
+      persist({ ...persisted, ui: uiState });
+    },
+
     onClose,
   });
 

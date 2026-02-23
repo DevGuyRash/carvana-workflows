@@ -7,55 +7,52 @@ Private Sub Worksheet_Change(ByVal Target As Range)
     Dim lo As ListObject
     Set lo = Me.ListObjects("tbl_invoice_lines")
 
-    Dim watchRng As Range
-    Dim firstCol As Long, lastCol As Long, headerRow As Long
+    Dim firstCol As Long, lastCol As Long
     firstCol = lo.Range.Column
     lastCol = firstCol + lo.Range.Columns.Count - 1
-    headerRow = lo.HeaderRowRange.Row
 
-    'Watch full table columns from header down so row-delete shifts are caught.
-    Set watchRng = Me.Range(Me.Cells(headerRow, firstCol), Me.Cells(Me.Rows.Count, lastCol))
+    Dim tableTopRow As Long
+    tableTopRow = lo.HeaderRowRange.Row
 
-    If Intersect(Target, watchRng) Is Nothing Then Exit Sub
+    Dim tableBottomRow As Long
+    tableBottomRow = lo.Range.Row + lo.Range.Rows.Count - 1
+
+    'Watch table columns from header row to sheet bottom so far-below pastes still queue sync.
+    Dim watchRng As Range
+    Set watchRng = Me.Range(Me.Cells(tableTopRow, firstCol), Me.Cells(Me.Rows.Count, lastCol))
+
+    Dim effectiveTarget As Range
+    Set effectiveTarget = Intersect(Target, watchRng)
+    If effectiveTarget Is Nothing Then Exit Sub
 
     Dim changedBottomRow As Long
     Dim changedTopRow As Long
     Dim changedFirstCol As Long
     Dim changedLastCol As Long
-    Dim isClearAction As Boolean
-    changedTopRow = Target.Row
-    changedBottomRow = Target.Row + Target.Rows.Count - 1
-    changedFirstCol = Target.Column
-    changedLastCol = Target.Column + Target.Columns.Count - 1
-    isClearAction = RangeIsAllBlank(Target)
 
-    'Run the sync (Application.Run avoids "Sub or function not defined" compile issues)
-    Application.Run "'" & ThisWorkbook.Name & "'!AP_SyncInvoiceLinesTable_WithTarget", _
-                    True, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, Not isClearAction
-    Application.Run "'" & ThisWorkbook.Name & "'!AP_SyncInvoicesTable", True, True
+    changedTopRow = effectiveTarget.Row
+    changedBottomRow = effectiveTarget.Row + effectiveTarget.Rows.Count - 1
+    changedFirstCol = effectiveTarget.Column
+    changedLastCol = effectiveTarget.Column + effectiveTarget.Columns.Count - 1
+
+    If changedFirstCol < firstCol Then changedFirstCol = firstCol
+    If changedLastCol > lastCol Then changedLastCol = lastCol
+    If changedFirstCol > changedLastCol Then
+        changedFirstCol = firstCol
+        changedLastCol = lastCol
+    End If
+
+    Dim protectChangedRows As Boolean
+    If lo.DataBodyRange Is Nothing Then
+        protectChangedRows = True
+    Else
+        protectChangedRows = (Intersect(effectiveTarget, lo.DataBodyRange) Is Nothing)
+    End If
+
+    'Protect changed rows only for below-table edits/pastes; allow in-table deletes to shrink immediately.
+    Application.Run "'" & ThisWorkbook.Name & "'!AP_QueueSyncAll_WithTarget", _
+                    True, changedBottomRow, changedTopRow, changedFirstCol, changedLastCol, protectChangedRows
     Application.OnUndo "Undo last invoice-lines change", "'" & ThisWorkbook.Name & "'!AP_UndoInvoiceLinesChange"
 
 SafeExit:
 End Sub
-
-Private Function RangeIsAllBlank(ByVal rng As Range) As Boolean
-    Dim area As Range
-    Dim cell As Range
-    Dim valueInCell As Variant
-
-    For Each area In rng.Areas
-        For Each cell In area.Cells
-            valueInCell = cell.Value2
-            If IsError(valueInCell) Then
-                Exit Function
-            End If
-            If Not IsEmpty(valueInCell) Then
-                If Len(Trim$(CStr(valueInCell))) > 0 Then
-                    Exit Function
-                End If
-            End If
-        Next cell
-    Next area
-
-    RangeIsAllBlank = True
-End Function

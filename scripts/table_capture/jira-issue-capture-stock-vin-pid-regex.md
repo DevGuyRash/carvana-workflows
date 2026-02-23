@@ -1,13 +1,13 @@
 # Identifier Extraction Spec: Stock, VIN, PID
 
-This document defines how to capture three identifiers from structured or unstructured text:
-- `Stock`
-- `VIN`
-- `PID`
+This document defines the canonical parsing behavior for Stock/VIN/PID extraction used by Jira table capture and TR upload formulas.
 
 ## Goal
 
-Extract the best available value for each identifier using field-first lookup, then label-aware text parsing, then validation.
+Extract the best available values using this precedence:
+1. Direct structured fields/columns.
+2. Label-aware free-text parsing (`stock`, `vin`, `pid`).
+3. Descriptor parsing (`stock[-modifier]-vin[-pid][-suffix...]`).
 
 ## Normalization Rules
 
@@ -16,7 +16,7 @@ Apply these before and after matching:
 - Collapse internal whitespace to a single space when reading free text.
 - Normalize hyphen separators by replacing `\s*-\s*` with `-`.
 - Use case-insensitive matching for label detection.
-- Preserve original case/value in output unless your downstream system requires uppercasing.
+- Preserve source casing unless downstream consumer requires uppercase.
 
 ## Core Value Patterns
 
@@ -27,31 +27,8 @@ Apply these before and after matching:
 ```
 
 Meaning:
-- 11 to 17 characters
-- Allowed: letters/digits except `I`, `O`, `Q`
-- Ends at a word boundary
-
-### Stock value pattern
-
-```regex
-((?:[A-Z0-9]{2,5}-)?\d{7,12}(?:-(?:[A-Z]{2,8}|\d{1,4}))?)\b
-```
-
-Meaning:
-- Base stock format: optional alpha-numeric prefix + `-` + 7-12 digits
-- Optional stock modifier segment after base stock:
-  - alphabetic code from 2 to 8 letters
-  - numeric increment from 1 to 4 digits
-- Modifier must be a full hyphen-delimited segment (between stock and VIN when present), not a partial VIN prefix
-
-### Base stock-only pattern (project number)
-
-```regex
-((?:[A-Z0-9]{2,5}-)?\d{7,12})\b
-```
-
-Meaning:
-- Captures stock before any optional modifier and before VIN/PID descriptor segments
+- 11 to 17 characters.
+- Allowed letters/digits except `I`, `O`, `Q`.
 
 ### PID value pattern
 
@@ -60,23 +37,48 @@ Meaning:
 ```
 
 Meaning:
-- 3 or more digits
+- 3+ digits.
+- Numeric-only for unlabeled descriptor parsing.
 
-### Combined descriptor pattern (stock-modifier-vin-pid)
+### Stock value pattern
 
 ```regex
-(?:^|[^A-Z0-9])((?:[A-Z0-9]{2,5}-)?\d{7,12})(?:-([A-Z]{2,8}|\d{1,4}))?-([A-HJ-NPR-Z0-9]{11,17})-(\d{3,})(?:$|[^A-Z0-9])
+((?:[A-Z0-9&]{2,8}-)?\d{7,12}(?:-(?:[A-Z]{2,8}|\d{1,4}))?)\b
 ```
 
 Meaning:
-- Group 1: base stock
-- Group 2: optional stock modifier (2-8 letter code or 1-4 digit increment)
-- Group 3: VIN
-- Group 4: PID
+- Base stock is 7-12 digits.
+- Optional short prefix token (2-8 chars) allows letters/digits and `&`.
+- Optional stock modifier segment is `2-8` letters or `1-4` digits.
+
+### Base stock-only pattern (project number)
+
+```regex
+((?:[A-Z0-9&]{2,8}-)?\d{7,12})\b
+```
+
+Meaning:
+- Captures base stock component before optional modifier/VIN/PID suffixes.
+
+## Descriptor Parsing Pattern
+
+Use descriptor parsing as a fallback for unstructured strings such as issue-key text:
+
+```regex
+(?:^|[^A-Z0-9&])((?:[A-Z0-9&]{2,8}-)?\d{7,12})(?:-([A-Z]{2,8}|\d{1,4}))?-([A-HJ-NPR-Z0-9]{11,17})(?:-(\d{3,}))?(?:-[A-Z0-9&]{2,30})*(?:$|[^A-Z0-9&])
+```
+
+Groups:
+- Group 1: stock base (with optional prefix).
+- Group 2: optional stock modifier.
+- Group 3: VIN.
+- Group 4: optional numeric PID.
+
+Suffix behavior:
+- Any additional `-TOKEN` segments after VIN/PID are ignored for Stock/VIN/PID extraction.
+- This supports status-like tails such as `-CORRECTED-TITLE` and `-DUPLICATE-TITLE`.
 
 ## Label Detection Pattern
-
-Use label-aware extraction when values are embedded in multiline text.
 
 ```regex
 \b<field>(?:\s*number(?:s)?)?\b
@@ -87,17 +89,11 @@ Replace `<field>` with:
 - `vin`
 - `pid`
 
-Examples matched:
-- `stock`
-- `stock number`
-- `vin numbers`
-- `pid number`
-
 ## Value-After-Label Parsing
 
-After finding a label occurrence, inspect the text after the label.
+After finding a label occurrence, inspect trailing text.
 
-Primary parser (allows punctuation separators):
+Primary parser:
 
 ```regex
 ^\s*(?:[#:\(\)\[\]\-]\s*)*(<PATTERN>)
@@ -109,59 +105,53 @@ Fallback parser:
 ^\s*(<PATTERN>)
 ```
 
-Replace `<PATTERN>` with the field's core value pattern:
-- Stock -> `((?:[A-Z0-9]{2,5}-)?\d{7,12}(?:-(?:[A-Z]{2,8}|\d{1,4}))?)\b`
-- VIN -> `([A-HJ-NPR-Z0-9]{11,17})\b`
-- PID -> `(\d{3,})\b`
+Pattern mapping:
+- Stock: `((?:[A-Z0-9&]{2,8}-)?\d{7,12}(?:-(?:[A-Z]{2,8}|\d{1,4}))?)\b`
+- VIN: `([A-HJ-NPR-Z0-9]{11,17})\b`
+- PID: `(\d{3,})\b`
 
 ## Stock-vs-VIN Safety Check
 
-A stock value can be incorrectly captured as a VIN. Validate stock candidates with:
+Reject stock candidates that are VIN-shaped:
 
 ```regex
 ^[A-HJ-NPR-Z0-9]{11,17}$
 ```
 
-If stock matches this VIN-like full-string pattern, reject it as stock.
-
 ## Extraction Procedure
 
-1. Read direct fields first (if present in structured data):
-   - Stock field(s)
-   - VIN field(s)
-   - PID field(s)
-2. For each missing identifier, run label-aware extraction on combined text.
-3. For each label match:
-   - Try primary parser on immediate trailing text.
-   - If not found, scan subsequent non-empty line and apply fallback parser.
-4. If values are still missing, try combined descriptor parsing with optional stock modifier.
-5. Apply stock-vs-VIN safety check.
-6. Return final `Stock`, `VIN`, `PID` values.
+1. Read direct Stock/VIN/PID fields first.
+2. For missing values, run label-aware extraction.
+3. For still-missing values, run descriptor parsing:
+   - Fill Stock from Group 1 (+ Group 2 when present).
+   - Fill VIN from Group 3.
+   - Fill PID only when Group 4 exists.
+4. Apply stock-vs-VIN safety check.
+5. Apply consumer-specific missing-value policy.
 
-## Downstream Notes (Jira Capture)
+## Downstream Notes
 
-- `StockNumber` output may keep a location/prefix segment (example: `<PREFIX>-<STOCK>-<MODIFIER>`).
-- Invoice stock base should use the numeric stock component (example: `<STOCK>`) and append modifier only when a full modifier segment exists (`<STOCK>-<MODIFIER>-TR`).
+- Jira capture output can apply placeholders when any identifier exists (`STOCK`, `VIN`, `PID`).
+- Invoice stock value uses numeric base stock, appending modifier only when an explicit stock modifier segment exists.
+- Date-mode invoice fallback behavior is independent of parsing grammar.
 
-## Missing-Value Policy
+## Example Inputs
 
-Keep this configurable by consumer system. Common choices:
-- Leave missing values empty.
-- Fill missing values with placeholders only when at least one identifier exists.
+- `H&D-2123456789-1HGCM82633A004352-CORRECTED-TITLE`
+  - Stock: `H&D-2123456789` (numeric base `2123456789`)
+  - VIN: `1HGCM82633A004352`
+  - PID: empty
+- `R1-2345678901-ADJ-5YJ3E1EA7KF317000-98765`
+  - Stock: `R1-2345678901-ADJ`
+  - VIN: `5YJ3E1EA7KF317000`
+  - PID: `98765`
+- `Stock Number: 3456789012`
+  - Stock from label path.
 
-## Minimal Pseudocode
+## Implementation Note (Excel Formula Fallback)
 
-```text
-stock = direct_stock
-vin   = direct_vin
-pid   = direct_pid
+In Excel formulas, `REGEXEXTRACT` behavior can vary by environment: some return the first capture group, while others may return the full descriptor match. To keep PID extraction stable without changing the canonical grammar, formula implementations should:
+- Prefer direct numeric capture when the descriptor result is already `^\d{3,}$`.
+- Otherwise, derive PID from the segment immediately after `-VIN-` and take the leading numeric token.
+- Continue fail-closed behavior (empty output) when no valid PID is found.
 
-if stock missing: stock = find_labeled_value(text, "stock", STOCK_PATTERN)
-if vin missing:   vin   = find_labeled_value(text, "vin", VIN_PATTERN)
-if pid missing:   pid   = find_labeled_value(text, "pid", PID_PATTERN)
-
-if stock is not empty and matches VIN_FULL_PATTERN:
-  stock = empty
-
-return { stock, vin, pid }
-```

@@ -4,17 +4,59 @@ import { getRowValueByHeaderLike, isMeaningfulValue, shouldKeepRow } from './fil
 import { loadIntoIframe } from './iframe';
 import type { Logger } from './logger';
 import { clickNextPage, getPaginationInfo, goToFirstPageIfNeeded } from './pagination';
-import { saveOptions } from './storage';
 import { baseTitle, getBlocksWithTables, parseCountFromTitle, scrapeCurrentPageRows } from './tables';
 import { parseTerms } from './terms';
-import type { AppState, AppUi, BlockInfo, Options, TermInfo } from './types';
+import type { AppState, AppUi, BlockInfo, ScrapeOptions, TermInfo, UniquenessOptions } from './types';
 import { cleanText, waitFor } from './utils';
 import { PURCHASE_ID_BLANK_MATCHERS, STOCK_NUMBER_BLANK_MATCHERS, VIN_BLANK_MATCHERS } from './constants';
+import { buildUniquenessKey, normalizeUniquenessOptions, parseRowDateMs, shouldReplaceDuplicate } from './uniqueness';
 
 export interface ScrapeContext {
   state: AppState;
   ui: AppUi;
   logger: Logger;
+}
+
+interface FilterSkipCounts {
+  purchaseId: number;
+  vin: number;
+  stockNumber: number;
+}
+
+interface UniquenessMetrics {
+  enabled: boolean;
+  keysBuilt: number;
+  missingKey: number;
+  duplicatesSeen: number;
+  replaced: number;
+  ignored: number;
+}
+
+interface TermDebugEntry {
+  term: string;
+  status: 'ok' | 'empty' | 'failed';
+  durationMs: number;
+  rowsSeen: number;
+  rowsKept: number;
+  blocks: number;
+  error?: string;
+}
+
+interface RunMetrics {
+  startedAtMs: number;
+  workerCount: number;
+  termsTotal: number;
+  termsProcessed: number;
+  termsFailed: number;
+  termsEmpty: number;
+  blocksScraped: number;
+  pagesVisited: number;
+  rowsSeen: number;
+  rowsExported: number;
+  skipByFilter: FilterSkipCounts;
+  uniqueness: UniquenessMetrics;
+  expectedCountMismatches: number;
+  debugTerms: TermDebugEntry[];
 }
 
 function normalizeSegment(value: string, blankMatchers: Array<string | RegExp>): string {
@@ -66,11 +108,11 @@ function hasEmptyResults(doc: Document): boolean {
   return false;
 }
 
-function readOptions(ui: AppUi): Options {
+function readScrapeOptions(ui: AppUi): ScrapeOptions {
   return {
     paginateAllPages: !!ui.paginate.checked,
     setShowTo100: !!ui.show100.checked,
-    columnMode: ui.columns.value as Options['columnMode'],
+    columnMode: ui.columns.value as ScrapeOptions['columnMode'],
     requirePurchaseId: !!ui.requirePurchaseId.checked,
     requireVin: !!ui.requireVin.checked,
     requireStockNumber: !!ui.requireStockNumber.checked,
@@ -79,13 +121,119 @@ function readOptions(ui: AppUi): Options {
   };
 }
 
+function readUniquenessOptions(ui: AppUi): UniquenessOptions {
+  return {
+    enabled: !!ui.uniqueEnabled.checked,
+    keyFields: {
+      vin: !!ui.uniqueKeyVin.checked,
+      stock: !!ui.uniqueKeyStock.checked,
+      pid: !!ui.uniqueKeyPid.checked,
+    },
+    strategy: 'latest_by_date',
+    dateColumn: {
+      mode: (ui.uniqueDateMode.value === 'manual') ? 'manual' : 'auto',
+      header: ui.uniqueDateHeader.value || '',
+    },
+  };
+}
+
+function evaluateRowFilters(row: Record<string, unknown>, filters: {
+  requirePurchaseId: boolean;
+  requireVin: boolean;
+  requireStockNumber: boolean;
+}): { keep: boolean; failed: { purchaseId: boolean; vin: boolean; stockNumber: boolean } } {
+  const failed = { purchaseId: false, vin: false, stockNumber: false };
+
+  if (filters.requirePurchaseId) {
+    const value = getRowValueByHeaderLike(row, [/purchase\s*id/i, /latest\s*purchase\s*purchase\s*id/i]);
+    failed.purchaseId = !isMeaningfulValue(value, PURCHASE_ID_BLANK_MATCHERS);
+  }
+
+  if (filters.requireVin) {
+    const value = getRowValueByHeaderLike(row, [/^vin$/i, /latest\s*purchase\s*vin/i]);
+    failed.vin = !isMeaningfulValue(value, VIN_BLANK_MATCHERS);
+  }
+
+  if (filters.requireStockNumber) {
+    const value = getRowValueByHeaderLike(row, [/stock\s*number/i, /latest\s*purchase\s*stock\s*number/i]);
+    failed.stockNumber = !isMeaningfulValue(value, STOCK_NUMBER_BLANK_MATCHERS);
+  }
+
+  return { keep: !(failed.purchaseId || failed.vin || failed.stockNumber), failed };
+}
+
+function createRunMetrics(workerCount: number, termsTotal: number, uniqueEnabled: boolean): RunMetrics {
+  return {
+    startedAtMs: Date.now(),
+    workerCount,
+    termsTotal,
+    termsProcessed: 0,
+    termsFailed: 0,
+    termsEmpty: 0,
+    blocksScraped: 0,
+    pagesVisited: 0,
+    rowsSeen: 0,
+    rowsExported: 0,
+    skipByFilter: { purchaseId: 0, vin: 0, stockNumber: 0 },
+    uniqueness: {
+      enabled: uniqueEnabled,
+      keysBuilt: 0,
+      missingKey: 0,
+      duplicatesSeen: 0,
+      replaced: 0,
+      ignored: 0,
+    },
+    expectedCountMismatches: 0,
+    debugTerms: [],
+  };
+}
+
+function formatSummary(metrics: RunMetrics, elapsedMs: number, exportedRows: number, debugEnabled: boolean): string {
+  const lines: string[] = [];
+  lines.push('');
+  lines.push('================ RUN SUMMARY ================');
+  lines.push(`Workers            : ${metrics.workerCount}`);
+  lines.push(`Duration           : ${(elapsedMs / 1000).toFixed(2)}s`);
+  lines.push(`Terms              : total=${metrics.termsTotal}, processed=${metrics.termsProcessed}, empty=${metrics.termsEmpty}, failed=${metrics.termsFailed}`);
+  lines.push(`Blocks / Pages     : blocks=${metrics.blocksScraped}, pages=${metrics.pagesVisited}`);
+  lines.push(`Rows               : seen=${metrics.rowsSeen}, exported=${exportedRows}`);
+  lines.push('');
+  lines.push('Filters (skipped):');
+  lines.push(`  Purchase ID      : ${metrics.skipByFilter.purchaseId}`);
+  lines.push(`  VIN              : ${metrics.skipByFilter.vin}`);
+  lines.push(`  Stock Number     : ${metrics.skipByFilter.stockNumber}`);
+  lines.push('');
+  lines.push(`Uniqueness         : ${metrics.uniqueness.enabled ? 'enabled' : 'disabled'}`);
+  lines.push(`  Keys built       : ${metrics.uniqueness.keysBuilt}`);
+  lines.push(`  Missing key pass : ${metrics.uniqueness.missingKey}`);
+  lines.push(`  Duplicates seen  : ${metrics.uniqueness.duplicatesSeen}`);
+  lines.push(`  Replaced         : ${metrics.uniqueness.replaced}`);
+  lines.push(`  Ignored          : ${metrics.uniqueness.ignored}`);
+
+  if (debugEnabled) {
+    lines.push('');
+    lines.push('Debug diagnostics:');
+    lines.push(`  Expected mismatches: ${metrics.expectedCountMismatches}`);
+    for (const entry of metrics.debugTerms) {
+      const err = entry.error ? ` | error=${entry.error}` : '';
+      lines.push(`  - ${entry.term} | ${entry.status} | ${entry.durationMs}ms | blocks=${entry.blocks} | seen=${entry.rowsSeen} | kept=${entry.rowsKept}${err}`);
+    }
+  }
+
+  lines.push('============================================');
+  return lines.join('\n');
+}
+
 async function scrapeBlockPages(params: {
   termInfo: TermInfo;
   blockInfo: BlockInfo;
-  opts: Options;
+  scrapeOpts: ScrapeOptions;
+  uniqueOpts: UniquenessOptions;
   ctx: ScrapeContext;
+  metrics: RunMetrics;
+  termStats: { rowsSeen: number; rowsKept: number; blocks: number };
 }): Promise<{ name: string; expectedCount: number | null; totalSeen: number; totalKept: number }> {
-  const { termInfo, blockInfo, opts, ctx } = params;
+  const { termInfo, blockInfo, scrapeOpts, uniqueOpts, ctx, metrics, termStats } = params;
   const { state, logger } = ctx;
   const { block, rawTitle } = blockInfo;
   const expectedCount = parseCountFromTitle(rawTitle);
@@ -103,45 +251,48 @@ async function scrapeBlockPages(params: {
     return blocks[0];
   };
   const resolveTable = (root: ParentNode): HTMLTableElement | null => (
-    root.querySelector('table[data-testid=\"data-table\"]') as HTMLTableElement | null
+    root.querySelector('table[data-testid="data-table"]') as HTMLTableElement | null
   );
 
-  if (opts.columnMode !== 'none') {
-    logger.log(`[INFO] [${rawTitle || name}] Applying columns: ${opts.columnMode}...`);
+  const normalizedUnique = normalizeUniquenessOptions(uniqueOpts);
+  const filters = {
+    requirePurchaseId: scrapeOpts.requirePurchaseId,
+    requireVin: scrapeOpts.requireVin,
+    requireStockNumber: scrapeOpts.requireStockNumber,
+  };
+
+  if (scrapeOpts.columnMode !== 'none') {
+    logger.log(`[INFO] [${rawTitle || name}] Applying columns: ${scrapeOpts.columnMode}...`);
     try {
-      const result = await applyColumns(resolveBlock(), opts.columnMode);
+      const result = await applyColumns(resolveBlock(), scrapeOpts.columnMode);
       if (result.reason === 'already_all' || result.reason === 'already_key') {
-        logger.log(`[INFO] Columns already satisfied (${opts.columnMode}).`);
+        logger.log(`[INFO] Columns already satisfied (${scrapeOpts.columnMode}).`);
       } else if (result.applied) {
         logger.log(`[OK] Columns updated (${result.reason}).`);
+      } else if (result.reason === 'no_button') {
+        logger.logDebug('Edit Columns button not found; skipping.');
       } else {
-        if (result.reason === 'no_button') {
-          logger.logDebug('Edit Columns button not found; skipping.');
-        } else {
-          logger.logDebug(`Columns not applied (${result.reason}).`);
-        }
+        logger.logDebug(`Columns not applied (${result.reason}).`);
       }
     } catch (error) {
       logger.log(`[WARN] Failed to apply columns: ${(error as Error).message}`);
     }
   }
 
-  if (opts.setShowTo100) {
+  if (scrapeOpts.setShowTo100) {
     logger.log(`[INFO] [${rawTitle || name}] Setting page size: Show 100...`);
     try {
       const result = await setPageSize(resolveBlock(), 100);
       if (result.changed) {
         logger.log('[OK] Set page size to Show 100.');
+      } else if (result.reason === 'already') {
+        logger.log('[INFO] Already Show 100.');
+      } else if (result.reason === 'no_show_button') {
+        logger.log('[WARN] Page size dropdown not found; leaving current size.');
+      } else if (result.reason === 'no_target_item') {
+        logger.log('[WARN] Show 100 option not found; leaving current size.');
       } else {
-        if (result.reason === 'already') {
-          logger.log('[INFO] Already Show 100.');
-        } else if (result.reason === 'no_show_button') {
-          logger.log('[WARN] Page size dropdown not found; leaving current size.');
-        } else if (result.reason === 'no_target_item') {
-          logger.log('[WARN] Show 100 option not found; leaving current size.');
-        } else {
-          logger.logDebug(`Page size unchanged (${result.reason}).`);
-        }
+        logger.logDebug(`Page size unchanged (${result.reason}).`);
       }
     } catch (error) {
       logger.log(`[WARN] Failed to set page size: ${(error as Error).message}`);
@@ -154,7 +305,7 @@ async function scrapeBlockPages(params: {
   let totalSeen = 0;
   let totalKept = 0;
 
-  if (opts.paginateAllPages && pi0.total > 1) {
+  if (scrapeOpts.paginateAllPages && pi0.total > 1) {
     try {
       await goToFirstPageIfNeeded(resolveBlock());
     } catch (error) {
@@ -163,13 +314,16 @@ async function scrapeBlockPages(params: {
   }
 
   const pi = getPaginationInfo(resolveBlock());
-  const pagesToScrape = opts.paginateAllPages ? pi.total : 1;
+  const pagesToScrape = scrapeOpts.paginateAllPages ? pi.total : 1;
 
-  if (!opts.paginateAllPages || pi.total <= 1) {
+  if (!scrapeOpts.paginateAllPages || pi.total <= 1) {
     logger.log(`[INFO] [${rawTitle || name}] Scraping current page only.`);
   } else {
     logger.log(`[INFO] [${rawTitle || name}] Scraping all pages (${pi.total}).`);
   }
+
+  termStats.blocks += 1;
+  metrics.blocksScraped += 1;
 
   for (let page = 1; page <= pagesToScrape; page++) {
     if (state.abort) {
@@ -190,6 +344,8 @@ async function scrapeBlockPages(params: {
       continue;
     }
 
+    metrics.pagesVisited += 1;
+
     const liveTable = resolveTable(resolveBlock());
     if (!liveTable) {
       logger.log(`[WARN] Table not found on page ${page}.`);
@@ -197,12 +353,8 @@ async function scrapeBlockPages(params: {
     }
     const { rows } = scrapeCurrentPageRows(liveTable);
     totalSeen += rows.length;
-
-    const filters = {
-      requirePurchaseId: opts.requirePurchaseId,
-      requireVin: opts.requireVin,
-      requireStockNumber: opts.requireStockNumber,
-    };
+    metrics.rowsSeen += rows.length;
+    termStats.rowsSeen += rows.length;
 
     for (const row of rows) {
       const out = {
@@ -215,9 +367,61 @@ async function scrapeBlockPages(params: {
       };
       out.Reference = buildReference(out);
 
-      if (shouldKeepRow(out, filters)) {
+      // Keep existing row-acceptance behavior while additionally tracking skip reasons.
+      const keepByLegacyFilter = shouldKeepRow(out, filters);
+      const filterEval = evaluateRowFilters(out, filters);
+
+      if (!keepByLegacyFilter || !filterEval.keep) {
+        if (filterEval.failed.purchaseId) metrics.skipByFilter.purchaseId += 1;
+        if (filterEval.failed.vin) metrics.skipByFilter.vin += 1;
+        if (filterEval.failed.stockNumber) metrics.skipByFilter.stockNumber += 1;
+        continue;
+      }
+
+      if (!normalizedUnique.enabled) {
         state.rows.push(out);
         totalKept++;
+        termStats.rowsKept += 1;
+        continue;
+      }
+
+      const key = buildUniquenessKey(out, normalizedUnique.keyFields);
+      if (!key) {
+        metrics.uniqueness.missingKey += 1;
+        state.rows.push(out);
+        totalKept++;
+        termStats.rowsKept += 1;
+        continue;
+      }
+
+      metrics.uniqueness.keysBuilt += 1;
+
+      const candidateTs = parseRowDateMs(out, normalizedUnique);
+      const existing = state.uniqueIndex.get(key);
+      if (!existing) {
+        state.rows.push(out);
+        state.uniqueIndex.set(key, { index: state.rows.length - 1, ts: candidateTs });
+        totalKept++;
+        termStats.rowsKept += 1;
+        continue;
+      }
+
+      metrics.uniqueness.duplicatesSeen += 1;
+
+      const replace = shouldReplaceDuplicate({
+        existingTs: existing.ts,
+        candidateTs,
+        strategy: normalizedUnique.strategy,
+      });
+
+      if (replace) {
+        state.rows[existing.index] = out;
+        state.uniqueIndex.set(key, { index: existing.index, ts: candidateTs });
+        metrics.uniqueness.replaced += 1;
+        if (scrapeOpts.debug) logger.logDebug(`[INFO] Replaced duplicate for key: ${key}`);
+      } else {
+        metrics.uniqueness.ignored += 1;
+        if (scrapeOpts.debug) logger.logDebug(`[INFO] Ignored duplicate for key: ${key}`);
       }
     }
 
@@ -235,6 +439,7 @@ async function scrapeBlockPages(params: {
 
   if (ctx.ui.debug?.checked && expectedCount !== null) {
     if (totalSeen !== expectedCount) {
+      metrics.expectedCountMismatches += 1;
       logger.logDebug(`Count mismatch for "${rawTitle}": title=${expectedCount}, scrapedRows=${totalSeen}. (This can be normal if filters/paging/permissions differ.)`);
     } else {
       logger.logDebug(`Count check OK for "${rawTitle}": ${expectedCount} rows.`);
@@ -248,12 +453,13 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
   const { state, ui, logger } = ctx;
   if (state.running) return;
 
-  const opts = readOptions(ui);
-  saveOptions(opts);
+  const scrapeOpts = readScrapeOptions(ui);
+  const uniqueOpts = normalizeUniquenessOptions(readUniquenessOptions(ui));
 
   const terms = parseTerms(ui.terms.value);
   logger.clear();
   state.rows = [];
+  state.uniqueIndex = new Map();
   state.abort = false;
 
   if (!terms.length) {
@@ -267,18 +473,20 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
 
   logger.log(`[INFO] Starting. Terms: ${terms.length}`);
   logger.log(`[INFO] Options: ${JSON.stringify({
-    paginateAllPages: opts.paginateAllPages,
-    setShowTo100: opts.setShowTo100,
-    columnMode: opts.columnMode,
-    requirePurchaseId: opts.requirePurchaseId,
-    requireVin: opts.requireVin,
-    requireStockNumber: opts.requireStockNumber,
-    debug: opts.debug,
-    maxConcurrency: opts.maxConcurrency,
+    paginateAllPages: scrapeOpts.paginateAllPages,
+    setShowTo100: scrapeOpts.setShowTo100,
+    columnMode: scrapeOpts.columnMode,
+    requirePurchaseId: scrapeOpts.requirePurchaseId,
+    requireVin: scrapeOpts.requireVin,
+    requireStockNumber: scrapeOpts.requireStockNumber,
+    debug: scrapeOpts.debug,
+    maxConcurrency: scrapeOpts.maxConcurrency,
   })}`);
 
-  const normalizedConcurrency = Math.max(1, Math.floor(opts.maxConcurrency || 1));
+  const normalizedConcurrency = Math.max(1, Math.floor(scrapeOpts.maxConcurrency || 1));
   const workerCount = Math.min(normalizedConcurrency, terms.length);
+  const metrics = createRunMetrics(workerCount, terms.length, uniqueOpts.enabled);
+
   if (workerCount > 1) {
     logger.log(`[INFO] Parallel workers: ${workerCount}`);
   }
@@ -316,19 +524,54 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
       if (!next) break;
       const { idx, termInfo } = next;
 
+      const termStarted = Date.now();
+      const termStats = { rowsSeen: 0, rowsKept: 0, blocks: 0 };
+      let termStatus: TermDebugEntry['status'] = 'ok';
+      let termError = '';
+
       workerLogger.log(`\n[INFO] (${idx + 1}/${terms.length}) ${termInfo.term}`);
 
       try {
         await loadIntoIframe(iframe, termInfo.url);
         workerLogger.log(`[INFO] Loaded iframe: ${termInfo.url}`);
       } catch (error) {
+        termStatus = 'failed';
+        termError = `load: ${(error as Error).message}`;
         workerLogger.log(`[WARN] Failed to load ${termInfo.url}: ${(error as Error).message}`);
+        metrics.termsFailed += 1;
+        metrics.termsProcessed += 1;
+        if (scrapeOpts.debug) {
+          metrics.debugTerms.push({
+            term: termInfo.term,
+            status: termStatus,
+            durationMs: Date.now() - termStarted,
+            rowsSeen: termStats.rowsSeen,
+            rowsKept: termStats.rowsKept,
+            blocks: termStats.blocks,
+            error: termError,
+          });
+        }
         continue;
       }
 
       const doc = iframe.contentDocument;
       if (!doc) {
+        termStatus = 'failed';
+        termError = 'no iframe document';
         workerLogger.log('[WARN] No iframe document; skipping.');
+        metrics.termsFailed += 1;
+        metrics.termsProcessed += 1;
+        if (scrapeOpts.debug) {
+          metrics.debugTerms.push({
+            term: termInfo.term,
+            status: termStatus,
+            durationMs: Date.now() - termStarted,
+            rowsSeen: termStats.rowsSeen,
+            rowsKept: termStats.rowsKept,
+            blocks: termStats.blocks,
+            error: termError,
+          });
+        }
         continue;
       }
 
@@ -341,28 +584,90 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
           return null;
         }, { timeoutMs: 20000, intervalMs: 200, debugLabel: 'results render' });
       } catch (error) {
+        termStatus = 'failed';
+        termError = `render: ${(error as Error).message}`;
         workerLogger.log(`[WARN] Results did not render in time: ${(error as Error).message}`);
+        metrics.termsFailed += 1;
+        metrics.termsProcessed += 1;
+        if (scrapeOpts.debug) {
+          metrics.debugTerms.push({
+            term: termInfo.term,
+            status: termStatus,
+            durationMs: Date.now() - termStarted,
+            rowsSeen: termStats.rowsSeen,
+            rowsKept: termStats.rowsKept,
+            blocks: termStats.blocks,
+            error: termError,
+          });
+        }
         continue;
       }
 
       if (renderState === 'empty') {
+        termStatus = 'empty';
         workerLogger.log('[INFO] No results found on this page.');
+        metrics.termsEmpty += 1;
+        metrics.termsProcessed += 1;
+        if (scrapeOpts.debug) {
+          metrics.debugTerms.push({
+            term: termInfo.term,
+            status: termStatus,
+            durationMs: Date.now() - termStarted,
+            rowsSeen: termStats.rowsSeen,
+            rowsKept: termStats.rowsKept,
+            blocks: termStats.blocks,
+          });
+        }
         continue;
       }
 
       const blocks = getBlocksWithTables(doc);
       if (!blocks.length) {
+        termStatus = 'failed';
+        termError = 'no tables found';
         workerLogger.log('[WARN] No tables found on this page.');
+        metrics.termsFailed += 1;
+        metrics.termsProcessed += 1;
+        if (scrapeOpts.debug) {
+          metrics.debugTerms.push({
+            term: termInfo.term,
+            status: termStatus,
+            durationMs: Date.now() - termStarted,
+            rowsSeen: termStats.rowsSeen,
+            rowsKept: termStats.rowsKept,
+            blocks: termStats.blocks,
+            error: termError,
+          });
+        }
         continue;
       }
 
       for (const blockInfo of blocks) {
         if (state.abort) break;
         try {
-          await scrapeBlockPages({ termInfo, blockInfo, opts, ctx: workerCtx });
+          await scrapeBlockPages({ termInfo, blockInfo, scrapeOpts, uniqueOpts, ctx: workerCtx, metrics, termStats });
         } catch (error) {
           workerLogger.log(`[WARN] Error scraping block: ${(error as Error).message}`);
+          termStatus = 'failed';
+          termError = `block: ${(error as Error).message}`;
         }
+      }
+
+      metrics.termsProcessed += 1;
+      if (termStatus === 'failed') {
+        metrics.termsFailed += 1;
+      }
+
+      if (scrapeOpts.debug) {
+        metrics.debugTerms.push({
+          term: termInfo.term,
+          status: termStatus,
+          durationMs: Date.now() - termStarted,
+          rowsSeen: termStats.rowsSeen,
+          rowsKept: termStats.rowsKept,
+          blocks: termStats.blocks,
+          error: termError || undefined,
+        });
       }
 
       workerLogger.log(`[INFO] Total exported rows: ${state.rows.length}`);
@@ -379,7 +684,11 @@ export async function runScrape(ctx: ScrapeContext): Promise<void> {
   state.lastJson = JSON.stringify(state.rows, null, 2);
   state.lastCsv = rowsToCsv(state.rows);
 
+  metrics.rowsExported = state.rows.length;
+  const elapsedMs = Date.now() - metrics.startedAtMs;
+
   logger.log(`\n[OK] Done. Total exported rows: ${state.rows.length}`);
+  logger.log(formatSummary(metrics, elapsedMs, state.rows.length, scrapeOpts.debug));
 }
 
 export function exportCsv(state: AppState): string {
@@ -403,3 +712,4 @@ export function downloadJson(state: AppState): void {
   const json = exportJson(state);
   downloadText(`carma-search-export_${new Date().toISOString().replace(/[:.]/g, '-')}.json`, json, 'application/json');
 }
+

@@ -342,6 +342,7 @@ if (!CVR.apProcess) {
       [/corporate check request/i,[0,CR,I]],
       [/50 state dmv/i,[0,CR,I]],
       [/dealer account no 43259|sc dmv/i,["SC DMV",CR,I,0,"South Carolina Department of Motor / ATTN Carol Reynolds / 10311 Wilson Boulevard, Blythewood, SC 29016"]],
+      [/(?:tarrant\s*c(?:ou)?nty\s*tax\s*assessor(?:\s*-\s*col(?:lector)?)?|rick\s*d\.?\s*barnes)/i,["TARRANT COUNTY TAX ASSESSOR-COLLECTOR"]],
       [/sell to carvana/i,[0,CR]],
       [/ttstc/i,[0,CR]],
       [/customer check request/i,[0,CR,0,0,0,0,/good\s*will|goodwill|GDW/i]],
@@ -831,9 +832,12 @@ if (!CVR.apProcess) {
       };
 
       // Patterns (kept compact + compiled once per run)
-      const VVP='([A-HJ-NPR-Z0-9]{11,17})\\b', SVP='((?:[A-Z0-9]{2,5}-)?\\d{7,12}(?:-(?:[A-Z]{2,8}|\\d{1,4}))?)\\b', PVP='(\\d{3,})\\b';
-      const DVP=/(?:^|[^A-Z0-9])((?:[A-Z0-9]{2,5}-)?\d{7,12})(?:-([A-Z]{2,8}|\d{1,4}))?-([A-HJ-NPR-Z0-9]{11,17})-(\d{3,})(?:$|[^A-Z0-9])/i;
-      const SXP=/^((?:[A-Z0-9]{2,5}-)?\d{7,12})(?:-([A-Z]{2,8}|\d{1,4}))?$/i;
+      const VVP='([A-HJ-NPR-Z0-9]{11,17})\\b', SVP='((?:[A-Z0-9&]{2,8}-)?\\d{7,12}(?:-(?:[A-Z]{2,8}|\\d{1,4}))?)\\b', PVP='(\\d{3,})\\b';
+      // Descriptor matcher groups:
+      // 1) stock base, 2) stock suffix (alpha/numeric), 3) VIN, 4) PID (optional).
+      // Remaining `-TOKEN` segments are tolerated as status/noise suffixes.
+      const DVP=/(?:^|[^A-Z0-9&])((?:[A-Z0-9&]{2,8}-)?\d{7,12})(?:-([A-Z]{2,8}|\d{1,4}))?-([A-HJ-NPR-Z0-9]{11,17})(?:-(\d{3,}))?(?:-[A-Z0-9&]{2,30})*(?:$|[^A-Z0-9&])/i;
+      const SXP=/^((?:[A-Z0-9&]{2,8}-)?\d{7,12})(?:-([A-Z]{2,8}|\d{1,4}))?$/i;
       const VCHK=/^[A-HJ-NPR-Z0-9]{11,17}$/i;
 
       // Today's date for Invoice fallback: MMDDYYYY-TR (example: 12302025-TR)
@@ -981,7 +985,7 @@ if (!CVR.apProcess) {
        if(sm){
          let stBase=sid(sm[1]).toUpperCase(),
              stTag=sid(sm[2]||"").toUpperCase(),
-             stBaseNumeric=stBase.replace(/^[A-Z0-9]{2,5}-/,"");
+             stBaseNumeric=stBase.replace(/^[A-Z0-9&]{2,8}-/,"");
          st=stTag?(stBase+"-"+stTag):stBase;
          stInvoice=stTag?(stBaseNumeric+"-"+stTag):stBaseNumeric
        }
