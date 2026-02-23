@@ -1,7 +1,5 @@
 Option Explicit
 
-Private Const WATCH_BUFFER_ROWS As Long = 25
-
 Private Sub Worksheet_Change(ByVal Target As Range)
     On Error GoTo SafeExit
     If Not Application.EnableEvents Then Exit Sub
@@ -19,25 +17,23 @@ Private Sub Worksheet_Change(ByVal Target As Range)
     Dim tableBottomRow As Long
     tableBottomRow = lo.Range.Row + lo.Range.Rows.Count - 1
 
-    Dim watchBottomRow As Long
-    watchBottomRow = tableBottomRow + WATCH_BUFFER_ROWS
-    If watchBottomRow > Me.Rows.Count Then watchBottomRow = Me.Rows.Count
-
-    'Watch table columns over the active table footprint + a small tail buffer.
+    'Watch table columns from header row to sheet bottom so far-below pastes still queue sync.
     Dim watchRng As Range
-    Set watchRng = Me.Range(Me.Cells(tableTopRow, firstCol), Me.Cells(watchBottomRow, lastCol))
+    Set watchRng = Me.Range(Me.Cells(tableTopRow, firstCol), Me.Cells(Me.Rows.Count, lastCol))
 
-    If Intersect(Target, watchRng) Is Nothing Then Exit Sub
+    Dim effectiveTarget As Range
+    Set effectiveTarget = Intersect(Target, watchRng)
+    If effectiveTarget Is Nothing Then Exit Sub
 
     Dim changedBottomRow As Long
     Dim changedTopRow As Long
     Dim changedFirstCol As Long
     Dim changedLastCol As Long
 
-    changedTopRow = Target.Row
-    changedBottomRow = Target.Row + Target.Rows.Count - 1
-    changedFirstCol = Target.Column
-    changedLastCol = Target.Column + Target.Columns.Count - 1
+    changedTopRow = effectiveTarget.Row
+    changedBottomRow = effectiveTarget.Row + effectiveTarget.Rows.Count - 1
+    changedFirstCol = effectiveTarget.Column
+    changedLastCol = effectiveTarget.Column + effectiveTarget.Columns.Count - 1
 
     If changedFirstCol < firstCol Then changedFirstCol = firstCol
     If changedLastCol > lastCol Then changedLastCol = lastCol
@@ -50,7 +46,7 @@ Private Sub Worksheet_Change(ByVal Target As Range)
     If lo.DataBodyRange Is Nothing Then
         protectChangedRows = True
     Else
-        protectChangedRows = (Intersect(Target, lo.DataBodyRange) Is Nothing)
+        protectChangedRows = (Intersect(effectiveTarget, lo.DataBodyRange) Is Nothing)
     End If
 
     'Protect changed rows only for below-table edits/pastes; allow in-table deletes to shrink immediately.
