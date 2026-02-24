@@ -34,6 +34,27 @@ function copyPkg(outDir) {
   }
 }
 
+function firefoxWebAccessibleResources(manifest) {
+  const raw = manifest.web_accessible_resources;
+  if (!Array.isArray(raw)) {
+    return ['pkg/*'];
+  }
+
+  const flattened = raw.flatMap((entry) => {
+    if (typeof entry === 'string') {
+      return [entry];
+    }
+
+    if (entry && typeof entry === 'object' && Array.isArray(entry.resources)) {
+      return entry.resources.filter((value) => typeof value === 'string');
+    }
+
+    return [];
+  });
+
+  return flattened.length ? [...new Set(flattened)] : ['pkg/*'];
+}
+
 async function buildEntries(outDir) {
   const entries = {
     background: path.join(srcRoot, 'background.ts'),
@@ -69,8 +90,15 @@ function chromeManifest() {
 }
 
 function firefoxManifest() {
+  const {
+    host_permissions: _hostPermissions,
+    action,
+    web_accessible_resources: _war,
+    ...rest
+  } = baseManifest;
+
   return {
-    ...baseManifest,
+    ...rest,
     manifest_version: 2,
     version: packageJson.version,
     permissions: [
@@ -81,6 +109,8 @@ function firefoxManifest() {
       'https://*.fa.us2.oraclecloud.com/*',
       'https://carma.cvnacorp.com/*',
     ],
+    web_accessible_resources: firefoxWebAccessibleResources(baseManifest),
+    browser_action: action,
     browser_specific_settings: {
       gecko: {
         id: 'carvana-workflows@carvana.com',
