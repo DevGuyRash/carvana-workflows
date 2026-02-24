@@ -1,5 +1,5 @@
 use cv_ext_contract::{
-    Action, RunArtifact, RunReport, RunStatus, RunStepReport, RuntimeError, Site,
+    Action, ArtifactKind, ArtifactMeta, RunArtifact, RunReport, RunStatus, RunStepReport, RuntimeError, Site,
 };
 use serde_json::{json, Value};
 
@@ -13,7 +13,7 @@ impl RuntimeEngine {
         workflows_for_site(site).into_iter().map(|wf| wf.id).collect()
     }
 
-    pub fn run_workflow_with_executor<E: ActionExecutor>(
+    pub async fn run_workflow_with_executor<E: ActionExecutor>(
         &self,
         site: Site,
         workflow_id: &str,
@@ -47,26 +47,42 @@ impl RuntimeEngine {
 
         for (index, action) in workflow.actions.iter().enumerate() {
             let step_started_at_ms = executor.now_ms();
-            let (kind, target, outcome) = execute_action(executor, action);
+            let (kind, target, outcome) = execute_action(executor, action).await;
             let step_ended_at_ms = executor.now_ms();
 
             match outcome {
                 Ok(data) => {
                     had_success = true;
                     if let Action::ExtractTable { .. } = action {
-                        artifacts.push(RunArtifact {
-                            name: format!("{workflow_id}:extract_table:{index}"),
-                            data: data.clone(),
-                        });
+                        if let Some(artifact) = artifact_from_extract_table(
+                            site.as_str(),
+                            workflow_id,
+                            step_ended_at_ms,
+                            index,
+                            &data,
+                        ) {
+                            artifacts.push(artifact);
+                        }
                     }
 
                     if let Action::Execute { command } = action {
                         if let Some(found) = data.get("artifacts").and_then(Value::as_array) {
                             for (artifact_index, artifact) in found.iter().enumerate() {
-                                artifacts.push(RunArtifact {
-                                    name: format!("{workflow_id}:{command}:{artifact_index}"),
-                                    data: artifact.clone(),
-                                });
+                                if let Ok(parsed) = serde_json::from_value::<RunArtifact>(artifact.clone()) {
+                                    artifacts.push(parsed);
+                                } else {
+                                    artifacts.push(RunArtifact {
+                                        kind: ArtifactKind::Diagnostic,
+                                        name: format!("{workflow_id}:{command}:{artifact_index}"),
+                                        columns: vec!["json".to_string()],
+                                        rows: vec![vec![artifact.clone()]],
+                                        meta: ArtifactMeta {
+                                            site: site.as_str().to_string(),
+                                            workflow_id: workflow_id.to_string(),
+                                            generated_at_ms: step_ended_at_ms,
+                                        },
+                                    });
+                                }
                             }
                         }
                     }
@@ -134,7 +150,53 @@ impl RuntimeEngine {
     }
 }
 
-fn execute_action<E: ActionExecutor>(
+fn artifact_from_extract_table(
+    site: &str,
+    workflow_id: &str,
+    generated_at_ms: u64,
+    step_index: usize,
+    data: &Value,
+) -> Option<RunArtifact> {
+    let rows = data.as_array()?;
+    let mut columns: Vec<String> = Vec::new();
+    for row in rows {
+        let Some(object) = row.as_object() else {
+            continue;
+        };
+        for key in object.keys() {
+            if !columns.contains(key) {
+                columns.push(key.clone());
+            }
+        }
+    }
+    columns.sort();
+
+    let mut out_rows: Vec<Vec<Value>> = Vec::new();
+    for row in rows {
+        let Some(object) = row.as_object() else {
+            continue;
+        };
+        let mut values = Vec::with_capacity(columns.len());
+        for column in &columns {
+            values.push(object.get(column).cloned().unwrap_or(Value::Null));
+        }
+        out_rows.push(values);
+    }
+
+    Some(RunArtifact {
+        kind: ArtifactKind::Table,
+        name: format!("{workflow_id}:extract_table:{step_index}"),
+        columns,
+        rows: out_rows,
+        meta: ArtifactMeta {
+            site: site.to_string(),
+            workflow_id: workflow_id.to_string(),
+            generated_at_ms,
+        },
+    })
+}
+
+async fn execute_action<E: ActionExecutor>(
     executor: &mut E,
     action: &Action,
 ) -> (String, Option<String>, Result<Value, String>) {
@@ -145,27 +207,27 @@ fn execute_action<E: ActionExecutor>(
         } => (
             "wait_for".to_string(),
             Some(selector.clone()),
-            executor.wait_for(selector, *timeout_ms),
+            executor.wait_for(selector, *timeout_ms).await,
         ),
         Action::Click { selector } => (
             "click".to_string(),
             Some(selector.clone()),
-            executor.click(selector),
+            executor.click(selector).await,
         ),
         Action::Type { selector, text } => (
             "type".to_string(),
             Some(selector.clone()),
-            executor.type_text(selector, text),
+            executor.type_text(selector, text).await,
         ),
         Action::ExtractTable { selector } => (
             "extract_table".to_string(),
             Some(selector.clone()),
-            executor.extract_table(selector),
+            executor.extract_table(selector).await,
         ),
         Action::Execute { command } => (
             "execute".to_string(),
             Some(command.clone()),
-            executor.execute_command(command),
+            executor.execute_command(command).await,
         ),
     }
 }
@@ -180,7 +242,8 @@ pub fn ok_payload(kind: &str, target: &str) -> Value {
 
 #[cfg(test)]
 mod tests {
-    use cv_ext_contract::Site;
+    use cv_ext_contract::{ArtifactKind, Site};
+    use futures::executor::block_on;
     use serde_json::{json, Value};
 
     use super::RuntimeEngine;
@@ -188,29 +251,41 @@ mod tests {
 
     struct TestExecutor;
 
+    #[async_trait::async_trait(?Send)]
     impl ActionExecutor for TestExecutor {
         fn now_ms(&self) -> u64 {
             1
         }
 
-        fn wait_for(&mut self, selector: &str, _timeout_ms: u32) -> Result<Value, String> {
+        async fn wait_for(&mut self, selector: &str, _timeout_ms: u32) -> Result<Value, String> {
             Ok(json!({"selector": selector}))
         }
 
-        fn click(&mut self, selector: &str) -> Result<Value, String> {
+        async fn click(&mut self, selector: &str) -> Result<Value, String> {
             Ok(json!({"selector": selector}))
         }
 
-        fn type_text(&mut self, selector: &str, text: &str) -> Result<Value, String> {
+        async fn type_text(&mut self, selector: &str, text: &str) -> Result<Value, String> {
             Ok(json!({"selector": selector, "text": text}))
         }
 
-        fn extract_table(&mut self, selector: &str) -> Result<Value, String> {
-            Ok(json!({"selector": selector, "rows": []}))
+        async fn extract_table(&mut self, selector: &str) -> Result<Value, String> {
+            Ok(json!([{"selector": selector, "value": "ok"}]))
         }
 
-        fn execute_command(&mut self, command: &str) -> Result<Value, String> {
-            Ok(json!({"command": command}))
+        async fn execute_command(&mut self, command: &str) -> Result<Value, String> {
+            Ok(json!({
+                "command": command,
+                "artifacts": [
+                    {
+                        "kind": "table",
+                        "name": "test-artifact",
+                        "columns": ["col"],
+                        "rows": [["value"]],
+                        "meta": { "site": "carma", "workflowId": "carma.bulk.search.scrape", "generatedAtMs": 1 }
+                    }
+                ]
+            }))
         }
     }
 
@@ -225,19 +300,24 @@ mod tests {
     fn executes_workflow_with_reports() {
         let engine = RuntimeEngine;
         let mut executor = TestExecutor;
-        let report = engine.run_workflow_with_executor(Site::Carma, "carma.bulk.search.scrape", &mut executor);
+        let report = block_on(engine.run_workflow_with_executor(
+            Site::Carma,
+            "carma.bulk.search.scrape",
+            &mut executor,
+        ));
 
         assert_eq!(report.workflow_id, "carma.bulk.search.scrape");
         assert_eq!(report.site, "carma");
-        assert_eq!(report.steps.len(), 2);
+        assert_eq!(report.steps.len(), 1);
         assert_eq!(report.artifacts.len(), 1);
+        assert_eq!(report.artifacts[0].kind, ArtifactKind::Table);
     }
 
     #[test]
     fn reports_missing_workflow() {
         let engine = RuntimeEngine;
         let mut executor = TestExecutor;
-        let report = engine.run_workflow_with_executor(Site::Jira, "missing", &mut executor);
+        let report = block_on(engine.run_workflow_with_executor(Site::Jira, "missing", &mut executor));
 
         assert_eq!(report.workflow_id, "missing");
         assert!(report.error.is_some());
