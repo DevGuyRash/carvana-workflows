@@ -20,13 +20,13 @@ pub fn jira_rules() -> Vec<RuleDefinition> {
         RuleDefinition {
             id: "jira.issue.capture.table".to_string(),
             label: "Jira: Capture Filter Table".to_string(),
-            description: "Capture visible Jira filter rows and derive Stock/VIN/PID reference columns.".to_string(),
+            description: "Capture Jira filter rows and transform to AP export schema (Reference/Invoice routing and amounts).".to_string(),
             site: Site::Jira,
             enabled: true,
             url_pattern: None,
             trigger: RuleTrigger::OnDemand,
-            actions: vec![Action::ExtractTable {
-                selector: "table".to_string(),
+            actions: vec![Action::Execute {
+                command: "jira.capture.filter_table".to_string(),
             }],
             priority: 100,
             category: RuleCategory::DataCapture,

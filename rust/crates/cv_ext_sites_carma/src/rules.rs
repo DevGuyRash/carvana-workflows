@@ -9,15 +9,9 @@ pub fn carma_rules() -> Vec<RuleDefinition> {
         enabled: true,
         url_pattern: None,
         trigger: RuleTrigger::OnDemand,
-        actions: vec![
-            Action::WaitFor {
-                selector: "table".to_string(),
-                timeout_ms: 12000,
-            },
-            Action::ExtractTable {
-                selector: "table".to_string(),
-            },
-        ],
+        actions: vec![Action::Execute {
+            command: "carma.bulk.search.scrape".to_string(),
+        }],
         priority: 100,
         category: RuleCategory::DataCapture,
         builtin: true,
