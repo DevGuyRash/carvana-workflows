@@ -93,6 +93,42 @@ async function handleListRules(payload: { site: string }): Promise<RuntimeRespon
   }
 }
 
+async function handleClipboardWrite(payload: { text: string }): Promise<RuntimeResponse> {
+  const text = payload.text;
+  if (typeof text !== 'string' || text.length === 0) return { ok: false, error: 'No text to copy' };
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return { ok: true };
+    }
+  } catch {
+    // fall back to a selection-based copy strategy
+  }
+
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', 'true');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    textarea.style.pointerEvents = 'none';
+    document.body.appendChild(textarea);
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+
+    const copied = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    if (!copied) {
+      return { ok: false, error: 'Clipboard write failed' };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 chrome.runtime.onMessage.addListener(
   (
     message: RuntimeCommand,
@@ -106,19 +142,22 @@ chrome.runtime.onMessage.addListener(
 
     switch (kind) {
       case 'run-rule':
-        handler = handleRunRule((message as any).payload);
+        handler = handleRunRule(message.payload);
         break;
       case 'run-rule-with-result-mode':
-        handler = handleRunRule((message as any).payload);
+        handler = handleRunRule(message.payload);
         break;
       case 'run-auto-rules':
-        handler = handleRunAutoRules((message as any).payload);
+        handler = handleRunAutoRules(message.payload);
         break;
       case 'capture-table':
         handler = handleCaptureTable();
         break;
       case 'get-rules':
-        handler = handleListRules((message as any).payload);
+        handler = handleListRules(message.payload);
+        break;
+      case 'clipboard-write':
+        handler = handleClipboardWrite(message.payload);
         break;
       default:
         return;

@@ -1,6 +1,17 @@
 import { formatError, queryActiveTab, sendTabMessage, storageGet, storageSet } from './shared/webext-async';
 import type { RuntimeCommand, RuntimeResponse } from './shared/messages';
 
+type OpenControlCenterCommand = Extract<RuntimeCommand, { kind: 'open-control-center' }>;
+
+function isRuntimeResponse(value: unknown): value is RuntimeResponse {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    'ok' in value &&
+    typeof (value as { ok: unknown }).ok === 'boolean',
+  );
+}
+
 async function handleMessage(
   message: RuntimeCommand,
   sender: chrome.runtime.MessageSender,
@@ -16,20 +27,30 @@ async function handleMessage(
     }
 
     case 'run-rule': {
-      const { ruleId, site, context } = (message as any).payload ?? {};
+      const { ruleId, site, context } = message.payload;
       const tab = await queryActiveTab();
       if (!tab?.id) return { ok: false, error: 'No active tab' };
       try {
-        const result = await sendTabMessage(tab.id, { kind: 'run-rule', payload: { ruleId, site, context } });
+        const result = await sendTabMessage<RuntimeCommand, RuntimeResponse>(
+          tab.id,
+          { kind: 'run-rule', payload: { ruleId, site, context } },
+        );
+        if (!isRuntimeResponse(result)) {
+          return { ok: false, error: 'Rule execution did not return a valid response' };
+        }
+        if (!result.ok) {
+          await appendLogEntry('error', `rule:${ruleId}`, result.error ?? 'Rule execution failed');
+          return result;
+        }
         await appendLogEntry('info', `rule:${ruleId}`, `Executed rule ${ruleId}`);
         try {
           if (site) {
-            await storageSet({ [`cv_last_run_${site}`]: result });
+            await storageSet({ [`cv_last_run_${site}`]: result.data });
           }
         } catch {
           // best effort
         }
-        return { ok: true, data: result };
+        return result;
       } catch (err) {
         await appendLogEntry('error', `rule:${ruleId}`, formatError(err));
         return { ok: false, error: formatError(err) };
@@ -37,16 +58,26 @@ async function handleMessage(
     }
 
     case 'run-rule-with-result-mode': {
-      const { ruleId, site, context, resultMode } = (message as any).payload ?? {};
+      const { ruleId, site, context, resultMode } = message.payload;
       const tab = await queryActiveTab();
       if (!tab?.id) return { ok: false, error: 'No active tab' };
       try {
-        const result = await sendTabMessage(tab.id, { kind: 'run-rule', payload: { ruleId, site, context } });
+        const result = await sendTabMessage<RuntimeCommand, RuntimeResponse>(
+          tab.id,
+          { kind: 'run-rule', payload: { ruleId, site, context } },
+        );
+        if (!isRuntimeResponse(result)) {
+          return { ok: false, error: 'Rule execution did not return a valid response' };
+        }
+        if (!result.ok) {
+          await appendLogEntry('error', `rule:${ruleId}`, result.error ?? 'Rule execution failed');
+          return result;
+        }
         await appendLogEntry('info', `rule:${ruleId}`, `Executed rule ${ruleId}`);
         if (site && resultMode === 'store') {
-          await storageSet({ [`cv_last_run_${site}`]: result });
+          await storageSet({ [`cv_last_run_${site}`]: result.data });
         }
-        return { ok: true, data: result };
+        return result;
       } catch (err) {
         await appendLogEntry('error', `rule:${ruleId}`, formatError(err));
         return { ok: false, error: formatError(err) };
@@ -54,7 +85,7 @@ async function handleMessage(
     }
 
     case 'run-auto-rules': {
-      const { url } = (message as any).payload ?? {};
+      const { url } = message.payload;
       const tab = await queryActiveTab();
       if (!tab?.id) return { ok: false, error: 'No active tab' };
       try {
@@ -66,7 +97,7 @@ async function handleMessage(
     }
 
     case 'detect-site': {
-      const url = (message as any).payload?.url ?? '';
+      const { url } = message.payload;
       const lower = String(url).toLowerCase();
       let site = 'unsupported';
       if (lower.includes('jira.carvana.com')) site = 'jira';
@@ -76,7 +107,7 @@ async function handleMessage(
     }
 
     case 'get-rules': {
-      const { site } = (message as any).payload ?? {};
+      const { site } = message.payload;
       const tab = await queryActiveTab();
       if (!tab?.id) return { ok: false, error: 'No active tab' };
       try {
@@ -88,7 +119,7 @@ async function handleMessage(
     }
 
     case 'toggle-rule': {
-      const { ruleId, enabled } = (message as any).payload ?? {};
+      const { ruleId, enabled } = message.payload;
       const states = await storageGet<Record<string, boolean>>('cv_rules_state', {});
       states[ruleId] = enabled;
       await storageSet({ cv_rules_state: states });
@@ -107,18 +138,18 @@ async function handleMessage(
     }
 
     case 'save-settings': {
-      await storageSet({ cv_settings: (message as any).payload });
+      await storageSet({ cv_settings: message.payload });
       return { ok: true };
     }
 
     case 'theme-changed': {
-      const { themeId } = (message as any).payload ?? {};
+      const { themeId } = message.payload;
       await storageSet({ cv_theme: themeId });
       return { ok: true };
     }
 
     case 'data-captured': {
-      const { site, data } = (message as any).payload ?? {};
+      const { site, data } = message.payload;
       if (site && data) {
         await storageSet({ [`cv_data_${site}`]: data });
       }
@@ -139,7 +170,7 @@ async function handleMessage(
 
 
     case 'download-result': {
-      const { filename, mime, data } = (message as any).payload ?? {};
+      const { filename, mime, data } = message.payload;
       if (!filename || !data) return { ok: false, error: 'Missing download payload' };
       try {
         const dataUrl = 'data:' + (mime || 'application/octet-stream') + ';base64,' + btoa(unescape(encodeURIComponent(data)));
@@ -157,13 +188,22 @@ async function handleMessage(
     }
 
     case 'copy-result': {
-      const { data: copyData } = (message as any).payload ?? {};
+      const { data: copyData } = message.payload;
       if (!copyData) return { ok: false, error: 'No data to copy' };
       try {
         const tab = await queryActiveTab();
-        if (tab?.id) {
-          await chrome.tabs.sendMessage(tab.id, { kind: 'clipboard-write', payload: { text: copyData } });
+        if (!tab?.id) return { ok: false, error: 'No active tab' };
+        const response = await sendTabMessage<RuntimeCommand, RuntimeResponse>(
+          tab.id,
+          { kind: 'clipboard-write', payload: { text: copyData } },
+        );
+        if (!isRuntimeResponse(response)) {
+          return { ok: false, error: 'Clipboard write was not acknowledged by content script' };
         }
+        if (!response.ok) {
+          return response;
+        }
+        await appendLogEntry('info', 'clipboard', 'Copied result to clipboard');
         return { ok: true };
       } catch (err) {
         return { ok: false, error: formatError(err) };
@@ -175,13 +215,12 @@ async function handleMessage(
 }
 
 async function handleOpenControlCenter(
-  message: RuntimeCommand,
+  message: OpenControlCenterCommand,
   sender: chrome.runtime.MessageSender,
 ): Promise<RuntimeResponse> {
   try {
-    const msg = message as any;
-    let tabId: number | undefined = msg.tabId;
-    let windowId: number | undefined = msg.windowId;
+    let tabId: number | undefined = message.tabId;
+    let windowId: number | undefined = message.windowId;
 
     if (tabId === undefined && windowId === undefined) {
       tabId = sender.tab?.id;

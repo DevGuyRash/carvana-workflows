@@ -45,6 +45,152 @@ const SITE_BORDER_COLORS: Record<string, string> = {
   carma: '#34d399',
 };
 
+
+/* ─── Rule-run helpers (extracted from the Run-button handler) ─── */
+
+interface RunFeedbackContext {
+  tracker: ProgressTracker | null;
+  alert: ValidationAlert | null;
+  resultSlot: HTMLDivElement;
+}
+
+type RuleEntry = (typeof BUILTIN_RULES)[number];
+
+function classifyRule(rule: RuleEntry) {
+  const isDataCapture = ['jira.issue.capture.table', 'carma.bulk.search.scrape'].includes(rule.id);
+  const isValidation = rule.id === 'oracle.invoice.validation.alert';
+  const isLongRunning = ['jira.jql.builder', 'carma.bulk.search.scrape', 'oracle.invoice.create'].includes(rule.id);
+  return { isDataCapture, isValidation, isLongRunning };
+}
+
+function initRunFeedback(
+  rule: RuleEntry,
+  card: HTMLElement,
+): RunFeedbackContext {
+  const { isLongRunning, isValidation } = classifyRule(rule);
+
+  let tracker: ProgressTracker | null = null;
+  let alert: ValidationAlert | null = null;
+  const resultSlot = document.createElement('div');
+  Object.assign(resultSlot.style, { marginTop: '8px' });
+  card.appendChild(resultSlot);
+
+  if (isLongRunning) {
+    tracker = new ProgressTracker({
+      title: rule.label,
+      status: 'running',
+      message: 'Executing workflow\u2026',
+      steps: [
+        { id: 'init', label: 'Initialize', status: 'running' },
+        { id: 'exec', label: 'Execute actions', status: 'idle' },
+        { id: 'collect', label: 'Collect results', status: 'idle' },
+      ],
+      onCancel: () => {
+        tracker?.update({ status: 'cancelled', message: 'Cancelled by user' });
+        showToast({ message: rule.label + ' cancelled', variant: 'warning' });
+      },
+    });
+    resultSlot.appendChild(tracker.getElement());
+  } else if (isValidation) {
+    alert = new ValidationAlert({
+      variant: 'validating',
+      title: rule.label,
+      message: 'Running validation checks\u2026',
+    });
+    alert.mount(resultSlot);
+  } else {
+    showToast({ message: 'Running: ' + rule.label, variant: 'info' });
+  }
+
+  return { tracker, alert, resultSlot };
+}
+
+function advanceTrackerToExec(tracker: ProgressTracker): void {
+  tracker.update({
+    steps: [
+      { id: 'init', label: 'Initialize', status: 'success' },
+      { id: 'exec', label: 'Execute actions', status: 'running' },
+      { id: 'collect', label: 'Collect results', status: 'idle' },
+    ],
+    progress: 33,
+  });
+}
+
+function finalizeTracker(tracker: ProgressTracker): void {
+  tracker.update({
+    status: 'success',
+    progress: 100,
+    message: 'Workflow complete',
+    steps: [
+      { id: 'init', label: 'Initialize', status: 'success' },
+      { id: 'exec', label: 'Execute actions', status: 'success' },
+      { id: 'collect', label: 'Collect results', status: 'success' },
+    ],
+  });
+}
+
+function handleValidationResult(
+  alert: ValidationAlert,
+  result: unknown,
+  retryFn: () => void,
+): void {
+  const resp = result as Record<string, unknown> | undefined;
+  const ok = resp?.ok !== false;
+  alert.update({
+    variant: ok ? 'valid' : 'invalid',
+    title: ok ? 'Validation passed' : 'Validation failed',
+    message: ok ? 'All checks completed successfully.' : String((resp as any)?.error ?? 'See details.'),
+    onRetry: retryFn,
+  });
+}
+
+function handleDataCaptureResult(
+  rule: RuleEntry,
+  result: unknown,
+  resultSlot: HTMLElement,
+): void {
+  const resp = (result ?? {}) as Record<string, unknown>;
+  const data = resp.data ?? resp;
+  if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
+    const rows = data as Record<string, string>[];
+    const cols = Object.keys(rows[0]).map((k) => ({ key: k, label: k, sortable: true }));
+    const artifact: ResultArtifact = {
+      type: 'table',
+      title: rule.label,
+      columns: cols,
+      rows,
+      meta: { Rule: rule.id, Rows: String(rows.length), Captured: new Date().toLocaleTimeString() },
+    };
+    const viewer = createResultViewer({
+      artifact,
+      onDownload: (filename, mime, d) => {
+        void sendRuntimeMessage({ kind: 'download-result', payload: { filename, mime, data: d } });
+      },
+      onCopy: (d) => {
+        void sendRuntimeMessage({ kind: 'copy-result', payload: { data: d } });
+      },
+    });
+    resultSlot.appendChild(viewer);
+    void saveCapturedData(rule.site + '_' + rule.id, rows).catch(() => {});
+  }
+}
+
+function handleRunError(
+  err: unknown,
+  rule: RuleEntry,
+  ctx: RunFeedbackContext,
+  retryFn: () => void,
+): void {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (ctx.tracker) {
+    ctx.tracker.update({ status: 'error', message: msg });
+  } else if (ctx.alert) {
+    ctx.alert.update({ variant: 'error', title: 'Error', message: msg, onRetry: retryFn });
+  } else {
+    showToast({ message: 'Cannot execute: not on ' + rule.site + ' page', variant: 'error' });
+  }
+}
+
 /* ─── Helpers ───────────────────────────────────────────────────── */
 
 function gradientText(el: HTMLElement): void {
@@ -483,123 +629,26 @@ function renderRules(): HTMLElement {
         boxShadow: '0 0 12px rgba(59, 130, 246, 0.15)',
       });
       runBtn.addEventListener('click', async () => {
-        const isDataCapture = ['jira.issue.capture.table', 'carma.bulk.search.scrape'].includes(rule.id);
-        const isValidation = rule.id === 'oracle.invoice.validation.alert';
-        const isLongRunning = ['jira.jql.builder', 'carma.bulk.search.scrape', 'oracle.invoice.create'].includes(rule.id);
-
-        let tracker: ProgressTracker | null = null;
-        let alert: ValidationAlert | null = null;
-        const resultSlot = document.createElement('div');
-        Object.assign(resultSlot.style, { marginTop: '8px' });
-        card.appendChild(resultSlot);
-
-        if (isLongRunning) {
-          tracker = new ProgressTracker({
-            title: rule.label,
-            status: 'running',
-            message: 'Executing workflow\u2026',
-            steps: [
-              { id: 'init', label: 'Initialize', status: 'running' },
-              { id: 'exec', label: 'Execute actions', status: 'idle' },
-              { id: 'collect', label: 'Collect results', status: 'idle' },
-            ],
-            onCancel: () => {
-              tracker?.update({ status: 'cancelled', message: 'Cancelled by user' });
-              showToast({ message: rule.label + ' cancelled', variant: 'warning' });
-            },
-          });
-          resultSlot.appendChild(tracker.getElement());
-        } else if (isValidation) {
-          alert = new ValidationAlert({
-            variant: 'validating',
-            title: rule.label,
-            message: 'Running validation checks\u2026',
-          });
-          alert.mount(resultSlot);
-        } else {
-          showToast({ message: 'Running: ' + rule.label, variant: 'info' });
-        }
+        const { isDataCapture, isValidation, isLongRunning } = classifyRule(rule);
+        const ctx = initRunFeedback(rule, card);
 
         try {
-          if (tracker) {
-            tracker.update({
-              steps: [
-                { id: 'init', label: 'Initialize', status: 'success' },
-                { id: 'exec', label: 'Execute actions', status: 'running' },
-                { id: 'collect', label: 'Collect results', status: 'idle' },
-              ],
-              progress: 33,
-            });
-          }
+          if (ctx.tracker) advanceTrackerToExec(ctx.tracker);
 
           const result = await sendRuntimeMessage({
             kind: 'run-rule-with-result-mode' as const,
             payload: { ruleId: rule.id, site: rule.site, resultMode: 'return' },
           });
 
-          if (tracker) {
-            tracker.update({
-              status: 'success',
-              progress: 100,
-              message: 'Workflow complete',
-              steps: [
-                { id: 'init', label: 'Initialize', status: 'success' },
-                { id: 'exec', label: 'Execute actions', status: 'success' },
-                { id: 'collect', label: 'Collect results', status: 'success' },
-              ],
-            });
-          }
-
-          if (alert) {
-            const resp = result as Record<string, unknown> | undefined;
-            const ok = resp?.ok !== false;
-            alert.update({
-              variant: ok ? 'valid' : 'invalid',
-              title: ok ? 'Validation passed' : 'Validation failed',
-              message: ok ? 'All checks completed successfully.' : String((resp as any)?.error ?? 'See details.'),
-              onRetry: () => runBtn.click(),
-            });
-          }
-
-          if (isDataCapture) {
-            const resp = (result ?? {}) as Record<string, unknown>;
-            const data = resp.data ?? resp;
-            if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
-              const rows = data as Record<string, string>[];
-              const cols = Object.keys(rows[0]).map((k) => ({ key: k, label: k, sortable: true }));
-              const artifact: ResultArtifact = {
-                type: 'table',
-                title: rule.label,
-                columns: cols,
-                rows,
-                meta: { Rule: rule.id, Rows: String(rows.length), Captured: new Date().toLocaleTimeString() },
-              };
-              const viewer = createResultViewer({
-                artifact,
-                onDownload: (filename, mime, d) => {
-                  void sendRuntimeMessage({ kind: 'download-result', payload: { filename, mime, data: d } });
-                },
-                onCopy: (d) => {
-                  void sendRuntimeMessage({ kind: 'copy-result', payload: { data: d } });
-                },
-              });
-              resultSlot.appendChild(viewer);
-              void saveCapturedData(rule.site + '_' + rule.id, rows).catch(() => {});
-            }
-          }
+          if (ctx.tracker) finalizeTracker(ctx.tracker);
+          if (ctx.alert) handleValidationResult(ctx.alert, result, () => runBtn.click());
+          if (isDataCapture) handleDataCaptureResult(rule, result, ctx.resultSlot);
 
           if (!isLongRunning && !isValidation) {
             showToast({ message: '\u2713 ' + rule.label + ' complete', variant: 'success' });
           }
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (tracker) {
-            tracker.update({ status: 'error', message: msg });
-          } else if (alert) {
-            alert.update({ variant: 'error', title: 'Error', message: msg, onRetry: () => runBtn.click() });
-          } else {
-            showToast({ message: 'Cannot execute: not on ' + rule.site + ' page', variant: 'error' });
-          }
+          handleRunError(err, rule, ctx, () => runBtn.click());
         }
       });
       controls.appendChild(runBtn);

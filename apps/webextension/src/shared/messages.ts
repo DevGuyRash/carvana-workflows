@@ -28,6 +28,7 @@ export type RuntimeCommand =
   | { kind: 'result-ready'; payload: { site: string; report: unknown } }
   | { kind: 'download-result'; payload: { filename: string; mime: string; data: string } }
   | { kind: 'copy-result'; payload: { data: string } }
+  | { kind: 'clipboard-write'; payload: { text: string } }
   | { kind: 'capture-table' };
 
 export type RuntimeResponse = ExtResponse;

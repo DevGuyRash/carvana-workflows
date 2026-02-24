@@ -91,7 +91,7 @@ function chromeManifest() {
     ...baseManifest,
     manifest_version: 3,
     version: packageJson.version,
-    permissions: ['storage', 'tabs', 'activeTab', 'scripting', 'sidePanel'],
+    permissions: ['storage', 'tabs', 'activeTab', 'scripting', 'sidePanel', 'downloads'],
     background: {
       service_worker: 'background.js',
     },
@@ -117,6 +117,7 @@ function firefoxManifest() {
       'storage',
       'tabs',
       'activeTab',
+      'downloads',
       'https://jira.carvana.com/*',
       'https://*.fa.us2.oraclecloud.com/*',
       'https://carma.cvnacorp.com/*',
