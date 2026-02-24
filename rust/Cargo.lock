@@ -28,6 +28,7 @@ name = "cv_ext_contract"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -39,6 +40,7 @@ dependencies = [
  "cv_ext_workflows_jira",
  "cv_ext_workflows_oracle",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -56,6 +58,7 @@ dependencies = [
  "cv_ext_contract",
  "cv_ext_core",
  "cv_ext_workflows_jira",
+ "js-sys",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",

@@ -9,10 +9,34 @@ This repository is extension-first and Rust-first.
 - Userscript/Tampermonkey/Violentmonkey runtime is deprecated and must not be reintroduced.
 - Keep `excel/` assets in-repo; they are not part of extension runtime execution.
 
+## Rust-First Principle
+
+**Rust is the primary language of this project. All new logic must be written in Rust first.**
+
+- If something can be expressed in Rust, it must be expressed in Rust. TypeScript is a last resort, not a default.
+- TypeScript exists only to satisfy browser extension APIs that have no `wasm-bindgen` equivalent (`chrome.*`, `browser.*`, manifest bootstrap, and top-level script registration).
+- Never add TS logic that duplicates, reimplements, or shadows Rust logic. If you catch yourself writing TS business logic, that is a signal to move it into a Rust crate and expose it over the WASM bridge.
+- The WASM binary is the unit of deployment for all logic. `cv_ext_wasm` (`crates/cv_ext_wasm`) is the only allowed boundary between Rust and TypeScript — all exports cross there.
+
+### Crate responsibilities
+
+- `cv_ext_contract` — shared types, traits, and serialisation contracts. No side-effects.
+- `cv_ext_storage` — storage access abstractions.
+- `cv_ext_core` — orchestration engine, selector engine, automation primitives.
+- `cv_ext_workflows_*` — per-site workflow implementations (jira, oracle, carma, …). Add new sites here.
+- `cv_ext_wasm` — `wasm-bindgen` bridge only. Thin wrappers that call into the crates above; no logic lives here.
+
+### WASM build chain
+
+- Target: `wasm32-unknown-unknown` (pinned in `rust/rust-toolchain.toml`).
+- Build tool: `wasm-pack` (invoked via `npm run build:wasm` → `scripts/build-wasm.mjs`).
+- Output lands in `apps/webextension/pkg/` and is imported by TS as an ES module.
+- Toolchain components `rustfmt` + `clippy` are required; run both before committing Rust changes.
+- `cargo check` is part of `npm run typecheck`; Rust must compile cleanly before any TS typecheck is considered valid.
+
 ## Architecture
 
 - Rust owns workflow contracts, site registries, selectors, automation logic, and data extraction.
-- WebAssembly build tooling uses `wasm-pack`.
 - TypeScript is minimal glue for extension APIs and bootstrap only.
 - Avoid wrapper-heavy frameworks and avoid unnecessary shims.
 
@@ -33,6 +57,25 @@ This repository is extension-first and Rust-first.
 - Package zip artifacts: `npm run package:extensions`
 
 `npm run dev` auto rebuilds on source changes. Browser extension reload remains manual.
+
+## Testing
+
+### Rust Unit Tests
+
+- Run with `npm test` (delegates to `cargo test`).
+- When modifying any Rust crate, update or add unit tests in the corresponding `#[cfg(test)]` module.
+- All new public functions must have at least one test covering the happy path and one covering an error/edge case.
+
+### Playwright End-to-End Tests
+
+- Location: `tests/e2e/` at the repository root.
+- Config: `tests/e2e/playwright.config.ts`.
+- Fixtures (mock site HTML): `tests/e2e/fixtures/`.
+- Run with: `npx playwright test --config tests/e2e/playwright.config.ts`.
+- When modifying **any** code in `apps/webextension/src/` or Rust crates that surface through the WASM bridge, you **must** update the relevant Playwright tests in `tests/e2e/` to cover the changed behavior.
+- New user-facing features (popup interactions, sidepanel workflows, content-script behavior) require new Playwright test files.
+- Tests are organised by surface: `popup.spec.ts`, `sidepanel.spec.ts`, `content.spec.ts`, `background.spec.ts`, and per-site workflow specs under `tests/e2e/workflows/`.
+- Fixture HTML files in `tests/e2e/fixtures/` simulate target-site DOM (Jira, Oracle, Carma) for deterministic testing without live credentials.
 
 ## Git and Safety
 

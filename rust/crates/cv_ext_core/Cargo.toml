@@ -9,3 +9,4 @@ cv_ext_workflows_jira = { path = "../cv_ext_workflows_jira" }
 cv_ext_workflows_oracle = { path = "../cv_ext_workflows_oracle" }
 cv_ext_workflows_carma = { path = "../cv_ext_workflows_carma" }
 serde.workspace = true
+serde_json.workspace = true
