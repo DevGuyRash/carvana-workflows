@@ -51,3 +51,9 @@ input::placeholder, textarea::placeholder { color: var(--cv-text-muted); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.15); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.25); }
+
+@keyframes cv-progress-indeterminate {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(0%); }
+  100% { transform: translateX(100%); }
+}
