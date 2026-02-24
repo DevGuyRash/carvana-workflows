@@ -9,6 +9,10 @@ import { createFormField } from './ui/components/form-field';
 import { createButton } from './ui/components/modal';
 import { showToast } from './ui/components/toast';
 import { storageGet, storageSet, sendRuntimeMessage } from './shared/webext-async';
+import { createResultViewer, ResultArtifact } from './ui/components/result-viewer';
+import { ProgressTracker } from './ui/components/progress-tracker';
+import { ValidationAlert } from './ui/components/validation-alert';
+import { loadCapturedData, saveCapturedData } from './shared/storage-bridge';
 
 /* ─── Shared types ──────────────────────────────────────────────── */
 
@@ -478,10 +482,125 @@ function renderRules(): HTMLElement {
         padding: '5px 14px',
         boxShadow: '0 0 12px rgba(59, 130, 246, 0.15)',
       });
-      runBtn.addEventListener('click', () => {
-        sendRuntimeMessage({ kind: 'run-rule', payload: { ruleId: rule.id } }).catch(() => {
-          showToast({ message: `Cannot execute: not on ${rule.site} page`, variant: 'error' });
-        });
+      runBtn.addEventListener('click', async () => {
+        const isDataCapture = ['jira.issue.capture.table', 'carma.bulk.search.scrape'].includes(rule.id);
+        const isValidation = rule.id === 'oracle.invoice.validation.alert';
+        const isLongRunning = ['jira.jql.builder', 'carma.bulk.search.scrape', 'oracle.invoice.create'].includes(rule.id);
+
+        let tracker: ProgressTracker | null = null;
+        let alert: ValidationAlert | null = null;
+        const resultSlot = document.createElement('div');
+        Object.assign(resultSlot.style, { marginTop: '8px' });
+        card.appendChild(resultSlot);
+
+        if (isLongRunning) {
+          tracker = new ProgressTracker({
+            title: rule.label,
+            status: 'running',
+            message: 'Executing workflow\u2026',
+            steps: [
+              { id: 'init', label: 'Initialize', status: 'running' },
+              { id: 'exec', label: 'Execute actions', status: 'idle' },
+              { id: 'collect', label: 'Collect results', status: 'idle' },
+            ],
+            onCancel: () => {
+              tracker?.update({ status: 'cancelled', message: 'Cancelled by user' });
+              showToast({ message: rule.label + ' cancelled', variant: 'warning' });
+            },
+          });
+          resultSlot.appendChild(tracker.getElement());
+        } else if (isValidation) {
+          alert = new ValidationAlert({
+            variant: 'validating',
+            title: rule.label,
+            message: 'Running validation checks\u2026',
+          });
+          alert.mount(resultSlot);
+        } else {
+          showToast({ message: 'Running: ' + rule.label, variant: 'info' });
+        }
+
+        try {
+          if (tracker) {
+            tracker.update({
+              steps: [
+                { id: 'init', label: 'Initialize', status: 'success' },
+                { id: 'exec', label: 'Execute actions', status: 'running' },
+                { id: 'collect', label: 'Collect results', status: 'idle' },
+              ],
+              progress: 33,
+            });
+          }
+
+          const result = await sendRuntimeMessage({
+            kind: 'run-rule-with-result-mode' as const,
+            payload: { ruleId: rule.id, site: rule.site, resultMode: 'return' },
+          });
+
+          if (tracker) {
+            tracker.update({
+              status: 'success',
+              progress: 100,
+              message: 'Workflow complete',
+              steps: [
+                { id: 'init', label: 'Initialize', status: 'success' },
+                { id: 'exec', label: 'Execute actions', status: 'success' },
+                { id: 'collect', label: 'Collect results', status: 'success' },
+              ],
+            });
+          }
+
+          if (alert) {
+            const resp = result as Record<string, unknown> | undefined;
+            const ok = resp?.ok !== false;
+            alert.update({
+              variant: ok ? 'valid' : 'invalid',
+              title: ok ? 'Validation passed' : 'Validation failed',
+              message: ok ? 'All checks completed successfully.' : String((resp as any)?.error ?? 'See details.'),
+              onRetry: () => runBtn.click(),
+            });
+          }
+
+          if (isDataCapture) {
+            const resp = (result ?? {}) as Record<string, unknown>;
+            const data = resp.data ?? resp;
+            if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
+              const rows = data as Record<string, string>[];
+              const cols = Object.keys(rows[0]).map((k) => ({ key: k, label: k, sortable: true }));
+              const artifact: ResultArtifact = {
+                type: 'table',
+                title: rule.label,
+                columns: cols,
+                rows,
+                meta: { Rule: rule.id, Rows: String(rows.length), Captured: new Date().toLocaleTimeString() },
+              };
+              const viewer = createResultViewer({
+                artifact,
+                onDownload: (filename, mime, d) => {
+                  void sendRuntimeMessage({ kind: 'download-result', payload: { filename, mime, data: d } });
+                },
+                onCopy: (d) => {
+                  void sendRuntimeMessage({ kind: 'copy-result', payload: { data: d } });
+                },
+              });
+              resultSlot.appendChild(viewer);
+              void saveCapturedData(rule.site + '_' + rule.id, rows).catch(() => {});
+            }
+          }
+
+          if (!isLongRunning && !isValidation) {
+            showToast({ message: '\u2713 ' + rule.label + ' complete', variant: 'success' });
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (tracker) {
+            tracker.update({ status: 'error', message: msg });
+          } else if (alert) {
+            alert.update({ variant: 'error', title: 'Error', message: msg, onRetry: () => runBtn.click() });
+          } else {
+            showToast({ message: 'Cannot execute: not on ' + rule.site + ' page', variant: 'error' });
+          }
+        }
       });
       controls.appendChild(runBtn);
       inner.appendChild(controls);
@@ -514,27 +633,111 @@ function renderData(): HTMLElement {
   const container = createContainer();
   Object.assign(container.style, { flex: '1' });
 
-  const columns: DataTableColumn[] = [
-    { key: 'rule', label: 'Rule', width: '180px' },
-    { key: 'site', label: 'Site', width: '100px' },
+  const captureIndex: DataTableColumn[] = [
+    { key: 'rule', label: 'Rule', width: '180px', sortable: true },
+    { key: 'site', label: 'Site', width: '100px', sortable: true },
     { key: 'status', label: 'Status', width: '100px' },
-    { key: 'rows', label: 'Rows', width: '80px' },
-    { key: 'timestamp', label: 'Captured', width: '180px' },
+    { key: 'rows', label: 'Rows', width: '80px', sortable: true },
+    { key: 'timestamp', label: 'Captured', width: '180px', sortable: true },
   ];
 
-  const table = new DataTable({
-    columns,
+  const indexTable = new DataTable({
+    columns: captureIndex,
     data: [],
     title: 'Captured Data',
     searchable: true,
     exportable: true,
     popout: true,
     pageSize: 25,
+    onRowClick: (_row, _idx) => {
+      showCaptureDetail(_row);
+    },
   });
 
-  container.appendChild(table.getElement());
+  container.appendChild(indexTable.getElement());
 
-  const emptyWrap = emptyState('📊', 'Run a data capture rule to see results here');
+  const detailArea = document.createElement('div');
+  Object.assign(detailArea.style, {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+    marginTop: '12px',
+  });
+  container.appendChild(detailArea);
+
+  function showCaptureDetail(row: Record<string, string>) {
+    detailArea.innerHTML = '';
+    const site = row.site ?? '';
+    const ruleId = row.rule ?? '';
+    void loadCapturedData(site + '_' + ruleId).then((capturedRows) => {
+      if (!capturedRows || capturedRows.length === 0) {
+        const msg = document.createElement('div');
+        Object.assign(msg.style, {
+          fontSize: '12px',
+          color: 'var(--cv-text-muted)',
+          padding: '16px',
+          textAlign: 'center',
+        });
+        msg.textContent = 'No detail data stored for this capture.';
+        detailArea.appendChild(msg);
+        return;
+      }
+      const cols = Object.keys(capturedRows[0]).map((k) => ({ key: k, label: k, sortable: true }));
+      const artifact: ResultArtifact = {
+        type: 'table',
+        title: ruleId + ' — ' + site,
+        columns: cols,
+        rows: capturedRows,
+        meta: { Site: site, Rule: ruleId, Rows: String(capturedRows.length) },
+      };
+      const viewer = createResultViewer({
+        artifact,
+        onDownload: (filename, mime, data) => {
+          void sendRuntimeMessage({ kind: 'download-result', payload: { filename, mime, data } });
+        },
+        onCopy: (data) => {
+          void sendRuntimeMessage({ kind: 'copy-result', payload: { data } });
+        },
+      });
+      detailArea.appendChild(viewer);
+    });
+  }
+
+  void (async () => {
+    try {
+      const sites = ['jira', 'oracle', 'carma'];
+      const captureRules: Record<string, string[]> = {
+        jira: ['jira.issue.capture.table'],
+        oracle: ['oracle.invoice.create'],
+        carma: ['carma.bulk.search.scrape'],
+      };
+      const indexRows: Record<string, string>[] = [];
+      for (const site of sites) {
+        for (const ruleId of (captureRules[site] ?? [])) {
+          const stored = await storageGet<Record<string, unknown> | null>('cv_last_run_' + site, null);
+          if (stored) {
+            const resp = stored as Record<string, unknown>;
+            const data = resp.data ?? resp;
+            const rowCount = Array.isArray(data) ? String(data.length) : '—';
+            indexRows.push({
+              rule: ruleId,
+              site: site,
+              status: resp.ok !== false ? '\u2713 OK' : '\u2715 Error',
+              rows: rowCount,
+              timestamp: new Date().toLocaleString(),
+            });
+          }
+        }
+      }
+      if (indexRows.length > 0) {
+        indexTable.setData(indexRows);
+      }
+    } catch {
+      // silently continue
+    }
+  })();
+
+  const emptyWrap = emptyState('\uD83D\uDCCA', 'Run a data capture rule to see results here');
   container.appendChild(emptyWrap);
 
   const hint = document.createElement('div');
@@ -545,11 +748,12 @@ function renderData(): HTMLElement {
     padding: '0 24px 12px',
     lineHeight: '1.5',
   });
-  hint.textContent = 'Data captures collect structured information from connected sites. Results appear in the table above and can be exported.';
+  hint.textContent = 'Click a row to view full captured data with export options. Results persist until cleared.';
   container.appendChild(hint);
 
   return container;
 }
+
 
 /* ─── Settings ──────────────────────────────────────────────────── */
 
