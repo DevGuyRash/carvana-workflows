@@ -1,14 +1,24 @@
-name: Release Extensions
+name: Build Extensions
 
 on:
+  push:
+    branches:
+      - main
+      - feat/**
+      - fix/**
+      - refactor/**
+      - docs/**
+      - chore/**
+  pull_request:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-and-upload:
+  build-and-package:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -46,7 +56,18 @@ jobs:
           zip -r chrome-extension.zip chrome-extension
           zip -r firefox-extension.zip firefox-extension
 
-      - name: Upload extension artifacts
+      - name: Upload CI artifacts
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: extensions-${{ github.sha }}
+          path: |
+            dist/chrome-extension.zip
+            dist/firefox-extension.zip
+          if-no-files-found: error
+
+      - name: Upload release artifacts
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: |
