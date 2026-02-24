@@ -32,6 +32,17 @@ Outputs:
 - `dist/chrome-extension`
 - `dist/firefox-extension`
 
+Package zipped artifacts:
+
+```bash
+npm run package:extensions
+```
+
+Zipped outputs:
+
+- `dist/chrome-extension.zip`
+- `dist/firefox-extension.zip`
+
 ## Check + Test
 
 ```bash

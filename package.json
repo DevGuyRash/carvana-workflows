@@ -6,6 +6,8 @@
     "build": "npm run build:wasm && npm run build:extension",
     "build:wasm": "node scripts/build-wasm.mjs",
     "build:extension": "node scripts/build-extension.mjs",
+    "package:extensions": "node scripts/package-extensions.mjs",
+    "package": "npm run build && npm run package:extensions",
     "dev": "node scripts/dev-extension.mjs",
     "clean": "rimraf dist apps/webextension/pkg",
     "typecheck": "tsc --project apps/webextension/tsconfig.json --noEmit && cargo check --manifest-path rust/Cargo.toml",

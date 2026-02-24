@@ -51,10 +51,7 @@ jobs:
         run: npm run build
 
       - name: Package extensions
-        run: |
-          cd dist
-          zip -r chrome-extension.zip chrome-extension
-          zip -r firefox-extension.zip firefox-extension
+        run: npm run package:extensions
 
       - name: Upload CI artifacts
         if: github.event_name != 'release'
