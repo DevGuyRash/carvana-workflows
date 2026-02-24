@@ -11,7 +11,9 @@ pub mod workflow;
 pub use action::Action;
 pub use command::{CommandEnvelope, CommandTarget, CommandType};
 pub use log::LogEntry;
-pub use result::{RunArtifact, RunReport, RunResult, RunStatus, RunStepReport, RuntimeError};
+pub use result::{
+    ArtifactKind, ArtifactMeta, RunArtifact, RunReport, RunResult, RunStatus, RunStepReport, RuntimeError,
+};
 pub use rule::{RuleCategory, RuleDefinition, RuleTrigger};
 pub use settings::{ExtensionSettings, LogLevel, SiteSettings};
 pub use site::Site;

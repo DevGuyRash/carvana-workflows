@@ -16,10 +16,31 @@ pub struct RuntimeError {
     pub message: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtifactKind {
+    Table,
+    Records,
+    Diagnostic,
+    Alert,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactMeta {
+    pub site: String,
+    pub workflow_id: String,
+    pub generated_at_ms: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RunArtifact {
+    pub kind: ArtifactKind,
     pub name: String,
-    pub data: Value,
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<Value>>,
+    pub meta: ArtifactMeta,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
