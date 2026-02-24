@@ -32,7 +32,23 @@ Outputs:
 - `dist/chrome-extension`
 - `dist/firefox-extension`
 
-Package zipped artifacts:
+## Dev Auto Rebuild
+
+```bash
+npm run dev
+```
+
+What this does:
+
+- Watches Rust and extension source files.
+- Automatically rebuilds wasm + extension outputs when files change.
+
+What it does not do:
+
+- It does not hot-reload installed extensions in browser tabs.
+- After each rebuild, click **Reload** in `chrome://extensions` or `about:debugging`.
+
+## Package Zipped Artifacts
 
 ```bash
 npm run package:extensions

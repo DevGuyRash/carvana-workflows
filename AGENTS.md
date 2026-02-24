@@ -27,8 +27,12 @@ This repository is extension-first and Rust-first.
 
 - Install deps: `npm install`
 - Build wasm + extension: `npm run build`
+- Auto rebuild during development: `npm run dev`
 - Typecheck: `npm run typecheck`
 - Test: `npm test`
+- Package zip artifacts: `npm run package:extensions`
+
+`npm run dev` auto rebuilds on source changes. Browser extension reload remains manual.
 
 ## Git and Safety
 

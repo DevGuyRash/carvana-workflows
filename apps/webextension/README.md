@@ -13,10 +13,14 @@ Artifacts:
 - `dist/chrome-extension`
 - `dist/firefox-extension`
 
-## Notes
+## Dev Auto Rebuild
 
-- Rust runtime is built via `wasm-pack`.
-- Keep TS limited to extension API glue and page bootstraps.
+```bash
+npm run dev
+```
+
+- Rebuilds automatically when Rust or extension source files change.
+- Browser extension reload remains manual after each rebuild.
 
 ## Package
 
@@ -28,3 +32,8 @@ Artifacts:
 
 - `dist/chrome-extension.zip`
 - `dist/firefox-extension.zip`
+
+## Notes
+
+- Rust runtime is built via `wasm-pack`.
+- Keep TS limited to extension API glue and page bootstraps.
