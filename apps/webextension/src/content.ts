@@ -27,7 +27,7 @@ async function handleRunRule(payload: { ruleId: string; site: string; context?: 
     const wasm = await ensureRuntime();
     if (!wasm) return { ok: false, error: 'WASM runtime not loaded' };
 
-    const result = wasm.run_workflow(payload.site, payload.ruleId, payload.context ?? null);
+    const result = await wasm.run_workflow(payload.site, payload.ruleId, payload.context ?? null);
     return { ok: true, data: result };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -56,7 +56,7 @@ async function handleRunAutoRules(payload: { url: string }): Promise<RuntimeResp
     for (const rule of rules) {
       const ruleId = typeof rule === 'object' && rule !== null ? (rule as any).id : String(rule);
       try {
-        const result = wasm.run_workflow(site, ruleId, null);
+        const result = await wasm.run_workflow(site, ruleId, null);
         results.push({ ruleId, status: 'success', data: result });
       } catch (err) {
         results.push({ ruleId, status: 'error', error: err instanceof Error ? err.message : String(err) });
@@ -74,7 +74,7 @@ async function handleCaptureTable(): Promise<RuntimeResponse> {
     const wasm = await ensureRuntime();
     if (!wasm) return { ok: false, error: 'WASM runtime not loaded' };
 
-    const data = wasm.capture_jira_filter_table();
+    const data = await wasm.capture_jira_filter_table();
     return { ok: true, data };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -106,6 +106,9 @@ chrome.runtime.onMessage.addListener(
 
     switch (kind) {
       case 'run-rule':
+        handler = handleRunRule((message as any).payload);
+        break;
+      case 'run-rule-with-result-mode':
         handler = handleRunRule((message as any).payload);
         break;
       case 'run-auto-rules':
