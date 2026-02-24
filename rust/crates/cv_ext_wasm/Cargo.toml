@@ -13,7 +13,10 @@ cv_ext_sites_jira = { path = "../cv_ext_sites_jira" }
 serde.workspace = true
 serde_json.workspace = true
 wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
 serde-wasm-bindgen.workspace = true
 web-sys.workspace = true
 js-sys.workspace = true
 thiserror.workspace = true
+gloo-timers.workspace = true
+async-trait.workspace = true
