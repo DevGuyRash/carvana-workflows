@@ -1,11 +1,11 @@
-# AGENTS.md — Carvana Workflows (WebExtension + Rust)
+# AGENTS.md — Carvana Extension (WebExtension + Rust)
 
 This repository is extension-first and Rust-first.
 
 ## Runtime Scope
 
 - Target browsers: Chrome + Firefox WebExtensions.
-- Runtime model: centralized extension UX (popup + side panel) with content-script execution.
+- Runtime model: centralized extension UX (popup + extension page + side panel) with content-script execution.
 - Userscript/Tampermonkey/Violentmonkey runtime is deprecated and must not be reintroduced.
 - Keep `excel/` assets in-repo; they are not part of extension runtime execution.
 
@@ -15,15 +15,16 @@ This repository is extension-first and Rust-first.
 
 - If something can be expressed in Rust, it must be expressed in Rust. TypeScript is a last resort, not a default.
 - TypeScript exists only to satisfy browser extension APIs that have no `wasm-bindgen` equivalent (`chrome.*`, `browser.*`, manifest bootstrap, and top-level script registration).
+- UI component code (in `apps/webextension/src/ui/`) is the only exception — rendering and event wiring must happen in TypeScript, but any business logic those components display should originate from the WASM bridge.
 - Never add TS logic that duplicates, reimplements, or shadows Rust logic. If you catch yourself writing TS business logic, that is a signal to move it into a Rust crate and expose it over the WASM bridge.
 - The WASM binary is the unit of deployment for all logic. `cv_ext_wasm` (`crates/cv_ext_wasm`) is the only allowed boundary between Rust and TypeScript — all exports cross there.
 
 ### Crate responsibilities
 
-- `cv_ext_contract` — shared types, traits, and serialisation contracts. No side-effects.
+- `cv_ext_contract` — shared types, traits, serialisation contracts, theme definitions, settings schema. No side-effects.
 - `cv_ext_storage` — storage access abstractions.
-- `cv_ext_core` — orchestration engine, selector engine, automation primitives.
-- `cv_ext_workflows_*` — per-site workflow implementations (jira, oracle, carma, …). Add new sites here.
+- `cv_ext_core` — rule engine, orchestration, executor, site registry.
+- `cv_ext_sites_*` — per-site adapters (jira, oracle, carma, …). Add new sites here.
 - `cv_ext_wasm` — `wasm-bindgen` bridge only. Thin wrappers that call into the crates above; no logic lives here.
 
 ### WASM build chain
@@ -36,15 +37,25 @@ This repository is extension-first and Rust-first.
 
 ## Architecture
 
-- Rust owns workflow contracts, site registries, selectors, automation logic, and data extraction.
-- TypeScript is minimal glue for extension APIs and bootstrap only.
+- Rust owns rule contracts, site registries, selectors, automation logic, and data extraction.
+- TypeScript is minimal glue for extension APIs, UI rendering, and bootstrap only.
+- Shared UI component library lives in `apps/webextension/src/ui/` — reused across popup, extension page, side panel.
+- Design tokens (CSS custom properties) in `src/ui/tokens.css` are the single source of truth for theming.
 - Avoid wrapper-heavy frameworks and avoid unnecessary shims.
+
+## Terminology
+
+- **Rule** (not workflow): the unit of automation. A rule defines "when conditions are met on a site, perform these actions."
+- **Site adapter** (not workflow crate): per-site Rust crates that know how to interact with a target app's DOM.
+- **Extension page**: the full-tab control center (`extension.html`) with tabbed navigation.
+- **Popup**: minimal quick-launch hub for running rules and opening the control center.
 
 ## Module Boundaries
 
 - Keep files short, focused, and composable.
-- Prefer small Rust modules per concern (contracts, engine, site workflows, wasm bridge).
-- Prefer small TS modules per concern (background, content, popup, sidepanel, messaging bridge).
+- Prefer small Rust modules per concern (contracts, engine, site adapters, wasm bridge).
+- Prefer small TS modules per concern (background, content, popup, sidepanel, extension-page, messaging bridge).
+- UI components are self-contained vanilla TypeScript — no frameworks.
 - Do not create monolithic files.
 
 ## Build and Validation
@@ -79,7 +90,6 @@ This repository is extension-first and Rust-first.
 
 ## Git and Safety
 
-- Do not use `apply_patch` in this repository.
 - Before each commit, scan staged and unstaged changes for sensitive information:
   - `git diff -- .`
   - `git diff --cached -- .`
