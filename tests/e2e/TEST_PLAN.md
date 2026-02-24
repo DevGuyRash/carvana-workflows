@@ -8,12 +8,18 @@ Carvana Workflows browser extension. Tests exercise the four TS entry-points
 workflow behaviour using local HTML fixtures that simulate Jira, Oracle, and
 Carma DOM surfaces.
 
-All tests load the built extension from `dist/chrome-extension/` and use
+Target-state tests load the built extension from `dist/chrome-extension/` and use
 fixture HTML served by Playwright's built-in static server.
 
 ---
 
-## Directory Layout
+## Current Status (2026-02-24)
+
+- Present now: `tests/e2e/TEST_PLAN.md`, `tests/e2e/fixtures/` (directory only), and `tests/e2e/workflows/` (directory only).
+- Missing now: `tests/e2e/playwright.config.ts`, all `*.spec.ts` files, fixture HTML files, and helper modules.
+- Runtime contract: `npm run test:e2e` is a fail-fast harness gate that exits with a clear error until `tests/e2e/playwright.config.ts` is added.
+
+## Target Directory Layout
 
 ```
 tests/e2e/
@@ -111,8 +117,8 @@ tests/e2e/
 | 2.3 | workflow select starts empty | `#workflow-select` has zero `<option>` children on initial load. |
 | 2.4 | hydrate populates workflows on supported site | Navigate to a Jira fixture; sidepanel hydrates; `#workflow-select` gets populated with Jira workflow options. |
 | 2.5 | hydrate shows unsupported on blank page | Navigate to blank fixture; `#site` shows "unsupported". |
-| 2.6 | run-workflow button dispatches command | Select a workflow; click `#run-workflow`; verify content script receives `{ kind: 'run-workflow', site, workflowId }`. |
-| 2.7 | capture-table button dispatches command | Click `#capture-table`; verify content script receives `{ kind: 'capture-jira-table' }`. |
+| 2.6 | run-rule button dispatches command | Select a rule; click `#run-rule`; verify runtime receives `{ kind: 'run-rule', payload: { site, ruleId } }`. |
+| 2.7 | capture-table button dispatches command | Click `#capture-table`; verify runtime receives `{ kind: 'capture-table' }`. |
 | 2.8 | output panel shows workflow result | Mock workflow returning data; `#output` `<pre>` element displays the result. |
 | 2.9 | output panel shows error on failure | Mock workflow failure; `#output` displays error message. |
 | 2.10 | re-hydrates on tab activation change | Simulate `chrome.tabs.onActivated`; verify `hydrateSite()` re-runs. |
@@ -129,14 +135,14 @@ tests/e2e/
 | 3.4 | detect-site returns oracle on oracle fixture | Load Oracle fixture; send `{ kind: 'detect-site' }`; response `data` is `"oracle"`. |
 | 3.5 | detect-site returns carma on carma fixture | Load Carma fixture; send `{ kind: 'detect-site' }`; response `data` is `"carma"`. |
 | 3.6 | detect-site returns unsupported on blank | Load blank fixture; response `data` is `"unsupported"` or similar. |
-| 3.7 | list-workflows returns jira workflows | Send `{ kind: 'list-workflows', site: 'jira' }`; response contains workflow objects with `id` and `label`. |
-| 3.8 | list-workflows returns oracle workflows | Send `{ kind: 'list-workflows', site: 'oracle' }`; response contains oracle workflow entries. |
-| 3.9 | list-workflows returns carma workflows | Send `{ kind: 'list-workflows', site: 'carma' }`; response contains carma workflow entries. |
-| 3.10 | run-workflow returns result for known id | Send `{ kind: 'run-workflow', site: 'jira', workflowId: 'jira.jql.builder' }`; response `ok: true`. |
-| 3.11 | run-workflow returns missing for unknown id | Send `{ kind: 'run-workflow', site: 'jira', workflowId: 'does.not.exist' }`; response includes `status: 'missing'`. |
-| 3.12 | capture-jira-table returns table data | Load Jira filter-table fixture; send `{ kind: 'capture-jira-table' }`; response includes row data with derived fields. |
-| 3.13 | capture-jira-table on non-jira page | Load blank fixture; send `{ kind: 'capture-jira-table' }`; response is error or empty. |
-| 3.14 | unsupported command returns error | Send `{ kind: 'unknown-thing' }`; response `ok: false`, error contains "unsupported". |
+| 3.7 | get-rules returns jira rules | Send `{ kind: 'get-rules', payload: { site: 'jira' } }`; response contains rule objects with `id` and `label`. |
+| 3.8 | get-rules returns oracle rules | Send `{ kind: 'get-rules', payload: { site: 'oracle' } }`; response contains oracle rule entries. |
+| 3.9 | get-rules returns carma rules | Send `{ kind: 'get-rules', payload: { site: 'carma' } }`; response contains carma rule entries. |
+| 3.10 | run-rule returns result for known id | Send `{ kind: 'run-rule', payload: { site: 'jira', ruleId: 'jira.jql.builder' } }`; response `ok: true`. |
+| 3.11 | run-rule returns error for unknown id | Send `{ kind: 'run-rule', payload: { site: 'jira', ruleId: 'does.not.exist' } }`; response `ok: false`. |
+| 3.12 | capture-table returns table data | Load Jira filter-table fixture; send `{ kind: 'capture-table' }`; response includes row data with derived fields. |
+| 3.13 | capture-table on non-jira page | Load blank fixture; send `{ kind: 'capture-table' }`; response is error or empty. |
+| 3.14 | unsupported command yields no content response | Send `{ kind: 'unknown-thing' }` as `any`; assert content listener does not produce a response payload. |
 
 ### 4. `background.spec.ts` — Background / Service Worker Tests
 
@@ -156,7 +162,7 @@ tests/e2e/
 
 | # | Test Name | Description |
 |---|-----------|-------------|
-| 5.1 | jira.jql.builder routes correctly | Load Jira fixture; run workflow `jira.jql.builder`; result status is `"ready"`, detail mentions rust runtime. |
+| 5.1 | jira.jql.builder routes correctly | Load Jira fixture; run rule `jira.jql.builder`; result status is `"ready"`, detail mentions rust runtime. |
 | 5.2 | jira.issue.capture.table extracts rows | Load Jira filter-table fixture; run `jira.issue.capture.table`; result contains extracted table data. |
 | 5.3 | capture derives StockNumber from Summary | Filter-table row has stock number in Summary; captured data includes correct `StockNumber` field. |
 | 5.4 | capture derives VIN from Summary | Summary contains a 17-char VIN; captured data includes correct `VIN` field. |
@@ -164,21 +170,21 @@ tests/e2e/
 | 5.6 | capture builds Reference from identifiers | Captured row has `Reference` field in `HUB-{stock}-{vin}-{pid}` format. |
 | 5.7 | capture builds Invoice from stock | Captured row has `Invoice` field ending in `-TR`. |
 | 5.8 | capture handles missing identifiers | Row without identifiers has empty StockNumber/VIN/PID and fallback Reference/Invoice. |
-| 5.9 | workflow list includes both jira workflows | `list_workflows("jira")` returns exactly `jira.jql.builder` and `jira.issue.capture.table`. |
-| 5.10 | workflow labels are human-readable | Each workflow has a non-empty `label` starting with "Jira:". |
+| 5.9 | rule list includes both jira rules | `get-rules` for `jira` returns exactly `jira.jql.builder` and `jira.issue.capture.table`. |
+| 5.10 | rule labels are human-readable | Each rule has a non-empty `label` starting with "Jira:". |
 
 ### 6. `workflows/oracle.spec.ts` — Oracle Workflow E2E Tests
 
 | # | Test Name | Description |
 |---|-----------|-------------|
 | 6.1 | detect_site returns oracle on oracle fixture | Oracle invoice-header fixture URL triggers `"oracle"` detection. |
-| 6.2 | list-workflows returns all oracle workflows | At least 11 oracle workflows returned (matching current registry). |
-| 6.3 | public workflows are user-facing | Non-internal workflows: `oracle.search.invoice.expand`, `oracle.invoice.validation.alert`, `oracle.invoice.create`. |
-| 6.4 | internal workflows are hidden from user lists | Internal workflows (`.perform`, `.ensure`, `.lov`, `.fill`, `.number`) have `internal: true`. |
-| 6.5 | run oracle.search.invoice.expand routes | Run workflow; result status `"ready"`. |
-| 6.6 | run oracle.invoice.validation.alert routes | Run workflow; result status `"ready"`. |
-| 6.7 | run oracle.invoice.create routes | Run workflow; result status `"ready"`. |
-| 6.8 | run unknown oracle workflow returns missing | Run `oracle.does.not.exist`; result status `"missing"`. |
+| 6.2 | get-rules returns all oracle rules | At least 11 oracle rules returned (matching current registry). |
+| 6.3 | public rules are user-facing | Non-internal rules: `oracle.search.invoice.expand`, `oracle.invoice.validation.alert`, `oracle.invoice.create`. |
+| 6.4 | internal rules are hidden from user lists | Internal rules (`.perform`, `.ensure`, `.lov`, `.fill`, `.number`) have `internal: true`. |
+| 6.5 | run oracle.search.invoice.expand routes | Run rule; result status `"ready"`. |
+| 6.6 | run oracle.invoice.validation.alert routes | Run rule; result status `"ready"`. |
+| 6.7 | run oracle.invoice.create routes | Run rule; result status `"ready"`. |
+| 6.8 | run unknown oracle rule returns error | Run `oracle.does.not.exist`; response `ok: false`. |
 | 6.9 | invoice-header fixture has ValidationStatus cell | Fixture DOM contains `td[headers="ValidationStatus"]` element. |
 | 6.10 | invoice-create fixture has form fields | Fixture DOM contains Business Unit, Supplier, Invoice Number inputs. |
 
@@ -187,9 +193,9 @@ tests/e2e/
 | # | Test Name | Description |
 |---|-----------|-------------|
 | 7.1 | detect_site returns carma on carma fixture | Carma dashboard fixture triggers `"carma"` detection. |
-| 7.2 | list-workflows returns carma workflows | Workflow list returns entries for carma (currently `carma.bulk.search.scrape`). |
-| 7.3 | run carma workflow routes correctly | Run the carma workflow; result status `"ready"`. |
-| 7.4 | run unknown carma workflow returns missing | Run non-existent id; result status `"missing"`. |
+| 7.2 | get-rules returns carma rules | Rule list returns entries for carma (currently `carma.bulk.search.scrape`). |
+| 7.3 | run carma rule routes correctly | Run the carma rule; result status `"ready"`. |
+| 7.4 | run unknown carma rule returns error | Run non-existent id; response `ok: false`. |
 
 ---
 
@@ -225,6 +231,13 @@ tests/e2e/
 - Reporter: html + list.
 ```
 
+## Harness Execution Contract
+
+- Primary command: `npm run test:e2e`
+- Harness gate behavior:
+  - If `tests/e2e/playwright.config.ts` is missing, the command fails with exit code `2`.
+  - If config exists, the command runs `npx playwright test --config tests/e2e/playwright.config.ts`.
+
 ---
 
 ## Test Count Summary
@@ -244,11 +257,11 @@ tests/e2e/
 
 ## Implementation Priority
 
-1. **Fixtures first** — Build all HTML fixtures so every spec has a surface to test against.
-2. **Helpers** — `extension.ts`, `messaging.ts`, `fixtures.ts` shared utilities.
-3. **content.spec.ts** — Core bridge; validates WASM loads and commands work.
-4. **background.spec.ts** — Service worker message routing.
-5. **popup.spec.ts** — Simple UI assertions.
-6. **sidepanel.spec.ts** — Richest UI surface; depends on content script working.
-7. **workflows/** — Per-site workflow verification; depends on content + fixtures.
-
+1. **Harness bootstrap first** — add `tests/e2e/playwright.config.ts` and verify `npm run test:e2e` executes Playwright (not fail-fast gate).
+2. **Fixtures** — build required HTML fixtures so every spec has a stable DOM surface.
+3. **Helpers** — `extension.ts`, `messaging.ts`, `fixtures.ts` shared utilities.
+4. **content.spec.ts** — core bridge; validates WASM loads and commands work.
+5. **background.spec.ts** — service worker message routing.
+6. **popup.spec.ts** — simple UI assertions.
+7. **sidepanel.spec.ts** — richest UI surface; depends on content script working.
+8. **workflows/** — per-site workflow verification; depends on content + fixtures.

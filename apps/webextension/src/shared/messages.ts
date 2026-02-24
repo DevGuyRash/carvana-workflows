@@ -25,7 +25,6 @@ export type RuntimeCommand =
   | { kind: 'open-extension-page' }
   | { kind: 'open-control-center'; tabId?: number; windowId?: number }
   | { kind: 'data-captured'; payload: { site: string; data: unknown } }
-  | { kind: 'result-ready'; payload: { site: string; report: unknown } }
   | { kind: 'download-result'; payload: { filename: string; mime: string; data: string } }
   | { kind: 'copy-result'; payload: { data: string } }
   | { kind: 'clipboard-write'; payload: { text: string } }

@@ -1,7 +1,7 @@
 # Migration Audit and Execution Spec: Legacy Userscripts -> Rust WebExtension
 
-> **As of:** 2026-02-24 09:25:20 UTC
-> **Repository commit:** `7ab3e48`
+> **As of:** 2026-02-24
+> **Repository commit at last verification pass:** `cf09f87`
 > **Primary target:** `apps/webextension/` + `rust/crates/*`
 > **Document mode:** Decision-complete implementation spec (not just audit)
 
@@ -82,7 +82,7 @@ Current-state claims in this file were validated by reading these files and entr
 - `type_selector()` sets input value but does not dispatch `input`/`change`/`blur` events.
 - `capture_table_rows()` is generic and does not support table-grid complexity.
 - Message contract includes generic `run-rule`/`capture-table`, but no progress stream contract.
-- Existing e2e implementation is absent; only planning doc exists in `tests/e2e/TEST_PLAN.md`.
+- Existing e2e implementation is absent; repository has planning docs and empty scaffolding directories only (`tests/e2e/fixtures/`, `tests/e2e/workflows/`).
 
 ---
 
@@ -659,7 +659,8 @@ Restore production scraper workflow with filtering/dedup/export and progress upd
 
 - Rust unit tests exist in crate modules.
 - `tests/e2e/TEST_PLAN.md` exists.
-- Playwright config/spec/fixtures are not present in repository at this revision.
+- `tests/e2e/fixtures/` and `tests/e2e/workflows/` directories exist but contain no committed test artifacts.
+- Playwright config, helper modules, specs, and fixture HTML files are not present in repository at this revision.
 
 ## 8.2 Required test implementation tracks
 
@@ -676,6 +677,7 @@ Restore production scraper workflow with filtering/dedup/export and progress upd
 3. E2E implementation (Playwright)
 - Build fixtures and specs described in `tests/e2e/TEST_PLAN.md`.
 - Add extension loading harness and message helper utilities.
+- Maintain executable command contract: `npm run test:e2e` must run Playwright once `tests/e2e/playwright.config.ts` is committed.
 
 ## 8.3 Feature acceptance checklist
 

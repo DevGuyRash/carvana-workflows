@@ -74,6 +74,7 @@ function toRuleEntry(rule: RustRuleDefinition): RuleEntry {
 async function loadBuiltinRules(): Promise<RuleEntry[]> {
   const wasm = await loadRuntime();
   if (!wasm) return [];
+  const persistedStates = await storageGet<Record<string, boolean>>('cv_rules_state', {});
 
   const sites = ['jira', 'oracle', 'carma'];
   const rules: RuleEntry[] = [];
@@ -82,7 +83,11 @@ async function loadBuiltinRules(): Promise<RuleEntry[]> {
     try {
       const siteRules = wasm.list_rules(site);
       for (const rule of siteRules) {
-        rules.push(toRuleEntry(rule));
+        const entry = toRuleEntry(rule);
+        if (persistedStates[entry.id] !== undefined) {
+          entry.enabled = persistedStates[entry.id];
+        }
+        rules.push(entry);
       }
     } catch {
       // continue collecting from other sites
@@ -664,7 +669,6 @@ function renderRules(): HTMLElement {
 
       const controls = document.createElement('div');
       Object.assign(controls.style, { display: 'flex', gap: '10px', alignItems: 'center', flexShrink: '0' });
-      controls.appendChild(createToggle({ checked: rule.enabled }));
 
       const runBtn = createButton('▶ Run', 'primary');
       Object.assign(runBtn.style, {
@@ -674,7 +678,37 @@ function renderRules(): HTMLElement {
         padding: '5px 14px',
         boxShadow: '0 0 12px rgba(59, 130, 246, 0.15)',
       });
+      const syncRunButtonState = () => {
+        runBtn.disabled = !rule.enabled;
+        runBtn.style.opacity = rule.enabled ? '1' : '0.55';
+        runBtn.style.cursor = rule.enabled ? 'pointer' : 'not-allowed';
+      };
+      syncRunButtonState();
+
+      controls.appendChild(createToggle({
+        checked: rule.enabled,
+        onChange: (enabled) => {
+          rule.enabled = enabled;
+          const idx = BUILTIN_RULES.findIndex((candidate) => candidate.id === rule.id);
+          if (idx >= 0) BUILTIN_RULES[idx].enabled = enabled;
+          syncRunButtonState();
+          void sendRuntimeMessage({
+            kind: 'toggle-rule',
+            payload: { ruleId: rule.id, enabled },
+          }).catch(() => {
+            rule.enabled = !enabled;
+            if (idx >= 0) BUILTIN_RULES[idx].enabled = !enabled;
+            syncRunButtonState();
+            showToast({ message: `Failed to update ${rule.label}`, variant: 'error' });
+          });
+        },
+      }));
+
       runBtn.addEventListener('click', async () => {
+        if (!rule.enabled) {
+          showToast({ message: `${rule.label} is disabled`, variant: 'warning' });
+          return;
+        }
         const { isDataCapture, isValidation, isLongRunning } = classifyRule(rule);
         const ctx = initRunFeedback(rule, card);
 

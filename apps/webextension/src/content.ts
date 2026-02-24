@@ -28,6 +28,22 @@ async function handleRunRule(payload: { ruleId: string; site: string; context?: 
     if (!wasm) return { ok: false, error: 'WASM runtime not loaded' };
 
     const result = await wasm.run_rule(payload.site, payload.ruleId, payload.context ?? null);
+    if (result && typeof result === 'object') {
+      const responseLike = result as Record<string, unknown>;
+      if (typeof responseLike.ok === 'boolean' && !responseLike.ok) {
+        return { ok: false, error: String(responseLike.error ?? responseLike.message ?? 'Rule execution failed'), data: result };
+      }
+
+      const status = typeof responseLike.status === 'string' ? responseLike.status.toLowerCase() : '';
+      if (status === 'error' || status === 'failed' || status === 'partial') {
+        return {
+          ok: false,
+          error: String(responseLike.error ?? responseLike.message ?? `Rule execution ended with status: ${status}`),
+          data: result,
+        };
+      }
+    }
+
     return { ok: true, data: result };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -46,12 +62,49 @@ async function handleRunAutoRules(payload: { url: string }): Promise<RuntimeResp
 
     const rules = wasm.list_rules(site);
 
+    const classifyRuleExecution = (
+      result: unknown,
+    ): { status: 'success' | 'failed' | 'partial' | 'error'; error?: string } => {
+      if (!result || typeof result !== 'object') {
+        return { status: 'success' };
+      }
+
+      const responseLike = result as Record<string, unknown>;
+      if (typeof responseLike.ok === 'boolean' && !responseLike.ok) {
+        return {
+          status: 'failed',
+          error: String(responseLike.error ?? responseLike.message ?? 'Rule execution failed'),
+        };
+      }
+
+      const status = typeof responseLike.status === 'string' ? responseLike.status.toLowerCase() : '';
+      if (status === 'partial') {
+        return {
+          status: 'partial',
+          error: String(responseLike.error ?? responseLike.message ?? 'Rule execution ended with partial status'),
+        };
+      }
+      if (status === 'failed' || status === 'error') {
+        return {
+          status: status === 'failed' ? 'failed' : 'error',
+          error: String(responseLike.error ?? responseLike.message ?? `Rule execution ended with status: ${status}`),
+        };
+      }
+
+      return { status: 'success' };
+    };
+
     const results: unknown[] = [];
     for (const rule of rules) {
       const ruleId = rule.id;
       try {
         const result = await wasm.run_rule(site, ruleId, null);
-        results.push({ ruleId, status: 'success', data: result });
+        const classified = classifyRuleExecution(result);
+        if (classified.status === 'success') {
+          results.push({ ruleId, status: 'success', data: result });
+        } else {
+          results.push({ ruleId, status: classified.status, error: classified.error, data: result });
+        }
       } catch (err) {
         results.push({ ruleId, status: 'error', error: err instanceof Error ? err.message : String(err) });
       }

@@ -26,3 +26,4 @@ This repository is being migrated from userscripts to a unified Chrome + Firefox
 - Unified extension build outputs Chrome and Firefox artifacts.
 - Rust crates own workflow contracts and runtime logic.
 - `scripts/table_capture/jira-issue-capture.js` behavior represented by Rust extension workflow module.
+- Playwright e2e harness is executable via `npm run test:e2e` with a committed `tests/e2e/playwright.config.ts` and baseline specs/fixtures described in `tests/e2e/TEST_PLAN.md`.
