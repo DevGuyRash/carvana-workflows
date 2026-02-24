@@ -13,6 +13,7 @@ import { createResultViewer, ResultArtifact } from './ui/components/result-viewe
 import { ProgressTracker } from './ui/components/progress-tracker';
 import { ValidationAlert } from './ui/components/validation-alert';
 import { loadCapturedData, saveCapturedData } from './shared/storage-bridge';
+import { loadRuntime, RustRuleDefinition } from './shared/runtime';
 
 /* ─── Shared types ──────────────────────────────────────────────── */
 
@@ -30,20 +31,68 @@ const SITES: SiteStatus[] = [
   { name: 'carma', label: 'Carma', icon: '🚗', connected: false, accentColor: '#34d399' },
 ];
 
-const BUILTIN_RULES = [
-  { id: 'jira.jql.builder', label: 'Jira: Search Builder', site: 'jira', category: 'UI Enhancement', enabled: true, builtin: true },
-  { id: 'jira.issue.capture.table', label: 'Jira: Capture Filter Table', site: 'jira', category: 'Data Capture', enabled: true, builtin: true },
-  { id: 'oracle.search.invoice.expand', label: 'Oracle: Expand Search Invoice', site: 'oracle', category: 'Navigation', enabled: true, builtin: true },
-  { id: 'oracle.invoice.validation.alert', label: 'Oracle: Invoice Validation Alert', site: 'oracle', category: 'Validation', enabled: true, builtin: true },
-  { id: 'oracle.invoice.create', label: 'Oracle: Invoice Create', site: 'oracle', category: 'Form Automation', enabled: true, builtin: true },
-  { id: 'carma.bulk.search.scrape', label: 'Carma: Bulk Search Scrape', site: 'carma', category: 'Data Capture', enabled: true, builtin: true },
-];
+interface RuleEntry {
+  id: string;
+  label: string;
+  site: string;
+  category: string;
+  enabled: boolean;
+  builtin: boolean;
+  priority: number;
+}
+
+let BUILTIN_RULES: RuleEntry[] = [];
 
 const SITE_BORDER_COLORS: Record<string, string> = {
   jira: '#22d3ee',
   oracle: '#fbbf24',
   carma: '#34d399',
 };
+
+function normalizeCategory(category: string): string {
+  const normalized = category.toLowerCase();
+  if (normalized === 'ui_enhancement') return 'UI Enhancement';
+  if (normalized === 'data_capture') return 'Data Capture';
+  if (normalized === 'form_automation') return 'Form Automation';
+  if (normalized === 'navigation') return 'Navigation';
+  if (normalized === 'validation') return 'Validation';
+  return category;
+}
+
+function toRuleEntry(rule: RustRuleDefinition): RuleEntry {
+  return {
+    id: rule.id,
+    label: rule.label,
+    site: rule.site,
+    category: normalizeCategory(rule.category),
+    enabled: rule.enabled,
+    builtin: rule.builtin,
+    priority: rule.priority,
+  };
+}
+
+async function loadBuiltinRules(): Promise<RuleEntry[]> {
+  const wasm = await loadRuntime();
+  if (!wasm) return [];
+
+  const sites = ['jira', 'oracle', 'carma'];
+  const rules: RuleEntry[] = [];
+
+  for (const site of sites) {
+    try {
+      const siteRules = wasm.list_rules(site);
+      for (const rule of siteRules) {
+        rules.push(toRuleEntry(rule));
+      }
+    } catch {
+      // continue collecting from other sites
+    }
+  }
+
+  return rules
+    .filter((rule) => rule.priority < 200)
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
 
 
 /* ─── Rule-run helpers (extracted from the Run-button handler) ─── */
@@ -53,9 +102,6 @@ interface RunFeedbackContext {
   alert: ValidationAlert | null;
   resultSlot: HTMLDivElement;
 }
-
-type RuleEntry = (typeof BUILTIN_RULES)[number];
-
 function classifyRule(rule: RuleEntry) {
   const isDataCapture = ['jira.issue.capture.table', 'carma.bulk.search.scrape'].includes(rule.id);
   const isValidation = rule.id === 'oracle.invoice.validation.alert';
@@ -432,7 +478,7 @@ function renderDashboard(): HTMLElement {
   const quickRules = BUILTIN_RULES.slice(0, 3);
   for (const rule of quickRules) {
     const pill = glowButton(`▶ ${rule.label.split(': ')[1] ?? rule.label}`, () => {
-      sendRuntimeMessage({ kind: 'run-rule', payload: { ruleId: rule.id } }).catch(() => {
+      sendRuntimeMessage({ kind: 'run-rule', payload: { ruleId: rule.id, site: rule.site } }).catch(() => {
         showToast({ message: `Cannot execute: not on ${rule.site} page`, variant: 'error' });
       });
     });
@@ -1061,7 +1107,9 @@ function renderLogs(): HTMLElement {
 
 /* ─── Init ──────────────────────────────────────────────────────── */
 
-function init() {
+async function init() {
+  BUILTIN_RULES = await loadBuiltinRules();
+
   const { root, main } = createPageShell();
 
   const tabDefs: TabDef[] = [
@@ -1083,4 +1131,4 @@ function init() {
   }
 }
 
-init();
+void init();

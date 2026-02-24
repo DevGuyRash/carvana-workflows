@@ -7,6 +7,8 @@ import { createResultViewer, ResultArtifact } from './ui/components/result-viewe
 import { ProgressTracker } from './ui/components/progress-tracker';
 import { ValidationAlert } from './ui/components/validation-alert';
 import { sendRuntimeMessage, sendTabMessage, queryActiveTab } from './shared/webext-async';
+import type { RuntimeResponse } from './shared/messages';
+import type { RustRuleDefinition } from './shared/runtime';
 
 interface RuleSummary {
   id: string;
@@ -14,21 +16,6 @@ interface RuleSummary {
   site: string;
   category: string;
 }
-
-const BUILTIN_RULES: Record<string, RuleSummary[]> = {
-  jira: [
-    { id: 'jira.jql.builder', label: 'Search Builder', site: 'jira', category: 'UI' },
-    { id: 'jira.issue.capture.table', label: 'Capture Table', site: 'jira', category: 'Data' },
-  ],
-  oracle: [
-    { id: 'oracle.search.invoice.expand', label: 'Expand Invoice', site: 'oracle', category: 'Nav' },
-    { id: 'oracle.invoice.validation.alert', label: 'Validation Alert', site: 'oracle', category: 'Check' },
-    { id: 'oracle.invoice.create', label: 'Create Invoice', site: 'oracle', category: 'Form' },
-  ],
-  carma: [
-    { id: 'carma.bulk.search.scrape', label: 'Bulk Scrape', site: 'carma', category: 'Data' },
-  ],
-};
 
 const SITE_ACCENT: Record<string, string> = {
   jira: '#22d3ee',
@@ -61,12 +48,58 @@ async function detectSite(): Promise<string | null> {
   try {
     const tab = await queryActiveTab();
     if (!tab?.url) return null;
-    if (tab.url.includes('jira.carvana.com')) return 'jira';
-    if (tab.url.includes('fa.us2.oraclecloud.com')) return 'oracle';
-    if (tab.url.includes('carma.cvnacorp.com')) return 'carma';
-    return null;
+    const response = await sendRuntimeMessage<
+      { kind: 'detect-site'; payload: { url: string } },
+      RuntimeResponse
+    >({
+      kind: 'detect-site',
+      payload: { url: tab.url },
+    });
+    if (!response?.ok) return null;
+    const payload = (response.data ?? {}) as Record<string, unknown>;
+    const site = typeof payload.site === 'string' ? payload.site : 'unsupported';
+    return site === 'unsupported' ? null : site;
   } catch {
     return null;
+  }
+}
+
+function normalizeCategory(category: string): string {
+  const normalized = category.toLowerCase();
+  if (normalized === 'ui_enhancement') return 'UI';
+  if (normalized === 'data_capture') return 'Data';
+  if (normalized === 'form_automation') return 'Form';
+  if (normalized === 'navigation') return 'Nav';
+  if (normalized === 'validation') return 'Check';
+  return category;
+}
+
+async function loadRulesForSite(site: string): Promise<RuleSummary[]> {
+  try {
+    const tab = await queryActiveTab();
+    if (!tab?.id) return [];
+
+    const response = await sendTabMessage<
+      { kind: 'get-rules'; payload: { site: string } },
+      RuntimeResponse
+    >(tab.id, {
+      kind: 'get-rules',
+      payload: { site },
+    });
+
+    if (!response?.ok || !Array.isArray(response.data)) return [];
+    const rules = response.data as RustRuleDefinition[];
+    return rules
+      .filter((rule) => rule.site === site)
+      .filter((rule) => typeof rule.priority === 'number' && rule.priority < 200)
+      .map((rule) => ({
+        id: rule.id,
+        label: rule.label,
+        site: rule.site,
+        category: normalizeCategory(rule.category),
+      }));
+  } catch {
+    return [];
   }
 }
 
@@ -232,7 +265,7 @@ async function init() {
       gap: '10px',
     });
 
-    const rules = BUILTIN_RULES[site] ?? [];
+    const rules = await loadRulesForSite(site);
     for (let idx = 0; idx < rules.length; idx++) {
       const rule = rules[idx];
       const card = createCard({ title: rule.label });

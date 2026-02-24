@@ -27,7 +27,7 @@ async function handleRunRule(payload: { ruleId: string; site: string; context?: 
     const wasm = await ensureRuntime();
     if (!wasm) return { ok: false, error: 'WASM runtime not loaded' };
 
-    const result = await wasm.run_workflow(payload.site, payload.ruleId, payload.context ?? null);
+    const result = await wasm.run_rule(payload.site, payload.ruleId, payload.context ?? null);
     return { ok: true, data: result };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -44,19 +44,13 @@ async function handleRunAutoRules(payload: { url: string }): Promise<RuntimeResp
     const site = wasm.detect_site(payload.url);
     if (site === 'unsupported') return { ok: true, data: { site: 'unsupported', skipped: true } };
 
-    let rules: unknown[];
-    try {
-      const raw = wasm.list_rules(site);
-      rules = Array.isArray(raw) ? raw : [];
-    } catch {
-      rules = [];
-    }
+    const rules = wasm.list_rules(site);
 
     const results: unknown[] = [];
     for (const rule of rules) {
-      const ruleId = typeof rule === 'object' && rule !== null ? (rule as any).id : String(rule);
+      const ruleId = rule.id;
       try {
-        const result = await wasm.run_workflow(site, ruleId, null);
+        const result = await wasm.run_rule(site, ruleId, null);
         results.push({ ruleId, status: 'success', data: result });
       } catch (err) {
         results.push({ ruleId, status: 'error', error: err instanceof Error ? err.message : String(err) });
@@ -91,6 +85,12 @@ async function handleListRules(payload: { site: string }): Promise<RuntimeRespon
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+async function handleDetectSite(payload: { url: string }): Promise<RuntimeResponse> {
+  const wasm = await ensureRuntime();
+  if (!wasm) return { ok: false, error: 'WASM runtime not loaded' };
+  return { ok: true, data: { site: wasm.detect_site(payload.url) } };
 }
 
 async function handleClipboardWrite(payload: { text: string }): Promise<RuntimeResponse> {
@@ -152,6 +152,9 @@ chrome.runtime.onMessage.addListener(
         break;
       case 'capture-table':
         handler = handleCaptureTable();
+        break;
+      case 'detect-site':
+        handler = handleDetectSite(message.payload);
         break;
       case 'get-rules':
         handler = handleListRules(message.payload);

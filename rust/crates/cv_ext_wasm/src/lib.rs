@@ -100,9 +100,9 @@ pub fn list_workflows(site: String) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub async fn run_workflow(
+pub async fn run_rule(
     site: String,
-    workflow_id: String,
+    rule_id: String,
     input_json: Option<String>,
 ) -> Result<JsValue, JsValue> {
     let parsed = parse_site(&site).map_err(|err| JsValue::from_str(&err.to_string()))?;
@@ -110,9 +110,18 @@ pub async fn run_workflow(
     let context = parse_input_context(input_json);
     let mut executor = WasmActionExecutor::new(context);
     let result = engine
-        .run_workflow_with_executor(parsed, &workflow_id, &mut executor)
+        .run_workflow_with_executor(parsed, &rule_id, &mut executor)
         .await;
     to_js_value(&result)
+}
+
+#[wasm_bindgen]
+pub async fn run_workflow(
+    site: String,
+    workflow_id: String,
+    input_json: Option<String>,
+) -> Result<JsValue, JsValue> {
+    run_rule(site, workflow_id, input_json).await
 }
 
 #[wasm_bindgen]

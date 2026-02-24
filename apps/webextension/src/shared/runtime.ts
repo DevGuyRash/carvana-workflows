@@ -1,12 +1,50 @@
 import { browserApi } from './browser-api';
 
+export interface RustRuleDefinition {
+  id: string;
+  label: string;
+  description: string;
+  site: string;
+  enabled: boolean;
+  priority: number;
+  category: string;
+  builtin: boolean;
+}
+
+export interface RustThemeTokens {
+  bg_primary: string;
+  bg_secondary: string;
+  bg_surface: string;
+  text_primary: string;
+  text_secondary: string;
+  text_muted: string;
+  accent: string;
+  accent_hover: string;
+  border: string;
+  border_active: string;
+  success: string;
+  warning: string;
+  error: string;
+  info: string;
+  radius_sm: string;
+  radius_md: string;
+  radius_lg: string;
+  font_family: string;
+  font_mono: string;
+}
+
+export interface RustThemeDefinition {
+  id: string;
+  label: string;
+  tokens: RustThemeTokens;
+}
+
 export interface RustRuntime {
   detect_site(href: string): string;
-  list_rules(site: string): unknown;
-  list_workflows(site: string): unknown;
-  run_workflow(site: string, workflowId: string, inputJson?: string | null): Promise<unknown>;
+  list_rules(site: string): RustRuleDefinition[];
+  run_rule(site: string, ruleId: string, inputJson?: string | null): Promise<unknown>;
   capture_jira_filter_table(): Promise<unknown>;
-  get_builtin_themes(): unknown;
+  get_builtin_themes(): RustThemeDefinition[];
   default_settings(): unknown;
   jql_init_state?(): unknown;
   jql_apply_action?(state: unknown, action: unknown): unknown;
@@ -32,8 +70,7 @@ export function loadRuntime(): Promise<RustRuntime | null> {
       const runtime: RustRuntime = {
         detect_site: wasmModule.detect_site,
         list_rules: wasmModule.list_rules,
-        list_workflows: wasmModule.list_workflows,
-        run_workflow: wasmModule.run_workflow,
+        run_rule: wasmModule.run_rule ?? wasmModule.run_workflow,
         capture_jira_filter_table: wasmModule.capture_jira_filter_table,
         get_builtin_themes: wasmModule.get_builtin_themes,
         default_settings: wasmModule.default_settings,

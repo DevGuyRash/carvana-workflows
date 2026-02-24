@@ -98,12 +98,20 @@ async function handleMessage(
 
     case 'detect-site': {
       const { url } = message.payload;
-      const lower = String(url).toLowerCase();
-      let site = 'unsupported';
-      if (lower.includes('jira.carvana.com')) site = 'jira';
-      else if (lower.includes('oraclecloud.com') && lower.includes('fa')) site = 'oracle';
-      else if (lower.includes('carma.cvnacorp.com')) site = 'carma';
-      return { ok: true, data: { site } };
+      const tab = await queryActiveTab();
+      if (!tab?.id) return { ok: true, data: { site: 'unsupported' } };
+      try {
+        const detected = await sendTabMessage<RuntimeCommand, RuntimeResponse>(
+          tab.id,
+          { kind: 'detect-site', payload: { url: url || tab.url || '' } },
+        );
+        if (!isRuntimeResponse(detected)) {
+          return { ok: true, data: { site: 'unsupported' } };
+        }
+        return detected.ok ? detected : { ok: true, data: { site: 'unsupported' } };
+      } catch {
+        return { ok: true, data: { site: 'unsupported' } };
+      }
     }
 
     case 'get-rules': {
