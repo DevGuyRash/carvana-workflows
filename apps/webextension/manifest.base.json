@@ -1,9 +1,9 @@
 {
-  "name": "Carvana Workflows",
-  "description": "Unified Chrome + Firefox extension powered by Rust + WebAssembly workflows.",
-  "version": "0.0.1",
+  "name": "Carvana Extension",
+  "description": "Enterprise automation platform for Carvana internal web applications.",
+  "version": "0.2.0",
   "action": {
-    "default_title": "Carvana Workflows",
+    "default_title": "Carvana Extension",
     "default_popup": "popup.html"
   },
   "host_permissions": [

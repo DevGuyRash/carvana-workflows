@@ -1,0 +1,35 @@
+:root {
+  --cv-bg-primary: #080c14;
+  --cv-bg-secondary: rgba(15, 23, 42, 0.7);
+  --cv-bg-surface: rgba(30, 41, 59, 0.5);
+  --cv-bg-glass: rgba(15, 23, 42, 0.4);
+  --cv-bg-glass-hover: rgba(30, 41, 59, 0.6);
+  --cv-text-primary: #f1f5f9;
+  --cv-text-secondary: #94a3b8;
+  --cv-text-muted: #64748b;
+  --cv-accent: #3b82f6;
+  --cv-accent-hover: #60a5fa;
+  --cv-accent-glow: rgba(59, 130, 246, 0.25);
+  --cv-accent-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  --cv-border: rgba(148, 163, 184, 0.1);
+  --cv-border-active: rgba(59, 130, 246, 0.4);
+  --cv-border-glow: rgba(59, 130, 246, 0.15);
+  --cv-success: #34d399;
+  --cv-warning: #fbbf24;
+  --cv-error: #f87171;
+  --cv-info: #22d3ee;
+  --cv-radius-sm: 6px;
+  --cv-radius-md: 10px;
+  --cv-radius-lg: 16px;
+  --cv-radius-xl: 20px;
+  --cv-font: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --cv-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --cv-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 1px rgba(0, 0, 0, 0.3);
+  --cv-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 1px rgba(0, 0, 0, 0.2);
+  --cv-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 1px rgba(0, 0, 0, 0.3);
+  --cv-shadow-glow: 0 0 20px rgba(59, 130, 246, 0.15), 0 0 60px rgba(59, 130, 246, 0.05);
+  --cv-transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --cv-transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  --cv-blur: blur(12px);
+  --cv-blur-heavy: blur(24px);
+}

@@ -34,6 +34,17 @@ function copyPkg(outDir) {
   }
 }
 
+function copyCssAssets(outDir) {
+  const uiOut = path.join(outDir, 'ui');
+  fs.mkdirSync(uiOut, { recursive: true });
+  const tokensPath = path.join(srcRoot, 'ui', 'tokens.css');
+  const basePath = path.join(srcRoot, 'ui', 'base.css');
+  if (fs.existsSync(tokensPath))
+    fs.copyFileSync(tokensPath, path.join(uiOut, 'tokens.css'));
+  if (fs.existsSync(basePath))
+    fs.copyFileSync(basePath, path.join(uiOut, 'base.css'));
+}
+
 function firefoxWebAccessibleResources(manifest) {
   const raw = manifest.web_accessible_resources;
   if (!Array.isArray(raw)) {
@@ -61,6 +72,7 @@ async function buildEntries(outDir) {
     content: path.join(srcRoot, 'content.ts'),
     popup: path.join(srcRoot, 'popup.ts'),
     sidepanel: path.join(srcRoot, 'sidepanel.ts'),
+    'extension-page': path.join(srcRoot, 'extension-page.ts'),
   };
 
   await build({
@@ -135,6 +147,10 @@ async function buildVariant(outDir, manifestFactory) {
   await buildEntries(outDir);
   copyFile('popup.html', outDir);
   copyFile('sidepanel.html', outDir);
+  if (fs.existsSync(path.join(appRoot, 'extension.html'))) {
+    copyFile('extension.html', outDir);
+  }
+  copyCssAssets(outDir);
   copyPkg(outDir);
   writeManifest(outDir, manifestFactory());
 }

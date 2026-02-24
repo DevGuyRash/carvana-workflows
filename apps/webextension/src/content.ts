@@ -1,190 +1,131 @@
 import type { RuntimeCommand, RuntimeResponse } from './shared/messages';
-import { loadRuntime } from './shared/runtime';
+import { loadRuntime, RustRuntime } from './shared/runtime';
 
-let initialized = false;
+let wasmRuntime: RustRuntime | null = null;
 
-function normalizeSpace(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
+async function ensureRuntime(): Promise<RustRuntime | null> {
+  if (wasmRuntime) return wasmRuntime;
+  wasmRuntime = await loadRuntime();
+  return wasmRuntime;
 }
 
-function setInputLikeValue(element: Element, value: string): boolean {
-  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-    element.focus();
-    element.value = value;
-    element.dispatchEvent(new Event('input', { bubbles: true }));
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-    return true;
-  }
-
-  const html = element as HTMLElement;
-  if (html.isContentEditable) {
-    html.focus();
-    html.textContent = value;
-    html.dispatchEvent(new Event('input', { bubbles: true }));
-    html.dispatchEvent(new Event('change', { bubbles: true }));
-    return true;
-  }
-
-  return false;
-}
-
-function applyJqlToUi(jql: string): { applied: boolean; selector?: string } {
-  const selectors = [
-    'textarea[aria-label*="JQL"]',
-    'textarea#advanced-search',
-    'textarea[name="jql"]',
-    'input[aria-label*="JQL"]',
-    'input[name="jql"]',
-    '[contenteditable="true"][aria-label*="JQL"]',
-  ];
-
-  for (const selector of selectors) {
-    const element = document.querySelector(selector);
-    if (!element) {
-      continue;
-    }
-
-    if (setInputLikeValue(element, jql)) {
-      return { applied: true, selector };
-    }
-  }
-
-  return { applied: false };
-}
-
-function clickJiraSearchButton(): boolean {
-  const selectors = [
-    'button[aria-label="Search"]',
-    'button[data-testid="advanced-search.search-button"]',
-    'button[type="submit"]',
-    'button[aria-label*="Run"]',
-  ];
-
-  for (const selector of selectors) {
-    const button = document.querySelector(selector);
-    if (!(button instanceof HTMLElement)) {
-      continue;
-    }
-
-    button.click();
-    return true;
-  }
-
-  return false;
-}
-
-function navigateToJqlResults(jql: string): void {
-  const url = new URL(window.location.href);
-  url.pathname = '/issues/';
-  url.searchParams.set('jql', jql);
-  window.location.assign(url.toString());
-}
-
-function applyJqlInJira(jqlRaw: string, runSearch: boolean): RuntimeResponse {
-  const jql = normalizeSpace(jqlRaw);
-  if (!jql) {
-    return { ok: false, error: 'jql is empty' };
-  }
-
-  const applyResult = applyJqlToUi(jql);
-
-  if (runSearch) {
-    if (!clickJiraSearchButton()) {
-      navigateToJqlResults(jql);
-      return {
-        ok: true,
-        data: {
-          applied: applyResult.applied,
-          selector: applyResult.selector,
-          mode: 'navigate',
-          jql,
-        },
-      };
-    }
-
-    return {
-      ok: true,
-      data: {
-        applied: applyResult.applied,
-        selector: applyResult.selector,
-        mode: 'click-search',
-        jql,
-      },
-    };
-  }
-
-  if (!applyResult.applied) {
-    return {
-      ok: false,
-      error: 'JQL editor not found on current Jira page',
-    };
-  }
-
-  return {
-    ok: true,
-    data: {
-      applied: true,
-      selector: applyResult.selector,
-      mode: 'apply-only',
-      jql,
-    },
-  };
-}
-
-async function handleCommand(command: RuntimeCommand): Promise<RuntimeResponse> {
-  const runtime = await loadRuntime();
-
-  try {
-    if (command.kind === 'detect-site') {
-      return { ok: true, data: runtime.detect_site(window.location.href) };
-    }
-
-    if (command.kind === 'list-workflows') {
-      return { ok: true, data: runtime.list_workflows(command.site) };
-    }
-
-    if (command.kind === 'run-workflow') {
-      return {
-        ok: true,
-        data: runtime.run_workflow(command.site, command.workflowId, command.input),
-      };
-    }
-
-    if (command.kind === 'apply-jql') {
-      const host = window.location.hostname.toLowerCase();
-      if (!host.includes('jira.carvana.com')) {
-        return { ok: false, error: 'not on Jira tab' };
-      }
-
-      return applyJqlInJira(command.jql, command.runSearch);
-    }
-
-    if (command.kind === 'capture-jira-table') {
-      return { ok: true, data: runtime.capture_jira_filter_table() };
-    }
-
-    return { ok: false, error: 'unsupported command' };
-  } catch (error) {
-    return { ok: false, error: String(error) };
-  }
-}
-
-function installListener(): void {
-  if (initialized) {
+async function initializeContentScript(): Promise<void> {
+  const wasm = await ensureRuntime();
+  if (!wasm) {
+    console.warn('[cv-ext] WASM runtime not available in content script');
     return;
   }
 
-  initialized = true;
-  chrome.runtime.onMessage.addListener(
-    (
-      message: RuntimeCommand,
-      _sender: chrome.runtime.MessageSender,
-      sendResponse: (response?: RuntimeResponse) => void,
-    ) => {
-      void handleCommand(message).then(sendResponse);
-      return true;
-    },
-  );
+  const site = wasm.detect_site(window.location.href);
+  if (site === 'unsupported') return;
+
+  console.log(`[cv-ext] Detected site: ${site}`);
 }
 
-installListener();
+async function handleRunRule(payload: { ruleId: string; site: string; context?: string }): Promise<RuntimeResponse> {
+  try {
+    const wasm = await ensureRuntime();
+    if (!wasm) return { ok: false, error: 'WASM runtime not loaded' };
+
+    const result = wasm.run_workflow(payload.site, payload.ruleId, payload.context ?? null);
+    return { ok: true, data: result };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[cv-ext] Rule execution failed:', msg);
+    return { ok: false, error: msg };
+  }
+}
+
+async function handleRunAutoRules(payload: { url: string }): Promise<RuntimeResponse> {
+  try {
+    const wasm = await ensureRuntime();
+    if (!wasm) return { ok: false, error: 'WASM runtime not loaded' };
+
+    const site = wasm.detect_site(payload.url);
+    if (site === 'unsupported') return { ok: true, data: { site: 'unsupported', skipped: true } };
+
+    let rules: unknown[];
+    try {
+      const raw = wasm.list_rules(site);
+      rules = Array.isArray(raw) ? raw : [];
+    } catch {
+      rules = [];
+    }
+
+    const results: unknown[] = [];
+    for (const rule of rules) {
+      const ruleId = typeof rule === 'object' && rule !== null ? (rule as any).id : String(rule);
+      try {
+        const result = wasm.run_workflow(site, ruleId, null);
+        results.push({ ruleId, status: 'success', data: result });
+      } catch (err) {
+        results.push({ ruleId, status: 'error', error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    return { ok: true, data: { site, results } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function handleCaptureTable(): Promise<RuntimeResponse> {
+  try {
+    const wasm = await ensureRuntime();
+    if (!wasm) return { ok: false, error: 'WASM runtime not loaded' };
+
+    const data = wasm.capture_jira_filter_table();
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function handleListRules(payload: { site: string }): Promise<RuntimeResponse> {
+  try {
+    const wasm = await ensureRuntime();
+    if (!wasm) return { ok: false, error: 'WASM runtime not loaded' };
+
+    const rules = wasm.list_rules(payload.site);
+    return { ok: true, data: rules };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+chrome.runtime.onMessage.addListener(
+  (
+    message: RuntimeCommand,
+    _sender: chrome.runtime.MessageSender,
+    sendResponse: (response?: RuntimeResponse) => void,
+  ) => {
+    const kind = message?.kind;
+    if (!kind) return;
+
+    let handler: Promise<RuntimeResponse>;
+
+    switch (kind) {
+      case 'run-rule':
+        handler = handleRunRule((message as any).payload);
+        break;
+      case 'run-auto-rules':
+        handler = handleRunAutoRules((message as any).payload);
+        break;
+      case 'capture-table':
+        handler = handleCaptureTable();
+        break;
+      case 'get-rules':
+        handler = handleListRules((message as any).payload);
+        break;
+      default:
+        return;
+    }
+
+    handler.then(sendResponse).catch((err) => {
+      sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    });
+    return true;
+  },
+);
+
+void initializeContentScript();
