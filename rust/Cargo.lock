@@ -36,9 +36,37 @@ name = "cv_ext_core"
 version = "0.1.0"
 dependencies = [
  "cv_ext_contract",
- "cv_ext_workflows_carma",
- "cv_ext_workflows_jira",
- "cv_ext_workflows_oracle",
+ "cv_ext_sites_carma",
+ "cv_ext_sites_jira",
+ "cv_ext_sites_oracle",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "cv_ext_sites_carma"
+version = "0.1.0"
+dependencies = [
+ "cv_ext_contract",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "cv_ext_sites_jira"
+version = "0.1.0"
+dependencies = [
+ "cv_ext_contract",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "cv_ext_sites_oracle"
+version = "0.1.0"
+dependencies = [
+ "cv_ext_contract",
  "serde",
  "serde_json",
 ]
@@ -57,7 +85,7 @@ version = "0.1.0"
 dependencies = [
  "cv_ext_contract",
  "cv_ext_core",
- "cv_ext_workflows_jira",
+ "cv_ext_sites_jira",
  "js-sys",
  "serde",
  "serde-wasm-bindgen",
@@ -65,29 +93,6 @@ dependencies = [
  "thiserror",
  "wasm-bindgen",
  "web-sys",
-]
-
-[[package]]
-name = "cv_ext_workflows_carma"
-version = "0.1.0"
-dependencies = [
- "cv_ext_contract",
-]
-
-[[package]]
-name = "cv_ext_workflows_jira"
-version = "0.1.0"
-dependencies = [
- "cv_ext_contract",
- "regex",
- "serde",
-]
-
-[[package]]
-name = "cv_ext_workflows_oracle"
-version = "0.1.0"
-dependencies = [
- "cv_ext_contract",
 ]
 
 [[package]]

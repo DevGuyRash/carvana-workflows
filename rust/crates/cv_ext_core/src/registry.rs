@@ -1,14 +1,28 @@
-use cv_ext_contract::{Site, WorkflowDefinition};
-use cv_ext_workflows_carma::carma_workflows;
-use cv_ext_workflows_jira::jira_workflows;
-use cv_ext_workflows_oracle::oracle_workflows;
+use cv_ext_contract::{Site, WorkflowDefinition, RuleDefinition};
+use cv_ext_sites_carma::carma_rules;
+use cv_ext_sites_jira::jira_rules;
+use cv_ext_sites_oracle::oracle_rules;
+
+pub fn rules_for_site(site: Site) -> Vec<RuleDefinition> {
+    match site {
+        Site::Jira => jira_rules(),
+        Site::Oracle => oracle_rules(),
+        Site::Carma => carma_rules(),
+    }
+}
 
 pub fn workflows_for_site(site: Site) -> Vec<WorkflowDefinition> {
-    match site {
-        Site::Jira => jira_workflows(),
-        Site::Oracle => oracle_workflows(),
-        Site::Carma => carma_workflows(),
-    }
+    rules_for_site(site)
+        .into_iter()
+        .map(|rule| WorkflowDefinition {
+            id: rule.id,
+            label: rule.label,
+            description: rule.description,
+            site: rule.site,
+            actions: rule.actions,
+            internal: rule.priority >= 200,
+        })
+        .collect()
 }
 
 pub fn detect_site_from_href(href: &str) -> Option<Site> {

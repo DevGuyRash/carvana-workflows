@@ -1,3 +1,6 @@
+mod bridge_rules;
+mod bridge_settings;
+mod bridge_theme;
 mod commands;
 mod dom;
 mod errors;
@@ -5,7 +8,7 @@ mod errors;
 use cv_ext_contract::{Site, WorkflowDefinition};
 use cv_ext_core::executor::ActionExecutor;
 use cv_ext_core::{detect_site_from_href, workflows_for_site, RuntimeEngine};
-use cv_ext_workflows_jira::rows_with_derived_fields;
+use cv_ext_sites_jira::rows_with_derived_fields;
 use serde_json::{json, Value};
 use wasm_bindgen::prelude::*;
 

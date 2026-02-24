@@ -1,5 +1,5 @@
 pub mod capture;
-pub mod workflows;
+pub mod rules;
 
 pub use capture::rows_with_derived_fields;
-pub use workflows::jira_workflows;
+pub use rules::jira_rules;

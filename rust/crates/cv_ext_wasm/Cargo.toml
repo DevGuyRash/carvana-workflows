@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 cv_ext_contract = { path = "../cv_ext_contract" }
 cv_ext_core = { path = "../cv_ext_core" }
-cv_ext_workflows_jira = { path = "../cv_ext_workflows_jira" }
+cv_ext_sites_jira = { path = "../cv_ext_sites_jira" }
 serde.workspace = true
 serde_json.workspace = true
 wasm-bindgen.workspace = true
