@@ -22,6 +22,30 @@ async function handleMessage(
       try {
         const result = await sendTabMessage(tab.id, { kind: 'run-rule', payload: { ruleId, site, context } });
         await appendLogEntry('info', `rule:${ruleId}`, `Executed rule ${ruleId}`);
+        try {
+          if (site) {
+            await storageSet({ [`cv_last_run_${site}`]: result });
+          }
+        } catch {
+          // best effort
+        }
+        return { ok: true, data: result };
+      } catch (err) {
+        await appendLogEntry('error', `rule:${ruleId}`, formatError(err));
+        return { ok: false, error: formatError(err) };
+      }
+    }
+
+    case 'run-rule-with-result-mode': {
+      const { ruleId, site, context, resultMode } = (message as any).payload ?? {};
+      const tab = await queryActiveTab();
+      if (!tab?.id) return { ok: false, error: 'No active tab' };
+      try {
+        const result = await sendTabMessage(tab.id, { kind: 'run-rule', payload: { ruleId, site, context } });
+        await appendLogEntry('info', `rule:${ruleId}`, `Executed rule ${ruleId}`);
+        if (site && resultMode === 'store') {
+          await storageSet({ [`cv_last_run_${site}`]: result });
+        }
         return { ok: true, data: result };
       } catch (err) {
         await appendLogEntry('error', `rule:${ruleId}`, formatError(err));
@@ -41,8 +65,26 @@ async function handleMessage(
       }
     }
 
+    case 'detect-site': {
+      const url = (message as any).payload?.url ?? '';
+      const lower = String(url).toLowerCase();
+      let site = 'unsupported';
+      if (lower.includes('jira.carvana.com')) site = 'jira';
+      else if (lower.includes('oraclecloud.com') && lower.includes('fa')) site = 'oracle';
+      else if (lower.includes('carma.cvnacorp.com')) site = 'carma';
+      return { ok: true, data: { site } };
+    }
+
     case 'get-rules': {
-      return { ok: true, data: [] };
+      const { site } = (message as any).payload ?? {};
+      const tab = await queryActiveTab();
+      if (!tab?.id) return { ok: false, error: 'No active tab' };
+      try {
+        const result = await sendTabMessage(tab.id, { kind: 'get-rules', payload: { site } });
+        return { ok: true, data: result };
+      } catch (err) {
+        return { ok: false, error: formatError(err) };
+      }
     }
 
     case 'toggle-rule': {
@@ -83,6 +125,50 @@ async function handleMessage(
       return { ok: true };
     }
 
+    case 'capture-table': {
+      const tab = await queryActiveTab();
+      if (!tab?.id) return { ok: false, error: 'No active tab' };
+      try {
+        const result = await sendTabMessage(tab.id, { kind: 'capture-table' });
+        await storageSet({ cv_last_capture: result });
+        return { ok: true, data: result };
+      } catch (err) {
+        return { ok: false, error: formatError(err) };
+      }
+    }
+
+
+    case 'download-result': {
+      const { filename, mime, data } = (message as any).payload ?? {};
+      if (!filename || !data) return { ok: false, error: 'Missing download payload' };
+      try {
+        const dataUrl = 'data:' + (mime || 'application/octet-stream') + ';base64,' + btoa(unescape(encodeURIComponent(data)));
+        await chrome.downloads.download({
+          url: dataUrl,
+          filename: filename,
+          saveAs: true,
+        });
+        await appendLogEntry('info', 'download', 'Downloaded ' + filename);
+        return { ok: true };
+      } catch (err) {
+        await appendLogEntry('error', 'download', formatError(err));
+        return { ok: false, error: formatError(err) };
+      }
+    }
+
+    case 'copy-result': {
+      const { data: copyData } = (message as any).payload ?? {};
+      if (!copyData) return { ok: false, error: 'No data to copy' };
+      try {
+        const tab = await queryActiveTab();
+        if (tab?.id) {
+          await chrome.tabs.sendMessage(tab.id, { kind: 'clipboard-write', payload: { text: copyData } });
+        }
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: formatError(err) };
+      }
+    }
     default:
       return { ok: false, error: `Unknown message kind: ${message.kind}` };
   }
