@@ -95,6 +95,7 @@ This repository is extension-first and Rust-first.
   - `git diff --cached -- .`
 - Use conventional commits and small logical batches.
 - Never commit directly to `main`.
+- Never write or modify files using inline shell content injection methods (for example large `Set-Content`/heredoc style command payloads). Use safe, standard patch/edit tooling instead.
 
 ## GitOps Workflow
 
