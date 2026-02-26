@@ -2,6 +2,11 @@ mod bridge_rules;
 mod bridge_jql;
 mod bridge_settings;
 mod bridge_theme;
+mod bridge_ui;
+mod dom_inject;
+mod jql_panel;
+mod oracle_banner;
+mod carma_ui;
 mod commands;
 mod dom;
 mod errors;
@@ -54,19 +59,19 @@ impl ActionExecutor for WasmActionExecutor {
         dom::wait_for_selector(selector, timeout_ms)
             .await
             .map(|_| json!({"selector": selector, "timeoutMs": timeout_ms, "ok": true}))
-            .map_err(|error| error.to_string())
+            .map_err(|error: WasmRuntimeError| error.to_string())
     }
 
     async fn click(&mut self, selector: &str) -> Result<Value, String> {
         dom::click_selector(selector)
             .map(|_| json!({"selector": selector, "clicked": true}))
-            .map_err(|error| error.to_string())
+            .map_err(|error: WasmRuntimeError| error.to_string())
     }
 
     async fn type_text(&mut self, selector: &str, text: &str) -> Result<Value, String> {
         dom::type_selector(selector, text)
             .map(|_| json!({"selector": selector, "typed": true, "text": text}))
-            .map_err(|error| error.to_string())
+            .map_err(|error: WasmRuntimeError| error.to_string())
     }
 
     async fn extract_table(&mut self, selector: &str) -> Result<Value, String> {
@@ -75,13 +80,13 @@ impl ActionExecutor for WasmActionExecutor {
                 serde_json::to_value(rows)
                     .map_err(|error| WasmRuntimeError::from(format!("serialize extract table rows: {error}")))
             })
-            .map_err(|error| error.to_string())
+            .map_err(|error: WasmRuntimeError| error.to_string())
     }
 
     async fn execute_command(&mut self, command: &str) -> Result<Value, String> {
-        commands::execute_command(command, &self.context)
-            .await
-            .map_err(|error| error.to_string())
+        let result: Result<Value, WasmRuntimeError> =
+            commands::execute_command(command, &self.context).await;
+        result.map_err(|error| error.to_string())
     }
 }
 
@@ -126,8 +131,8 @@ pub async fn run_workflow(
 
 #[wasm_bindgen]
 pub async fn capture_jira_filter_table() -> Result<JsValue, JsValue> {
-    let payload = commands::execute_command("jira.capture.filter_table", &Value::Null)
-        .await
-        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let result: Result<Value, WasmRuntimeError> =
+        commands::execute_command("jira.capture.filter_table", &Value::Null).await;
+    let payload = result.map_err(|err| JsValue::from_str(&err.to_string()))?;
     to_js_value(&payload)
 }

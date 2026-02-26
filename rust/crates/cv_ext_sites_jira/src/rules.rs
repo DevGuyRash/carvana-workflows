@@ -1,4 +1,4 @@
-use cv_ext_contract::{Action, Site, RuleDefinition, RuleTrigger, RuleCategory};
+use cv_ext_contract::{Action, RuleCategory, RuleDefinition, RuleTrigger, Site};
 
 pub fn jira_rules() -> Vec<RuleDefinition> {
     vec![
@@ -9,7 +9,7 @@ pub fn jira_rules() -> Vec<RuleDefinition> {
             site: Site::Jira,
             enabled: true,
             url_pattern: None,
-            trigger: RuleTrigger::OnDemand,
+            trigger: RuleTrigger::OnPageLoad,
             actions: vec![Action::Execute {
                 command: "jira.install_jql_builder".to_string(),
             }],

@@ -6,6 +6,8 @@ export interface RustRuleDefinition {
   description: string;
   site: string;
   enabled: boolean;
+  url_pattern: string | null;
+  trigger: unknown;
   priority: number;
   category: string;
   builtin: boolean;
@@ -39,6 +41,32 @@ export interface RustThemeDefinition {
   tokens: RustThemeTokens;
 }
 
+
+export interface UiRuleSummary {
+  id: string;
+  label: string;
+  site: string;
+  site_label: string;
+  site_accent: string;
+  category: string;
+  category_short: string;
+  category_variant: string;
+  priority: number;
+  enabled: boolean;
+  builtin: boolean;
+  is_on_demand: boolean;
+  is_auto_trigger: boolean;
+  is_data_capture: boolean;
+  is_validation: boolean;
+  is_long_running: boolean;
+}
+
+export interface ClassifiedResult {
+  ok: boolean;
+  status: string;
+  error?: string;
+}
+
 export interface RustRuntime {
   detect_site(href: string): string;
   list_rules(site: string): RustRuleDefinition[];
@@ -51,6 +79,9 @@ export interface RustRuntime {
   jql_format?(state: unknown, autoQuote?: boolean): string;
   jql_presets_list?(): unknown;
   jql_presets_save?(presets: unknown): unknown;
+  ui_rules_for_site?(site: string): UiRuleSummary[];
+  ui_all_rules?(): UiRuleSummary[];
+  classify_rule_result?(resultJson: string): ClassifiedResult;
 }
 
 let runtimePromise: Promise<RustRuntime | null> | null = null;
@@ -79,6 +110,9 @@ export function loadRuntime(): Promise<RustRuntime | null> {
         jql_format: wasmModule.jql_format,
         jql_presets_list: wasmModule.jql_presets_list,
         jql_presets_save: wasmModule.jql_presets_save,
+        ui_rules_for_site: wasmModule.ui_rules_for_site,
+        ui_all_rules: wasmModule.ui_all_rules,
+        classify_rule_result: wasmModule.classify_rule_result,
       };
 
       (globalThis as any).__cv_wasm = runtime;

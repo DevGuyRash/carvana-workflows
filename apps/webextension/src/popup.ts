@@ -2,7 +2,7 @@ import { createBadge, BadgeVariant } from './ui/components/badge';
 import { createButton } from './ui/components/modal';
 import { sendTabMessage, queryActiveTab, sendRuntimeMessage } from './shared/webext-async';
 import type { RuntimeResponse } from './shared/messages';
-import type { RustRuleDefinition } from './shared/runtime';
+import type { UiRuleSummary } from './shared/runtime';
 
 interface DetectedSite {
   site: string;
@@ -11,42 +11,9 @@ interface DetectedSite {
   tabId: number;
 }
 
-interface RuleInfo {
-  id: string;
-  label: string;
-  category: string;
-}
+// RuleInfo replaced by UiRuleSummary from WASM bridge
 
-const CATEGORY_VARIANT: Record<string, BadgeVariant> = {
-  'UI Enhancement': 'info',
-  'Data Capture': 'success',
-  'Navigation': 'neutral',
-  'Validation': 'warning',
-  'Form Automation': 'info',
-};
 
-const SITE_ACCENT: Record<string, string> = {
-  jira: '#22d3ee',
-  oracle: '#fbbf24',
-  carma: '#34d399',
-};
-
-function normalizeCategory(category: string): string {
-  const normalized = category.toLowerCase();
-  if (normalized === 'ui_enhancement') return 'UI Enhancement';
-  if (normalized === 'data_capture') return 'Data Capture';
-  if (normalized === 'form_automation') return 'Form Automation';
-  if (normalized === 'navigation') return 'Navigation';
-  if (normalized === 'validation') return 'Validation';
-  return category;
-}
-
-function siteLabel(siteKey: string): string {
-  if (siteKey === 'jira') return 'Jira';
-  if (siteKey === 'oracle') return 'Oracle';
-  if (siteKey === 'carma') return 'Carma';
-  return siteKey;
-}
 
 function el(tag: string, styles: Record<string, string> = {}): HTMLElement {
   const element = document.createElement(tag);
@@ -68,31 +35,23 @@ async function detectCurrentSite(): Promise<DetectedSite | null> {
     const payload = (response?.data ?? {}) as Record<string, unknown>;
     const siteKey = typeof payload.site === 'string' ? payload.site : 'unsupported';
     if (siteKey === 'unsupported') return null;
-    return { site: siteLabel(siteKey), siteKey, url: tab.url, tabId: tab.id };
+    return { site: siteKey.charAt(0).toUpperCase() + siteKey.slice(1), siteKey, url: tab.url, tabId: tab.id };
   } catch {
     return null;
   }
 }
 
-async function loadRulesForSite(tabId: number, siteKey: string): Promise<RuleInfo[]> {
+async function loadRulesForSite(tabId: number, siteKey: string): Promise<UiRuleSummary[]> {
   try {
     const response = await sendTabMessage<
-      { kind: 'get-rules'; payload: { site: string } },
+      { kind: 'get-ui-rules'; payload: { site: string } },
       RuntimeResponse
     >(tabId, {
-      kind: 'get-rules',
+      kind: 'get-ui-rules',
       payload: { site: siteKey },
     });
     if (!response?.ok || !Array.isArray(response.data)) return [];
-    const rules = response.data as RustRuleDefinition[];
-    return rules
-      .filter((rule) => rule.site === siteKey)
-      .filter((rule) => typeof rule.priority === 'number' && rule.priority < 200)
-      .map((rule) => ({
-        id: rule.id,
-        label: rule.label,
-        category: normalizeCategory(rule.category),
-      }));
+    return response.data as UiRuleSummary[];
   } catch {
     return [];
   }
@@ -103,19 +62,36 @@ async function runRule(tabId: number, ruleId: string, siteKey: string, statusEl:
   statusEl.style.color = '#3b82f6';
   statusEl.style.opacity = '1';
   try {
-    await sendTabMessage(tabId, {
+    const result = await sendTabMessage(tabId, {
       kind: 'run-rule',
       payload: { ruleId, site: siteKey },
     });
+    if (!result || typeof result !== 'object') {
+      throw new Error('Rule execution did not return a response');
+    }
+    const responseLike = result as Record<string, unknown> | undefined;
+    if (responseLike?.ok === false) {
+      throw new Error(String(responseLike.error ?? 'Rule execution failed'));
+    }
+    const status = typeof responseLike?.status === 'string' ? responseLike.status.toLowerCase() : '';
+    if (status === 'failed' || status === 'error' || status === 'partial') {
+      throw new Error(String(responseLike?.error ?? `Rule execution ended with status: ${status}`));
+    }
     statusEl.textContent = '\u2713 Done';
     statusEl.style.color = '#34d399';
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     statusEl.textContent = '\u2715 Failed';
     statusEl.style.color = '#f87171';
+    statusEl.title = msg;
   }
   setTimeout(() => {
     statusEl.style.opacity = '0';
-    setTimeout(() => { statusEl.textContent = ''; statusEl.style.opacity = '1'; }, 300);
+    setTimeout(() => {
+      statusEl.textContent = '';
+      statusEl.style.opacity = '1';
+      statusEl.title = '';
+    }, 300);
   }, 3000);
 }
 
@@ -230,7 +206,7 @@ async function init() {
   /* ── Rules list ── */
   if (siteData) {
     const rules = await loadRulesForSite(siteData.tabId, siteData.siteKey);
-    const accent = SITE_ACCENT[siteData.siteKey] ?? '#3b82f6';
+    const accent = rules.length > 0 ? rules[0].site_accent : '#3b82f6';
 
     if (rules.length > 0) {
       const rulesHeader = el('div', {
@@ -290,7 +266,7 @@ async function init() {
         name.textContent = rule.label;
         info.appendChild(name);
 
-        const catBadge = createBadge(rule.category, CATEGORY_VARIANT[rule.category] ?? 'neutral');
+        const catBadge = createBadge(rule.category, (rule.category_variant ?? 'neutral') as BadgeVariant);
         info.appendChild(catBadge);
         row.appendChild(info);
 

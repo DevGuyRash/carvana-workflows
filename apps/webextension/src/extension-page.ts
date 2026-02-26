@@ -13,7 +13,7 @@ import { createResultViewer, ResultArtifact } from './ui/components/result-viewe
 import { ProgressTracker } from './ui/components/progress-tracker';
 import { ValidationAlert } from './ui/components/validation-alert';
 import { loadCapturedData, saveCapturedData } from './shared/storage-bridge';
-import { loadRuntime, RustRuleDefinition } from './shared/runtime';
+import { loadRuntime, UiRuleSummary } from './shared/runtime';
 
 /* ─── Shared types ──────────────────────────────────────────────── */
 
@@ -31,72 +31,43 @@ const SITES: SiteStatus[] = [
   { name: 'carma', label: 'Carma', icon: '🚗', connected: false, accentColor: '#34d399' },
 ];
 
-interface RuleEntry {
-  id: string;
-  label: string;
-  site: string;
-  category: string;
-  enabled: boolean;
-  builtin: boolean;
-  priority: number;
-}
+let BUILTIN_RULES: UiRuleSummary[] = [];
 
-let BUILTIN_RULES: RuleEntry[] = [];
-
-const SITE_BORDER_COLORS: Record<string, string> = {
-  jira: '#22d3ee',
-  oracle: '#fbbf24',
-  carma: '#34d399',
-};
-
-function normalizeCategory(category: string): string {
-  const normalized = category.toLowerCase();
-  if (normalized === 'ui_enhancement') return 'UI Enhancement';
-  if (normalized === 'data_capture') return 'Data Capture';
-  if (normalized === 'form_automation') return 'Form Automation';
-  if (normalized === 'navigation') return 'Navigation';
-  if (normalized === 'validation') return 'Validation';
-  return category;
-}
-
-function toRuleEntry(rule: RustRuleDefinition): RuleEntry {
-  return {
-    id: rule.id,
-    label: rule.label,
-    site: rule.site,
-    category: normalizeCategory(rule.category),
-    enabled: rule.enabled,
-    builtin: rule.builtin,
-    priority: rule.priority,
-  };
-}
-
-async function loadBuiltinRules(): Promise<RuleEntry[]> {
+async function loadBuiltinRules(): Promise<UiRuleSummary[]> {
   const wasm = await loadRuntime();
   if (!wasm) return [];
   const persistedStates = await storageGet<Record<string, boolean>>('cv_rules_state', {});
 
+  if (wasm.ui_all_rules) {
+    const summaries = wasm.ui_all_rules() as UiRuleSummary[];
+    for (const rule of summaries) {
+      if (persistedStates[rule.id] !== undefined) {
+        rule.enabled = persistedStates[rule.id];
+      }
+    }
+    return summaries;
+  }
+
   const sites = ['jira', 'oracle', 'carma'];
-  const rules: RuleEntry[] = [];
+  const rules: UiRuleSummary[] = [];
 
   for (const site of sites) {
     try {
-      const siteRules = wasm.list_rules(site);
-      for (const rule of siteRules) {
-        const entry = toRuleEntry(rule);
-        if (persistedStates[entry.id] !== undefined) {
-          entry.enabled = persistedStates[entry.id];
+      if (wasm.ui_rules_for_site) {
+        const siteRules = wasm.ui_rules_for_site(site) as UiRuleSummary[];
+        for (const rule of siteRules) {
+          if (persistedStates[rule.id] !== undefined) {
+            rule.enabled = persistedStates[rule.id];
+          }
+          rules.push(rule);
         }
-        rules.push(entry);
       }
     } catch {
       // continue collecting from other sites
     }
   }
 
-  return rules
-    .filter((rule) => rule.priority < 200)
-    .sort((a, b) => a.label.localeCompare(b.label));
+  return rules.sort((a, b) => a.label.localeCompare(b.label));
 }
 
 
@@ -107,15 +78,29 @@ interface RunFeedbackContext {
   alert: ValidationAlert | null;
   resultSlot: HTMLDivElement;
 }
-function classifyRule(rule: RuleEntry) {
-  const isDataCapture = ['jira.issue.capture.table', 'carma.bulk.search.scrape'].includes(rule.id);
-  const isValidation = rule.id === 'oracle.invoice.validation.alert';
-  const isLongRunning = ['jira.jql.builder', 'carma.bulk.search.scrape', 'oracle.invoice.create'].includes(rule.id);
-  return { isDataCapture, isValidation, isLongRunning };
+function classifyRule(rule: UiRuleSummary) {
+  return {
+    isDataCapture: rule.is_data_capture,
+    isValidation: rule.is_validation,
+    isLongRunning: rule.is_long_running,
+  };
+}
+
+function runtimeFailureMessage(result: unknown): string | null {
+  if (!result || typeof result !== 'object') return 'Rule execution did not return a response';
+  const responseLike = result as Record<string, unknown>;
+  if (responseLike.ok === false) {
+    return String(responseLike.error ?? responseLike.message ?? 'Rule execution failed');
+  }
+  const status = typeof responseLike.status === 'string' ? responseLike.status.toLowerCase() : '';
+  if (status === 'failed' || status === 'error' || status === 'partial') {
+    return String(responseLike.error ?? responseLike.message ?? `Rule execution ended with status: ${status}`);
+  }
+  return null;
 }
 
 function initRunFeedback(
-  rule: RuleEntry,
+  rule: UiRuleSummary,
   card: HTMLElement,
 ): RunFeedbackContext {
   const { isLongRunning, isValidation } = classifyRule(rule);
@@ -196,7 +181,7 @@ function handleValidationResult(
 }
 
 function handleDataCaptureResult(
-  rule: RuleEntry,
+  rule: UiRuleSummary,
   result: unknown,
   resultSlot: HTMLElement,
 ): void {
@@ -228,7 +213,7 @@ function handleDataCaptureResult(
 
 function handleRunError(
   err: unknown,
-  rule: RuleEntry,
+  rule: UiRuleSummary,
   ctx: RunFeedbackContext,
   retryFn: () => void,
 ): void {
@@ -483,9 +468,16 @@ function renderDashboard(): HTMLElement {
   const quickRules = BUILTIN_RULES.slice(0, 3);
   for (const rule of quickRules) {
     const pill = glowButton(`▶ ${rule.label.split(': ')[1] ?? rule.label}`, () => {
-      sendRuntimeMessage({ kind: 'run-rule', payload: { ruleId: rule.id, site: rule.site } }).catch(() => {
-        showToast({ message: `Cannot execute: not on ${rule.site} page`, variant: 'error' });
-      });
+      void sendRuntimeMessage({ kind: 'run-rule', payload: { ruleId: rule.id, site: rule.site } })
+        .then((result) => {
+          const runtimeFailure = runtimeFailureMessage(result);
+          if (runtimeFailure) {
+            showToast({ message: runtimeFailure, variant: 'error' });
+          }
+        })
+        .catch(() => {
+          showToast({ message: `Cannot execute: not on ${rule.site} page`, variant: 'error' });
+        });
     });
     actionsRow.appendChild(pill);
   }
@@ -616,8 +608,8 @@ function renderRules(): HTMLElement {
       return;
     }
     for (const rule of rules) {
-      const siteVariant: Record<string, BadgeVariant> = { jira: 'info', oracle: 'warning', carma: 'success' };
-      const borderColor = SITE_BORDER_COLORS[rule.site] ?? 'var(--cv-border)';
+      
+      const borderColor = rule.site_accent ?? 'var(--cv-border)';
 
       const card = document.createElement('div');
       Object.assign(card.style, {
@@ -661,8 +653,8 @@ function renderRules(): HTMLElement {
 
       const badges = document.createElement('div');
       Object.assign(badges.style, { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' });
-      badges.appendChild(createBadge(rule.site, siteVariant[rule.site] ?? 'neutral'));
-      badges.appendChild(createBadge(rule.category, 'neutral'));
+      badges.appendChild(createBadge(rule.site_label, (rule.site === 'jira' ? 'info' : rule.site === 'oracle' ? 'warning' : 'success') as BadgeVariant));
+      badges.appendChild(createBadge(rule.category, (rule.category_variant ?? 'neutral') as BadgeVariant));
       if (rule.builtin) badges.appendChild(createBadge('Built-in', 'neutral'));
       left.appendChild(badges);
       inner.appendChild(left);
@@ -719,6 +711,11 @@ function renderRules(): HTMLElement {
             kind: 'run-rule-with-result-mode' as const,
             payload: { ruleId: rule.id, site: rule.site, resultMode: 'return' },
           });
+
+          const runtimeFailure = runtimeFailureMessage(result);
+          if (runtimeFailure) {
+            throw new Error(runtimeFailure);
+          }
 
           if (ctx.tracker) finalizeTracker(ctx.tracker);
           if (ctx.alert) handleValidationResult(ctx.alert, result, () => runBtn.click());

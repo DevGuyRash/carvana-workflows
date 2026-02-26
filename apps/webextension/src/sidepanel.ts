@@ -8,41 +8,7 @@ import { ProgressTracker } from './ui/components/progress-tracker';
 import { ValidationAlert } from './ui/components/validation-alert';
 import { sendRuntimeMessage, sendTabMessage, queryActiveTab } from './shared/webext-async';
 import type { RuntimeResponse } from './shared/messages';
-import type { RustRuleDefinition } from './shared/runtime';
-
-interface RuleSummary {
-  id: string;
-  label: string;
-  site: string;
-  category: string;
-}
-
-const SITE_ACCENT: Record<string, string> = {
-  jira: '#22d3ee',
-  oracle: '#fbbf24',
-  carma: '#34d399',
-};
-
-const SITE_LABEL: Record<string, string> = {
-  jira: 'Jira',
-  oracle: 'Oracle',
-  carma: 'Carma',
-};
-
-const LONG_RUNNING_RULES = new Set([
-  'jira.jql.builder',
-  'carma.bulk.search.scrape',
-  'oracle.invoice.create',
-]);
-
-const VALIDATION_RULES = new Set([
-  'oracle.invoice.validation.alert',
-]);
-
-const DATA_CAPTURE_RULES = new Set([
-  'jira.issue.capture.table',
-  'carma.bulk.search.scrape',
-]);
+import type { UiRuleSummary } from './shared/runtime';
 
 async function detectSite(): Promise<string | null> {
   try {
@@ -64,40 +30,21 @@ async function detectSite(): Promise<string | null> {
   }
 }
 
-function normalizeCategory(category: string): string {
-  const normalized = category.toLowerCase();
-  if (normalized === 'ui_enhancement') return 'UI';
-  if (normalized === 'data_capture') return 'Data';
-  if (normalized === 'form_automation') return 'Form';
-  if (normalized === 'navigation') return 'Nav';
-  if (normalized === 'validation') return 'Check';
-  return category;
-}
-
-async function loadRulesForSite(site: string): Promise<RuleSummary[]> {
+async function loadRulesForSite(site: string): Promise<UiRuleSummary[]> {
   try {
     const tab = await queryActiveTab();
     if (!tab?.id) return [];
 
     const response = await sendTabMessage<
-      { kind: 'get-rules'; payload: { site: string } },
+      { kind: 'get-ui-rules'; payload: { site: string } },
       RuntimeResponse
     >(tab.id, {
-      kind: 'get-rules',
+      kind: 'get-ui-rules',
       payload: { site },
     });
 
     if (!response?.ok || !Array.isArray(response.data)) return [];
-    const rules = response.data as RustRuleDefinition[];
-    return rules
-      .filter((rule) => rule.site === site)
-      .filter((rule) => typeof rule.priority === 'number' && rule.priority < 200)
-      .map((rule) => ({
-        id: rule.id,
-        label: rule.label,
-        site: rule.site,
-        category: normalizeCategory(rule.category),
-      }));
+    return response.data as UiRuleSummary[];
   } catch {
     return [];
   }
@@ -135,6 +82,19 @@ function parseResultToArtifact(ruleId: string, ruleLabel: string, raw: unknown):
     text: String(data),
     meta: { Rule: ruleId },
   };
+}
+
+function runtimeFailureMessage(result: unknown): string | null {
+  if (!result || typeof result !== 'object') return 'Rule execution did not return a response';
+  const responseLike = result as Record<string, unknown>;
+  if (responseLike.ok === false) {
+    return String(responseLike.error ?? responseLike.message ?? 'Rule execution failed');
+  }
+  const status = typeof responseLike.status === 'string' ? responseLike.status.toLowerCase() : '';
+  if (status === 'failed' || status === 'error' || status === 'partial') {
+    return String(responseLike.error ?? responseLike.message ?? `Rule execution ended with status: ${status}`);
+  }
+  return null;
 }
 
 async function init() {
@@ -209,8 +169,9 @@ async function init() {
 
     content.appendChild(emptyWrap);
   } else {
-    const accent = SITE_ACCENT[site] ?? '#3b82f6';
-    const displayName = SITE_LABEL[site] ?? site;
+    const rules = await loadRulesForSite(site);
+    const accent = rules.length > 0 ? rules[0].site_accent : '#3b82f6';
+    const displayName = rules.length > 0 ? rules[0].site_label : site.charAt(0).toUpperCase() + site.slice(1);
 
     const siteRow = document.createElement('div');
     Object.assign(siteRow.style, {
@@ -265,7 +226,6 @@ async function init() {
       gap: '10px',
     });
 
-    const rules = await loadRulesForSite(site);
     for (let idx = 0; idx < rules.length; idx++) {
       const rule = rules[idx];
       const card = createCard({ title: rule.label });
@@ -335,9 +295,9 @@ async function init() {
       });
 
       runBtn.addEventListener('click', async () => {
-        const isLongRunning = LONG_RUNNING_RULES.has(rule.id);
-        const isValidation = VALIDATION_RULES.has(rule.id);
-        const isDataCapture = DATA_CAPTURE_RULES.has(rule.id);
+        const isLongRunning = rule.is_long_running;
+        const isValidation = rule.is_validation;
+        const isDataCapture = rule.is_data_capture;
 
         let tracker: ProgressTracker | null = null;
         let alert: ValidationAlert | null = null;
@@ -388,6 +348,11 @@ async function init() {
             kind: 'run-rule-with-result-mode' as const,
             payload: { ruleId: rule.id, site: rule.site, resultMode: 'return' },
           });
+
+          const runtimeFailure = runtimeFailureMessage(result);
+          if (runtimeFailure) {
+            throw new Error(runtimeFailure);
+          }
 
           if (tracker) {
             tracker.update({

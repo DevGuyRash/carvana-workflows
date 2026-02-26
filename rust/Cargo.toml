@@ -43,6 +43,10 @@ web-sys = { version = "0.3", features = [
   "Storage",
   "Node",
   "NodeList",
-  "console"
+  "MutationObserver",
+  "MutationObserverInit",
+  "console",
+  "CssStyleDeclaration",
+  "HtmlHeadElement"
 ] }
 js-sys = "0.3"

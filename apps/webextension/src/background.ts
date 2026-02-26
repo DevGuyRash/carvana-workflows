@@ -229,6 +229,24 @@ async function handleMessage(
         return { ok: false, error: formatError(err) };
       }
     }
+    case 'get-ui-rules': {
+      const { site } = message.payload;
+      const tab = await getExecutionTab(sender);
+      if (!tab?.id) return { ok: false, error: 'No runnable tab available' };
+      try {
+        const result = await sendTabMessage<RuntimeCommand, RuntimeResponse>(
+          tab.id,
+          { kind: 'get-ui-rules', payload: { site } },
+        );
+        if (!isRuntimeResponse(result)) {
+          return { ok: false, error: 'UI rules did not return a valid response' };
+        }
+        return result;
+      } catch (err) {
+        return { ok: false, error: formatError(err) };
+      }
+    }
+
 
     case 'toggle-rule': {
       const { ruleId, enabled } = message.payload;
@@ -386,8 +404,52 @@ async function appendLogEntry(level: string, source: string, message: string): P
   }
 }
 
+const AUTO_RULE_COOLDOWN_MS = 5000;
+const lastAutoRunByTab = new Map<number, number>();
+
+async function autoRunEnabled(): Promise<boolean> {
+  const settings = await storageGet<Record<string, unknown>>('cv_settings', { auto_run_rules: true });
+  return settings.auto_run_rules !== false;
+}
+
+async function triggerAutoRulesForTab(tab: chrome.tabs.Tab | undefined, reason: string): Promise<void> {
+  if (!isTabRunnable(tab)) return;
+  if (!(await autoRunEnabled())) return;
+
+  const now = Date.now();
+  const lastRun = lastAutoRunByTab.get(tab.id) ?? 0;
+  if (now - lastRun < AUTO_RULE_COOLDOWN_MS) return;
+  lastAutoRunByTab.set(tab.id, now);
+
+  try {
+    const result = await sendTabMessage(tab.id, {
+      kind: 'run-auto-rules',
+      payload: { url: tab.url ?? '' },
+    });
+    const normalized = normalizeRuleResultEnvelope(result);
+    if (!normalized.ok) {
+      await appendLogEntry('warn', 'autorun', `autorun (${reason}) finished with non-success status: ${normalized.error ?? 'unknown error'}`);
+    }
+  } catch (err) {
+    await appendLogEntry('warn', 'autorun', `autorun (${reason}) failed: ${formatError(err)}`);
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[cv-ext] background service worker installed');
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== 'complete') return;
+  if (!tab || tab.id !== tabId) return;
+  void triggerAutoRulesForTab(tab, 'tabs.onUpdated');
+});
+
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  void chrome.tabs.get(activeInfo.tabId, (tab) => {
+    if (chrome.runtime.lastError) return;
+    void triggerAutoRulesForTab(tab, 'tabs.onActivated');
+  });
 });
 
 chrome.runtime.onMessage.addListener(

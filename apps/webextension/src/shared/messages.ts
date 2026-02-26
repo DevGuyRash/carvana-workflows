@@ -18,6 +18,7 @@ export type RuntimeCommand =
   | { kind: 'run-rule-with-result-mode'; payload: { ruleId: string; site: string; context?: string; resultMode: 'return' | 'store' } }
   | { kind: 'run-auto-rules'; payload: { url: string } }
   | { kind: 'get-rules'; payload: { site: string } }
+  | { kind: 'get-ui-rules'; payload: { site: string } }
   | { kind: 'toggle-rule'; payload: { ruleId: string; enabled: boolean } }
   | { kind: 'get-settings' }
   | { kind: 'save-settings'; payload: unknown }

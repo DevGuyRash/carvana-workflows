@@ -1,17 +1,14 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum LogLevel {
     Debug,
+    #[default]
     Info,
     Warn,
     Error,
-}
-
-impl Default for LogLevel {
-    fn default() -> Self { Self::Info }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,7 +19,10 @@ pub struct SiteSettings {
 
 impl Default for SiteSettings {
     fn default() -> Self {
-        Self { enabled: true, default_rules: Vec::new() }
+        Self {
+            enabled: true,
+            default_rules: Vec::new(),
+        }
     }
 }
 
