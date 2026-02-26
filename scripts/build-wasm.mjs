@@ -6,6 +6,7 @@ import path from 'node:path';
 const root = process.cwd();
 const crateDir = path.join(root, 'rust', 'crates', 'cv_ext_wasm');
 const outDir = path.join(root, 'apps', 'webextension', 'pkg');
+let toolchainEnv = process.env;
 
 function isWindowsGnuToolchain() {
   if (process.platform !== 'win32') {
@@ -25,31 +26,30 @@ function verifyWindowsGnuLinker() {
     return true;
   }
 
-  const check = spawnSync('x86_64-w64-mingw32-gcc', ['-print-file-name=libktmw32.a'], {
-    encoding: 'utf8',
-  });
-  if (check.status !== 0) {
-    console.error(
-      '[build:wasm] Preflight failed: GNU Windows Rust toolchain detected, but `x86_64-w64-mingw32-gcc` is unavailable.',
-    );
-    console.error(
-      '[build:wasm] Install MinGW-w64 fully or switch to MSVC: `rustup default stable-x86_64-pc-windows-msvc`.',
-    );
-    return false;
+  const configuredLinker = process.env.CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER;
+  const candidates = [
+    configuredLinker,
+    'x86_64-w64-mingw32-gcc',
+    'gcc',
+  ].filter(Boolean);
+
+  for (const linker of candidates) {
+    const probe = spawnSync(linker, ['--version'], { encoding: 'utf8' });
+    if (probe.status === 0) {
+      return true;
+    }
   }
 
-  const resolved = (check.stdout ?? '').trim().toLowerCase();
-  if (!resolved || resolved === 'libktmw32.a') {
-    console.error(
-      '[build:wasm] Preflight failed: GNU linker is missing `libktmw32` (required to compile wasm-pack on Windows GNU).',
-    );
-    console.error(
-      '[build:wasm] Install complete MinGW-w64 runtime libs or switch to MSVC: `rustup default stable-x86_64-pc-windows-msvc`.',
-    );
-    return false;
-  }
-
-  return true;
+  console.error(
+    '[build:wasm] Preflight failed: GNU Windows Rust toolchain detected, but no usable GNU linker was found.',
+  );
+  console.error(
+    '[build:wasm] Checked CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER, `x86_64-w64-mingw32-gcc`, and `gcc`.',
+  );
+  console.error(
+    '[build:wasm] Install MinGW-w64, add its bin to PATH, or set CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER.',
+  );
+  return false;
 }
 
 function verifyWindowsMsvcLinker() {
@@ -95,8 +95,31 @@ function verifyWindowsMsvcLinker() {
   return true;
 }
 
+function resolveActiveToolchain() {
+  const active = spawnSync('rustup', ['show', 'active-toolchain'], { encoding: 'utf8' });
+  if (active.status !== 0) {
+    return null;
+  }
+  const first = (active.stdout ?? '')
+    .trim()
+    .split(/\s+/)
+    .find(Boolean);
+  return first ?? null;
+}
+
+function prepareToolchainEnv() {
+  const activeToolchain = resolveActiveToolchain();
+  if (!activeToolchain) {
+    return process.env;
+  }
+  return {
+    ...process.env,
+    RUSTUP_TOOLCHAIN: activeToolchain,
+  };
+}
+
 function resolveWasmPack() {
-  const direct = spawnSync('wasm-pack', ['--version'], { encoding: 'utf8' });
+  const direct = spawnSync('wasm-pack', ['--version'], { encoding: 'utf8', env: toolchainEnv });
   if (direct.status === 0) {
     return 'wasm-pack';
   }
@@ -104,7 +127,7 @@ function resolveWasmPack() {
   const binaryName = process.platform === 'win32' ? 'wasm-pack.exe' : 'wasm-pack';
   const cargoBin = path.join(os.homedir(), '.cargo', 'bin', binaryName);
   if (fs.existsSync(cargoBin)) {
-    const check = spawnSync(cargoBin, ['--version'], { encoding: 'utf8' });
+    const check = spawnSync(cargoBin, ['--version'], { encoding: 'utf8', env: toolchainEnv });
     if (check.status === 0) {
       return cargoBin;
     }
@@ -115,9 +138,11 @@ function resolveWasmPack() {
 
 function installWasmPack() {
   console.warn('[build:wasm] wasm-pack missing. Attempting to install via `cargo install wasm-pack`.');
-  const result = spawnSync('cargo', ['install', 'wasm-pack'], { stdio: 'inherit' });
+  const result = spawnSync('cargo', ['install', 'wasm-pack'], { stdio: 'inherit', env: toolchainEnv });
   return result.status === 0;
 }
+
+toolchainEnv = prepareToolchainEnv();
 
 if (!verifyWindowsGnuLinker() || !verifyWindowsMsvcLinker()) {
   process.exit(1);
@@ -138,7 +163,7 @@ if (!wasmPack) {
 const result = spawnSync(
   wasmPack,
   ['build', crateDir, '--target', 'web', '--out-dir', outDir, '--out-name', 'cv_ext_wasm'],
-  { stdio: 'inherit' },
+  { stdio: 'inherit', env: toolchainEnv },
 );
 
 process.exit(result.status ?? 1);
