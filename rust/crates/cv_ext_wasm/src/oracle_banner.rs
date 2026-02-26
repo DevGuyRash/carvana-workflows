@@ -1,6 +1,6 @@
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 
-use crate::{dom, dom_inject, errors::WasmRuntimeError};
+use crate::{dom_inject, errors::WasmRuntimeError};
 
 const BANNER_ID: &str = "cv-oracle-validation-banner";
 const STYLE_ID: &str = "cv-oracle-validation-styles";
@@ -74,9 +74,10 @@ pub fn show_banner(status: &str, detail: &str) -> Result<(), WasmRuntimeError> {
     let html = build_banner_html(status, detail);
     let banner = dom_inject::inject_or_update_banner(BANNER_ID, css_class, &html)?;
 
-    let close_handler = Closure::<dyn FnMut(web_sys::Event)>::wrap(Box::new(|_e: web_sys::Event| {
-        let _ = dom_inject::remove_element(BANNER_ID);
-    }));
+    let close_handler =
+        Closure::<dyn FnMut(web_sys::Event)>::wrap(Box::new(|_e: web_sys::Event| {
+            let _ = dom_inject::remove_element(BANNER_ID);
+        }));
     if let Ok(Some(btn)) = banner.query_selector(".cv-banner-close") {
         btn.add_event_listener_with_callback("click", close_handler.as_ref().unchecked_ref())
             .ok();
@@ -87,7 +88,8 @@ pub fn show_banner(status: &str, detail: &str) -> Result<(), WasmRuntimeError> {
         .and_then(|w| w.document())
         .and_then(|d| d.body())
     {
-        body.set_attribute("data-cv-oracle-validation-status", status).ok();
+        body.set_attribute("data-cv-oracle-validation-status", status)
+            .ok();
     }
 
     Ok(())
@@ -108,8 +110,8 @@ pub fn setup_spa_persistence(status_value: String) -> Result<(), WasmRuntimeErro
         .ok_or_else(|| WasmRuntimeError::from("body unavailable"))?;
 
     let status_for_cb = status_value.clone();
-    let cb = Closure::<dyn FnMut(js_sys::Array, web_sys::MutationObserver)>::wrap(
-        Box::new(move |_records: js_sys::Array, _obs: web_sys::MutationObserver| {
+    let cb = Closure::<dyn FnMut(js_sys::Array, web_sys::MutationObserver)>::wrap(Box::new(
+        move |_records: js_sys::Array, _obs: web_sys::MutationObserver| {
             if web_sys::window()
                 .and_then(|w| w.document())
                 .and_then(|d| d.get_element_by_id(BANNER_ID))
@@ -117,8 +119,8 @@ pub fn setup_spa_persistence(status_value: String) -> Result<(), WasmRuntimeErro
             {
                 let _ = show_banner(&status_for_cb, "Restored after navigation");
             }
-        }),
-    );
+        },
+    ));
 
     let observer = web_sys::MutationObserver::new(cb.as_ref().unchecked_ref())
         .map_err(|_| WasmRuntimeError::from("failed to create validation observer"))?;
@@ -127,7 +129,12 @@ pub fn setup_spa_persistence(status_value: String) -> Result<(), WasmRuntimeErro
     opts.set_subtree(false);
     observer.observe_with_options(&body, &opts).ok();
 
-    js_sys::Reflect::set(window.as_ref(), &JsValue::from_str(OBSERVER_KEY), observer.as_ref()).ok();
+    js_sys::Reflect::set(
+        window.as_ref(),
+        &JsValue::from_str(OBSERVER_KEY),
+        observer.as_ref(),
+    )
+    .ok();
     cb.forget();
 
     Ok(())

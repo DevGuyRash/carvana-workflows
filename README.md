@@ -29,6 +29,15 @@ Enterprise-grade Chrome + Firefox WebExtension for automating Carvana internal w
 - Rust stable toolchain
 - `wasm-pack` (`cargo install wasm-pack`)
 
+### Windows Rust Toolchain
+
+- Windows workflows are GNU-first for deterministic builds and tests.
+- Install Scoop `mingw` so `gcc` provides `libgcc_eh.a`.
+- Use project commands (`npm run typecheck`, `npm test`, `npm run build`) instead of raw `cargo` for consistent toolchain/linker setup.
+- If you hit linker errors, ensure `stable-x86_64-pc-windows-gnu` is installed:
+  - `rustup toolchain install stable-x86_64-pc-windows-gnu`
+  - `scoop install mingw`
+
 ## Build
 
 ```bash

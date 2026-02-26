@@ -25,7 +25,9 @@ const ORACLE_BUSINESS_UNIT_INPUT: &str =
 pub async fn execute_command(command: &str, context: &Value) -> Result<Value, WasmRuntimeError> {
     match command {
         "jira.install_jql_builder" => install_jql_builder_switcher_hooks(),
+        "jira.open_jql_builder" => open_jql_builder_panel(),
         "jira.capture.filter_table" => jira_capture_filter_table(),
+        "carma.show_panel" => carma_show_panel(),
         "carma.bulk.search.scrape" => carma_bulk_search_scrape().await,
         "oracle.expand_invoice" => oracle_expand_invoice(),
         "oracle.expand_invoice.perform" => oracle_expand_invoice_perform(),
@@ -144,6 +146,14 @@ fn install_jql_builder_switcher_hooks() -> Result<Value, WasmRuntimeError> {
         .document()
         .ok_or_else(|| WasmRuntimeError::from("document unavailable"))?;
     crate::jql_panel::install(&document)
+}
+
+fn open_jql_builder_panel() -> Result<Value, WasmRuntimeError> {
+    let window = web_sys::window().ok_or_else(|| WasmRuntimeError::from("window unavailable"))?;
+    let document = window
+        .document()
+        .ok_or_else(|| WasmRuntimeError::from("document unavailable"))?;
+    crate::jql_panel::open_panel(&document)
 }
 
 fn oracle_invoice_button() -> Result<web_sys::Element, WasmRuntimeError> {
@@ -914,6 +924,10 @@ fn normalize_header_like(value: &str) -> String {
         .collect()
 }
 
+fn carma_show_panel() -> Result<Value, WasmRuntimeError> {
+    crate::carma_ui::show_control_panel()
+}
+
 async fn carma_bulk_search_scrape() -> Result<Value, WasmRuntimeError> {
     crate::carma_ui::show_progress_panel()?;
     crate::carma_ui::update_progress("Waiting for table...", 0, 0, 0, 5)?;
@@ -932,7 +946,10 @@ async fn carma_bulk_search_scrape() -> Result<Value, WasmRuntimeError> {
     all_rows.extend(page_rows);
     crate::carma_ui::update_progress(
         &format!("Page {pages_visited} — {} rows", all_rows.len()),
-        pages_visited, all_rows.len() as u32, 0, 10,
+        pages_visited,
+        all_rows.len() as u32,
+        0,
+        10,
     )?;
 
     while pages_visited < MAX_PAGES {
@@ -942,7 +959,9 @@ async fn carma_bulk_search_scrape() -> Result<Value, WasmRuntimeError> {
         next.click();
         crate::carma_ui::update_progress(
             &format!("Loading page {}...", pages_visited + 1),
-            pages_visited, all_rows.len() as u32, 0,
+            pages_visited,
+            all_rows.len() as u32,
+            0,
             ((pages_visited as f64 / MAX_PAGES as f64) * 80.0) as u32 + 10,
         )?;
 
@@ -968,7 +987,9 @@ async fn carma_bulk_search_scrape() -> Result<Value, WasmRuntimeError> {
         all_rows.extend(candidate);
         crate::carma_ui::update_progress(
             &format!("Page {pages_visited} — {} rows", all_rows.len()),
-            pages_visited, all_rows.len() as u32, 0,
+            pages_visited,
+            all_rows.len() as u32,
+            0,
             ((pages_visited as f64 / MAX_PAGES as f64) * 80.0) as u32 + 10,
         )?;
     }

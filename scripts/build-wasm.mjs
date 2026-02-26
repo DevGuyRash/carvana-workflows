@@ -7,92 +7,76 @@ const root = process.cwd();
 const crateDir = path.join(root, 'rust', 'crates', 'cv_ext_wasm');
 const outDir = path.join(root, 'apps', 'webextension', 'pkg');
 let toolchainEnv = process.env;
+const WINDOWS_GNU_TOOLCHAIN = 'stable-x86_64-pc-windows-gnu';
+const WINDOWS_GNU_LINKER_ENV = 'CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER';
 
-function isWindowsGnuToolchain() {
-  if (process.platform !== 'win32') {
-    return false;
+function failPreflight(lines) {
+  for (const line of lines) {
+    console.error(`[build:wasm] ${line}`);
   }
-
-  const rustcInfo = spawnSync('rustc', ['-vV'], { encoding: 'utf8' });
-  if (rustcInfo.status !== 0) {
-    return false;
-  }
-
-  return /host:\s+.+-pc-windows-gnu/i.test(rustcInfo.stdout ?? '');
+  process.exit(1);
 }
 
-function verifyWindowsGnuLinker() {
-  if (!isWindowsGnuToolchain()) {
-    return true;
+function commandExists(command, env) {
+  const probe = spawnSync(command, ['--version'], { encoding: 'utf8', env });
+  return probe.status === 0;
+}
+
+function ensureWindowsGnuToolchain() {
+  const list = spawnSync('rustup', ['toolchain', 'list'], { encoding: 'utf8' });
+  if (list.status !== 0) {
+    failPreflight([
+      'Unable to read installed Rust toolchains via `rustup toolchain list`.',
+      'Install rustup and ensure it is on PATH.',
+    ]);
   }
 
-  const configuredLinker = process.env.CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER;
-  const candidates = [
-    configuredLinker,
-    'x86_64-w64-mingw32-gcc',
-    'gcc',
-  ].filter(Boolean);
+  if (!(list.stdout ?? '').includes(WINDOWS_GNU_TOOLCHAIN)) {
+    failPreflight([
+      `Missing required Rust toolchain: ${WINDOWS_GNU_TOOLCHAIN}`,
+      `Install it with: rustup toolchain install ${WINDOWS_GNU_TOOLCHAIN}`,
+    ]);
+  }
+}
+
+function resolveWindowsGnuLinker(baseEnv) {
+  const userProfile = baseEnv.USERPROFILE ?? os.homedir();
+  const scoopMingwGcc = path.join(userProfile, 'scoop', 'apps', 'mingw', 'current', 'bin', 'gcc.exe');
+  const configuredLinker = baseEnv[WINDOWS_GNU_LINKER_ENV];
+  const candidates = [scoopMingwGcc, configuredLinker, 'x86_64-w64-mingw32-gcc', 'gcc'].filter(Boolean);
 
   for (const linker of candidates) {
-    const probe = spawnSync(linker, ['--version'], { encoding: 'utf8' });
-    if (probe.status === 0) {
-      return true;
+    if (!commandExists(linker, baseEnv)) {
+      continue;
     }
+    return linker;
   }
 
-  console.error(
-    '[build:wasm] Preflight failed: GNU Windows Rust toolchain detected, but no usable GNU linker was found.',
-  );
-  console.error(
-    '[build:wasm] Checked CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER, `x86_64-w64-mingw32-gcc`, and `gcc`.',
-  );
-  console.error(
-    '[build:wasm] Install MinGW-w64, add its bin to PATH, or set CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER.',
-  );
-  return false;
+  failPreflight([
+    'Unable to resolve a usable GNU linker on Windows.',
+    `Checked ${WINDOWS_GNU_LINKER_ENV}, Scoop MinGW gcc, x86_64-w64-mingw32-gcc, and gcc.`,
+    'Install Scoop `mingw` or set CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER explicitly.',
+  ]);
 }
 
-function verifyWindowsMsvcLinker() {
-  if (process.platform !== 'win32') {
-    return true;
+function ensureLibgccEh(linker, env) {
+  const probe = spawnSync(linker, ['-print-file-name=libgcc_eh.a'], { encoding: 'utf8', env });
+  if (probe.status !== 0) {
+    failPreflight([
+      `Failed to inspect runtime libraries for linker: ${linker}`,
+      'The resolved linker is not usable for Rust GNU builds.',
+    ]);
   }
 
-  const rustcInfo = spawnSync('rustc', ['-vV'], { encoding: 'utf8' });
-  if (rustcInfo.status !== 0) {
-    return false;
+  const libPath = (probe.stdout ?? '').trim();
+  const unresolved = !libPath || libPath === 'libgcc_eh' || libPath === 'libgcc_eh.a';
+  if (unresolved || !fs.existsSync(libPath)) {
+    failPreflight([
+      `Resolved linker (${linker}) does not provide libgcc_eh.a.`,
+      `Observed value: ${libPath || '<empty>'}`,
+      'Install Scoop `mingw` or use a GNU toolchain distribution that ships libgcc_eh.',
+    ]);
   }
-
-  const isMsvcHost = /host:\s+.+-pc-windows-msvc/i.test(rustcInfo.stdout ?? '');
-  if (!isMsvcHost) {
-    return true;
-  }
-
-  const linkCheck = spawnSync('where.exe', ['link'], { encoding: 'utf8' });
-  const firstLink = (linkCheck.stdout ?? '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find(Boolean);
-
-  if (!firstLink) {
-    console.error('[build:wasm] Preflight failed: could not resolve `link.exe` on PATH for MSVC host.');
-    console.error(
-      '[build:wasm] Run from Developer PowerShell for Visual Studio or install Build Tools with "Desktop development with C++".',
-    );
-    return false;
-  }
-
-  const normalized = firstLink.replaceAll('/', '\\').toLowerCase();
-  const isGitLink = normalized.includes('\\git\\') && normalized.endsWith('\\usr\\bin\\link.exe');
-  if (isGitLink) {
-    console.error('[build:wasm] Preflight failed: PATH resolves `link.exe` to Git/MSYS linker:');
-    console.error(`[build:wasm] ${firstLink}`);
-    console.error(
-      '[build:wasm] Use Developer PowerShell for Visual Studio or move Git `usr\\bin` later in PATH.',
-    );
-    return false;
-  }
-
-  return true;
 }
 
 function resolveActiveToolchain() {
@@ -108,6 +92,27 @@ function resolveActiveToolchain() {
 }
 
 function prepareToolchainEnv() {
+  if (process.platform === 'win32') {
+    ensureWindowsGnuToolchain();
+    const env = {
+      ...process.env,
+      RUSTUP_TOOLCHAIN: WINDOWS_GNU_TOOLCHAIN,
+    };
+
+    const linker = resolveWindowsGnuLinker(env);
+    env[WINDOWS_GNU_LINKER_ENV] = linker;
+
+    const linkerDir = path.dirname(linker);
+    const hasPathSeparator = linker.includes(path.sep);
+    if (hasPathSeparator && fs.existsSync(linkerDir)) {
+      const currentPath = env.PATH ?? '';
+      env.PATH = `${linkerDir}${path.delimiter}${currentPath}`;
+    }
+
+    ensureLibgccEh(linker, env);
+    return env;
+  }
+
   const activeToolchain = resolveActiveToolchain();
   if (!activeToolchain) {
     return process.env;
@@ -143,10 +148,6 @@ function installWasmPack() {
 }
 
 toolchainEnv = prepareToolchainEnv();
-
-if (!verifyWindowsGnuLinker() || !verifyWindowsMsvcLinker()) {
-  process.exit(1);
-}
 
 let wasmPack = resolveWasmPack();
 if (!wasmPack && !installWasmPack()) {

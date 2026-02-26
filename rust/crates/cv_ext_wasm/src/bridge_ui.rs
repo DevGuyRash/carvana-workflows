@@ -74,11 +74,7 @@ fn category_variant(cat: &RuleCategory) -> &'static str {
 
 const DATA_CAPTURE_RULES: &[&str] = &["jira.issue.capture.table", "carma.bulk.search.scrape"];
 const VALIDATION_RULES: &[&str] = &["oracle.invoice.validation.alert"];
-const LONG_RUNNING_RULES: &[&str] = &[
-    "jira.jql.builder",
-    "carma.bulk.search.scrape",
-    "oracle.invoice.create",
-];
+const LONG_RUNNING_RULES: &[&str] = &["carma.bulk.search.scrape", "oracle.invoice.create"];
 
 fn to_ui_summary(r: cv_ext_contract::RuleDefinition) -> UiRuleSummary {
     let is_auto = !matches!(r.trigger, RuleTrigger::OnDemand);

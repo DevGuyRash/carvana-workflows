@@ -1,4 +1,4 @@
-use wasm_bindgen::{closure::Closure, JsCast, JsValue};
+use wasm_bindgen::{closure::Closure, JsCast};
 
 use crate::errors::WasmRuntimeError;
 

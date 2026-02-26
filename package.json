@@ -10,8 +10,8 @@
     "package": "npm run build && npm run package:extensions",
     "dev": "node scripts/dev-extension.mjs",
     "clean": "rimraf dist apps/webextension/pkg",
-    "typecheck": "tsc --project apps/webextension/tsconfig.json --noEmit && cargo check --manifest-path rust/Cargo.toml",
-    "test:rust": "cargo test --manifest-path rust/Cargo.toml",
+    "typecheck": "tsc --project apps/webextension/tsconfig.json --noEmit && node scripts/run-rust-cargo.mjs check --manifest-path rust/Cargo.toml",
+    "test:rust": "node scripts/run-rust-cargo.mjs test --manifest-path rust/Cargo.toml",
     "test:e2e": "node -e \"const fs=require('fs');if(!fs.existsSync('tests/e2e/playwright.config.ts')){console.error('E2E harness missing: tests/e2e/playwright.config.ts');process.exit(2)}\" && npx playwright test --config tests/e2e/playwright.config.ts",
     "test": "npm run test:rust"
   },
