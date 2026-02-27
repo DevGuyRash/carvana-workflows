@@ -75,11 +75,16 @@ struct VisualClause {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 struct JqlPanelState {
     active_tab: String,
+    pinned_preset_ids: Vec<String>,
     selected_preset_ids: Vec<String>,
     custom_presets: Vec<Preset>,
     recent_queries: Vec<String>,
+    recent_filters: Vec<String>,
+    quick_search_text: String,
+    advanced_editor_text: String,
     visual_clauses: Vec<VisualClause>,
     run_search: bool,
     query_text: String,
@@ -89,9 +94,13 @@ impl Default for JqlPanelState {
     fn default() -> Self {
         Self {
             active_tab: "quick".to_string(),
+            pinned_preset_ids: Vec::new(),
             selected_preset_ids: Vec::new(),
             custom_presets: Vec::new(),
             recent_queries: Vec::new(),
+            recent_filters: Vec::new(),
+            quick_search_text: String::new(),
+            advanced_editor_text: String::new(),
             visual_clauses: Vec::new(),
             run_search: true,
             query_text: String::new(),
@@ -114,7 +123,7 @@ fn builtin_presets() -> Vec<Preset> {
 
 fn defaults_from_legacy(
     custom: Option<Value>,
-    _pinned: Option<Value>,
+    pinned: Option<Value>,
     recent: Option<Value>,
     builder_state: Option<Value>,
 ) -> JqlPanelState {
@@ -130,6 +139,11 @@ fn defaults_from_legacy(
     }
     if let Some(items) = recent.and_then(|v| serde_json::from_value::<Vec<String>>(v).ok()) {
         state.recent_queries = items;
+        state.recent_filters = state.recent_queries.clone();
+    }
+    if let Some(items) = pinned.and_then(|v| serde_json::from_value::<Vec<String>>(v).ok()) {
+        state.pinned_preset_ids = items.clone();
+        state.selected_preset_ids = items;
     }
     if let Some(query) = builder_state
         .as_ref()
@@ -137,9 +151,41 @@ fn defaults_from_legacy(
         .and_then(Value::as_str)
     {
         state.query_text = query.to_string();
+        state.advanced_editor_text = query.to_string();
         state.active_tab = "advanced".to_string();
     }
     state
+}
+
+fn compose_query_from_quick_text(text: &str) -> String {
+    let normalized = text.trim().to_lowercase();
+    if normalized.is_empty() {
+        return String::new();
+    }
+    let mut clauses: Vec<String> = Vec::new();
+    if normalized.contains("my ") || normalized == "my" || normalized.contains("assigned to me") {
+        clauses.push("assignee = currentUser()".to_string());
+    }
+    if normalized.contains("open") {
+        clauses.push("resolution = Unresolved".to_string());
+    }
+    if normalized.contains("high priority") || normalized.contains("critical") {
+        clauses.push("priority in (Highest, High)".to_string());
+    }
+    if normalized.contains("overdue") {
+        clauses.push("due < now()".to_string());
+    }
+    if let Some(project) = normalized
+        .split("project ")
+        .nth(1)
+        .and_then(|part| part.split_whitespace().next())
+    {
+        clauses.push(format!("project = {}", project.to_uppercase()));
+    }
+    if clauses.is_empty() {
+        clauses.push(format!(r#"text ~ "{}""#, text.trim().replace('"', "")));
+    }
+    clauses.join(" AND ")
 }
 
 fn load_state() -> Result<StateEnvelope<JqlPanelState>, WasmRuntimeError> {
@@ -169,6 +215,15 @@ fn normalize_tabs(state: &mut JqlPanelState) {
     let mut tabs = PanelTabs::new(vec!["quick", "visual", "advanced"], "quick");
     tabs.set_active(&state.active_tab);
     state.active_tab = tabs.active().to_string();
+    if state.pinned_preset_ids.is_empty() && !state.selected_preset_ids.is_empty() {
+        state.pinned_preset_ids = state.selected_preset_ids.clone();
+    }
+    if state.recent_filters.is_empty() && !state.recent_queries.is_empty() {
+        state.recent_filters = state.recent_queries.clone();
+    }
+    if state.advanced_editor_text.trim().is_empty() && !state.query_text.trim().is_empty() {
+        state.advanced_editor_text = state.query_text.clone();
+    }
 }
 
 fn ensure_advanced_mode(doc: &web_sys::Document) {
@@ -352,6 +407,9 @@ fn panel_html(state: &JqlPanelState) -> String {
       <div class="cv-jql-note">Preset combinations: select one or more and they are combined with <code>AND</code>.</div>
       <div class="cv-jql-presets">{presets_html}</div>
       <div class="cv-jql-row">
+        <input class="cv-jql-input" value="{}" placeholder="Quick search phrase (e.g. my open high priority)" data-cv-quick-search />
+      </div>
+      <div class="cv-jql-row">
         <input class="cv-jql-input" placeholder="Custom preset label" data-cv-custom-label />
         <button class="cv-jql-btn" data-cv-action="save-preset">Save Current as Preset</button>
       </div>
@@ -390,7 +448,8 @@ fn panel_html(state: &JqlPanelState) -> String {
     <button class="cv-jql-btn primary" data-cv-action="apply">Apply Query</button>
   </div>
 </div>"#,
-        html_escape(&state.query_text),
+        html_escape(&state.quick_search_text),
+        html_escape(&state.advanced_editor_text),
         references_html(),
         if state.run_search { "checked" } else { "" },
     )
@@ -424,6 +483,15 @@ fn compose_query_from_visual(clauses: &[VisualClause]) -> String {
 }
 
 fn bind_events(panel: &web_sys::HtmlElement) -> Result<(), WasmRuntimeError> {
+    if panel
+        .get_attribute("data-cv-bound")
+        .map(|value| value == "1")
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+    panel.set_attribute("data-cv-bound", "1").ok();
+
     let click_panel = panel.clone();
     let click_handler =
         Closure::<dyn FnMut(web_sys::Event)>::wrap(Box::new(move |event: web_sys::Event| {
@@ -464,6 +532,7 @@ fn bind_events(panel: &web_sys::HtmlElement) -> Result<(), WasmRuntimeError> {
                 } else {
                     envelope.payload.selected_preset_ids.push(preset_id);
                 }
+                envelope.payload.pinned_preset_ids = envelope.payload.selected_preset_ids.clone();
                 envelope.payload.active_tab = "quick".to_string();
                 envelope.payload.query_text = compose_query_from_presets(
                     &envelope.payload.selected_preset_ids,
@@ -592,6 +661,7 @@ fn bind_events(panel: &web_sys::HtmlElement) -> Result<(), WasmRuntimeError> {
                         .flatten()
                         .unwrap_or_default();
                     envelope.payload.query_text = current;
+                    envelope.payload.advanced_editor_text = envelope.payload.query_text.clone();
                     envelope.payload.active_tab = "advanced".to_string();
                     if let Ok(saved) = save_state(envelope) {
                         click_panel.set_inner_html(&panel_html(&saved.payload));
@@ -599,6 +669,13 @@ fn bind_events(panel: &web_sys::HtmlElement) -> Result<(), WasmRuntimeError> {
                     }
                 }
                 "apply" => {
+                    envelope.payload.quick_search_text = click_panel
+                        .query_selector("[data-cv-quick-search]")
+                        .ok()
+                        .flatten()
+                        .and_then(|el| el.dyn_into::<web_sys::HtmlInputElement>().ok())
+                        .map(|el| el.value())
+                        .unwrap_or_default();
                     let query = click_panel
                         .query_selector("[data-cv-textarea]")
                         .ok()
@@ -606,10 +683,26 @@ fn bind_events(panel: &web_sys::HtmlElement) -> Result<(), WasmRuntimeError> {
                         .and_then(|el| el.dyn_into::<web_sys::HtmlTextAreaElement>().ok())
                         .map(|el| el.value())
                         .unwrap_or_else(|| envelope.payload.query_text.clone());
-                    if query.trim().is_empty() {
+                    let preset_query = compose_query_from_presets(
+                        &envelope.payload.selected_preset_ids,
+                        &envelope.payload.custom_presets,
+                    );
+                    let quick_query = compose_query_from_quick_text(&envelope.payload.quick_search_text);
+                    let composed = if envelope.payload.active_tab == "quick" {
+                        [preset_query, quick_query]
+                            .into_iter()
+                            .filter(|part| !part.trim().is_empty())
+                            .map(|part| format!("({})", part.trim()))
+                            .collect::<Vec<_>>()
+                            .join(" AND ")
+                    } else {
+                        query.trim().to_string()
+                    };
+                    if composed.trim().is_empty() {
                         return;
                     }
-                    envelope.payload.query_text = query.trim().to_string();
+                    envelope.payload.query_text = composed;
+                    envelope.payload.advanced_editor_text = envelope.payload.query_text.clone();
                     envelope.payload.run_search = click_panel
                         .query_selector("[data-cv-run-search]")
                         .ok()
@@ -627,6 +720,7 @@ fn bind_events(panel: &web_sys::HtmlElement) -> Result<(), WasmRuntimeError> {
                             .recent_queries
                             .insert(0, envelope.payload.query_text.clone());
                         envelope.payload.recent_queries.truncate(20);
+                        envelope.payload.recent_filters = envelope.payload.recent_queries.clone();
                     }
                     let _ = save_state(envelope.clone());
                     if envelope.payload.run_search {
@@ -658,6 +752,7 @@ fn create_or_refresh_panel() -> Result<(), WasmRuntimeError> {
     let mut envelope = load_state()?;
     if envelope.payload.query_text.trim().is_empty() {
         envelope.payload.query_text = dom::element_value(ADVANCED_INPUT)?.unwrap_or_default();
+        envelope.payload.advanced_editor_text = envelope.payload.query_text.clone();
     }
     let saved = save_state(envelope)?;
     let html = panel_html(&saved.payload);

@@ -37,14 +37,14 @@ pub async fn execute_command(command: &str, context: &Value) -> Result<Value, Wa
         "oracle.expand_invoice.perform" => oracle_expand_invoice_perform(),
         "oracle.expand_invoice.ensure" => oracle_expand_invoice_ensure(),
         "oracle.invoice.validation.alert" => oracle_invoice_validation_alert().await,
-        "oracle.invoice.validation.verify" => oracle_invoice_validation_verify().await,
+        "oracle.invoice.validation.verify" => oracle_invoice_validation_verify(context).await,
         "oracle.invoice.create" => oracle_invoice_create(context).await,
         "oracle.invoice.create.business_unit.ensure" => {
             oracle_invoice_business_unit_ensure(context)
         }
         "oracle.invoice.create.supplier.lov" => oracle_invoice_supplier_lov(context).await,
         "oracle.invoice.create.supplier_site.fill" => oracle_invoice_supplier_site_fill(context),
-        "oracle.invoice.create.supplier_site.ensure" => oracle_invoice_supplier_site_ensure(),
+        "oracle.invoice.create.supplier_site.ensure" => oracle_invoice_supplier_site_ensure(context),
         "oracle.invoice.create.number" => oracle_invoice_create_number(context),
         other => Err(WasmRuntimeError::from(format!(
             "unsupported command: {other}"
@@ -106,6 +106,24 @@ fn read_input(context: &Value, keys: &[&str]) -> Option<String> {
         }
     }
     None
+}
+
+fn read_bool_input(context: &Value, keys: &[&str], default: bool) -> bool {
+    for key in keys {
+        if let Some(value) = context.get(*key) {
+            if let Some(parsed) = value.as_bool() {
+                return parsed;
+            }
+            if let Some(text) = value.as_str() {
+                match text.trim().to_lowercase().as_str() {
+                    "1" | "true" | "yes" | "y" | "on" => return true,
+                    "0" | "false" | "no" | "n" | "off" => return false,
+                    _ => {}
+                }
+            }
+        }
+    }
+    default
 }
 
 fn fill_if_present(
@@ -429,13 +447,38 @@ async fn oracle_invoice_validation_alert() -> Result<Value, WasmRuntimeError> {
     }))
 }
 
-async fn oracle_invoice_validation_verify() -> Result<Value, WasmRuntimeError> {
+async fn oracle_invoice_validation_verify(context: &Value) -> Result<Value, WasmRuntimeError> {
     let status = detect_validation_status_with_retries().await?;
+    let expected_status = read_input(context, &["expectedStatus", "expected_status"])
+        .unwrap_or_default();
+    let observed_status = status
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let expected_snippet = read_input(context, &["expectedSnippet", "expected_snippet"])
+        .unwrap_or_default();
+    let observed_text = status
+        .get("statusText")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let status_matches = expected_status.is_empty() || expected_status == observed_status;
+    let snippet_matches = expected_snippet.is_empty()
+        || observed_text
+            .to_lowercase()
+            .contains(&expected_snippet.to_lowercase());
+    let verified = status_matches && snippet_matches;
     Ok(json!({
         "command": "oracle.invoice.validation.verify",
-        "status": "success",
+        "status": if verified { "success" } else { "mismatch" },
         "result": status,
-        "verified": true
+        "verified": verified,
+        "comparison": {
+            "expectedStatus": expected_status,
+            "observedStatus": observed_status,
+            "statusMatches": status_matches,
+            "expectedSnippet": expected_snippet,
+            "snippetMatches": snippet_matches
+        }
     }))
 }
 
@@ -647,9 +690,22 @@ fn oracle_invoice_supplier_site_fill(context: &Value) -> Result<Value, WasmRunti
     }))
 }
 
-fn oracle_invoice_supplier_site_ensure() -> Result<Value, WasmRuntimeError> {
+fn oracle_invoice_supplier_site_ensure(context: &Value) -> Result<Value, WasmRuntimeError> {
     let value = dom::element_value(ORACLE_SUPPLIER_SITE_INPUT)?.unwrap_or_default();
     if value.trim().is_empty() {
+        let allow_without_number = read_bool_input(
+            context,
+            &["allowSupplierSiteWithoutNumber", "allow_supplier_site_without_number"],
+            false,
+        );
+        let invoice_number = dom::element_value(ORACLE_INVOICE_NUMBER_INPUT)?.unwrap_or_default();
+        if allow_without_number && invoice_number.trim().is_empty() {
+            return Ok(json!({
+                "command": "oracle.invoice.create.supplier_site.ensure",
+                "supplierSite": "",
+                "detail": "allowed-empty due to allowSupplierSiteWithoutNumber"
+            }));
+        }
         return Err(WasmRuntimeError::from("supplier site value is empty"));
     }
 
@@ -668,6 +724,13 @@ fn default_invoice_number() -> String {
 }
 
 fn oracle_invoice_create_number(context: &Value) -> Result<Value, WasmRuntimeError> {
+    if read_bool_input(context, &["skipInvoiceNumber", "skip_invoice_number"], false) {
+        return Ok(json!({
+            "command": "oracle.invoice.create.number",
+            "detail": "skipped due to skipInvoiceNumber=true"
+        }));
+    }
+
     if let Some(value) = read_input(context, &["invoiceNumber", "Number", "Invoice Number"]) {
         dom::type_selector(ORACLE_INVOICE_NUMBER_INPUT, &value)?;
         return Ok(json!({
@@ -699,6 +762,11 @@ fn oracle_invoice_create_number(context: &Value) -> Result<Value, WasmRuntimeErr
 async fn oracle_invoice_create(context: &Value) -> Result<Value, WasmRuntimeError> {
     let mut steps = Vec::new();
     let mut artifacts = Vec::new();
+    let options = json!({
+        "skipInvoiceNumber": read_bool_input(context, &["skipInvoiceNumber", "skip_invoice_number"], false),
+        "allowDocumentScope": read_bool_input(context, &["allowDocumentScope", "allow_document_scope"], false),
+        "allowSupplierSiteWithoutNumber": read_bool_input(context, &["allowSupplierSiteWithoutNumber", "allow_supplier_site_without_number"], false)
+    });
 
     // Best effort: many Oracle forms keep invoice fields hidden until the search
     // region is expanded, so try to expand first without failing the workflow.
@@ -725,7 +793,7 @@ async fn oracle_invoice_create(context: &Value) -> Result<Value, WasmRuntimeErro
     steps.push(json!({"command": "oracle.invoice.create.supplier_site.fill", "status": "success"}));
     dom::sleep_ms(60).await;
 
-    let step4 = oracle_invoice_supplier_site_ensure()?;
+    let step4 = oracle_invoice_supplier_site_ensure(context)?;
     artifacts.push(step4.clone());
     steps.push(
         json!({"command": "oracle.invoice.create.supplier_site.ensure", "status": "success"}),
@@ -780,6 +848,7 @@ async fn oracle_invoice_create(context: &Value) -> Result<Value, WasmRuntimeErro
         "command": "oracle.invoice.create",
         "steps": steps,
         "artifacts": artifacts,
+        "options": options,
         "input": context,
     }))
 }
@@ -965,6 +1034,126 @@ fn row_uniqueness_key(row: &BTreeMap<String, String>, options: &CarmaPanelState)
         format!("{row:?}")
     } else {
         key
+    }
+}
+
+fn row_fingerprint(row: &BTreeMap<String, String>) -> String {
+    row.iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+fn resolve_uniqueness_date_header(
+    records: &[BTreeMap<String, String>],
+    options: &CarmaPanelState,
+) -> Option<String> {
+    if !options.uniqueness.enabled || options.uniqueness.strategy != "latest_by_date" {
+        return None;
+    }
+    if records.is_empty() {
+        return None;
+    }
+    let first_row = &records[0];
+    if options.uniqueness.date_mode == "manual" {
+        let wanted = normalize_header_like(&options.uniqueness.date_header);
+        if wanted.is_empty() {
+            return None;
+        }
+        return first_row.keys().find_map(|key| {
+            if normalize_header_like(key) == wanted {
+                Some(key.clone())
+            } else {
+                None
+            }
+        });
+    }
+
+    let patterns = ["date", "created", "updated", "purchasedate", "transactiondate"];
+    first_row.keys().find_map(|key| {
+        let normalized = normalize_header_like(key);
+        if patterns.iter().any(|pattern| normalized.contains(pattern)) {
+            Some(key.clone())
+        } else {
+            None
+        }
+    })
+}
+
+fn parse_date_rank(raw: &str) -> Option<i64> {
+    let text = raw.trim();
+    if text.is_empty() {
+        return None;
+    }
+
+    let parts = text
+        .split(|ch: char| !ch.is_ascii_digit())
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if parts.len() >= 3 {
+        let (year, month, day) = if parts[0].len() == 4 {
+            (parts[0], parts[1], parts[2])
+        } else if parts[2].len() == 4 {
+            (parts[2], parts[0], parts[1])
+        } else {
+            ("", "", "")
+        };
+        if let (Ok(year), Ok(month), Ok(day)) = (
+            year.parse::<i64>(),
+            month.parse::<i64>(),
+            day.parse::<i64>(),
+        ) {
+            if (1900..=9999).contains(&year) && (1..=12).contains(&month) && (1..=31).contains(&day)
+            {
+                return Some((year * 10_000) + (month * 100) + day);
+            }
+        }
+    }
+
+    let digits = text.chars().filter(|ch| ch.is_ascii_digit()).collect::<String>();
+    if digits.len() == 8 {
+        if let Ok(value) = digits.parse::<i64>() {
+            let as_year = value / 10_000;
+            if (1900..=9999).contains(&as_year) {
+                return Some(value);
+            }
+            let month = value / 1_000_000;
+            let day = (value / 10_000) % 100;
+            let year = value % 10_000;
+            if (1..=12).contains(&month) && (1..=31).contains(&day) && (1900..=9999).contains(&year)
+            {
+                return Some((year * 10_000) + (month * 100) + day);
+            }
+        }
+    }
+    None
+}
+
+fn should_replace_duplicate(
+    strategy: &str,
+    existing: &BTreeMap<String, String>,
+    candidate: &BTreeMap<String, String>,
+    date_header: Option<&str>,
+) -> bool {
+    match strategy {
+        "first_seen" => false,
+        "last_seen" => true,
+        "latest_by_date" => {
+            let existing_rank = date_header
+                .and_then(|header| existing.get(header))
+                .and_then(|value| parse_date_rank(value));
+            let candidate_rank = date_header
+                .and_then(|header| candidate.get(header))
+                .and_then(|value| parse_date_rank(value));
+            match (existing_rank, candidate_rank) {
+                (None, Some(_)) => true,
+                (Some(_), None) => false,
+                (Some(a), Some(b)) if b > a => true,
+                (Some(a), Some(b)) if b < a => false,
+                _ => row_fingerprint(candidate) > row_fingerprint(existing),
+            }
+        }
+        _ => false,
     }
 }
 
@@ -1484,11 +1673,13 @@ async fn load_document_into_iframe(
 }
 
 fn extract_rows_from_records(
-    records: Vec<BTreeMap<String, String>>,
+    mut records: Vec<BTreeMap<String, String>>,
     panel_state: &CarmaPanelState,
-) -> (Vec<String>, Vec<Vec<Value>>, u32) {
+) -> (Vec<String>, Vec<Vec<Value>>, u32, Option<String>) {
     let mut duplicates: u32 = 0;
     let mut seen: HashMap<String, BTreeMap<String, String>> = HashMap::new();
+    records.sort_by(|a, b| row_fingerprint(a).cmp(&row_fingerprint(b)));
+    let resolved_date_header = resolve_uniqueness_date_header(&records, panel_state);
 
     for mut row in records {
         let reference = derive_carma_reference(&row);
@@ -1496,9 +1687,16 @@ fn extract_rows_from_records(
             row.insert("Reference".to_string(), reference.clone());
         }
         let uniqueness_key = row_uniqueness_key(&row, panel_state);
-        if seen.contains_key(&uniqueness_key) {
+        if let Some(existing) = seen.get(&uniqueness_key) {
             duplicates += 1;
-            continue;
+            if !should_replace_duplicate(
+                &panel_state.uniqueness.strategy,
+                existing,
+                &row,
+                resolved_date_header.as_deref(),
+            ) {
+                continue;
+            }
         }
         if !reference.is_empty() && !panel_state.uniqueness.enabled && seen.contains_key(&reference)
         {
@@ -1531,7 +1729,7 @@ fn extract_rows_from_records(
     }
 
     let mut columns: Vec<String> = Vec::new();
-    for row in &out {
+        for row in &out {
         for key in row.keys() {
             if !columns.contains(key) {
                 columns.push(key.clone());
@@ -1552,7 +1750,7 @@ fn extract_rows_from_records(
         }
         artifact_rows.push(values);
     }
-    (columns, artifact_rows, duplicates)
+    (columns, artifact_rows, duplicates, resolved_date_header)
 }
 
 async fn prepare_block_for_scrape(block: &web_sys::Element, panel_state: &CarmaPanelState) {
@@ -1764,7 +1962,8 @@ async fn carma_bulk_search_scrape(context: &Value) -> Result<Value, WasmRuntimeE
 
     let rows_seen = all_rows.len();
     crate::carma_ui::update_progress("Deduplicating...", pages_visited, rows_seen as u32, 0, 90)?;
-    let (columns, artifact_rows, duplicates) = extract_rows_from_records(all_rows, &panel_state);
+    let (columns, artifact_rows, duplicates, resolved_date_header) =
+        extract_rows_from_records(all_rows, &panel_state);
     let final_count = artifact_rows.len() as u32;
     crate::carma_ui::store_last_run(&columns, &artifact_rows)?;
     if carma_cancel_requested() {
@@ -1796,6 +1995,8 @@ async fn carma_bulk_search_scrape(context: &Value) -> Result<Value, WasmRuntimeE
             "rowsSeen": rows_seen,
             "duplicatesSkipped": duplicates,
             "uniquenessEnabled": panel_state.uniqueness.enabled,
+            "uniquenessStrategy": panel_state.uniqueness.strategy,
+            "resolvedDateColumn": resolved_date_header,
             "columnMode": panel_state.scrape.column_mode,
             "maxPages": max_pages,
             "termsProcessed": terms_total

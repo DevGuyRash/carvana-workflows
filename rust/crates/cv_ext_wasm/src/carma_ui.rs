@@ -79,8 +79,14 @@ pub struct UniquenessOptions {
     pub key_vin: bool,
     pub key_stock: bool,
     pub key_pid: bool,
+    #[serde(default = "default_uniqueness_strategy")]
+    pub strategy: String,
     pub date_mode: String,
     pub date_header: String,
+}
+
+fn default_uniqueness_strategy() -> String {
+    "latest_by_date".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,6 +142,7 @@ impl Default for CarmaPanelState {
                 key_vin: true,
                 key_stock: true,
                 key_pid: true,
+                strategy: "latest_by_date".to_string(),
                 date_mode: "auto".to_string(),
                 date_header: String::new(),
             },
@@ -223,6 +230,12 @@ fn migrate_from_legacy(saved: Option<Value>) -> CarmaPanelState {
             .and_then(|v| v.get("pid"))
             .and_then(Value::as_bool)
             .unwrap_or(true);
+        state.uniqueness.strategy = unique
+            .get("strategy")
+            .and_then(Value::as_str)
+            .filter(|value| matches!(*value, "latest_by_date" | "first_seen" | "last_seen"))
+            .unwrap_or("latest_by_date")
+            .to_string();
         let date_column = unique.get("dateColumn");
         state.uniqueness.date_mode = date_column
             .and_then(|v| v.get("mode"))
@@ -445,6 +458,14 @@ fn panel_html(state: &CarmaPanelState) -> String {
           <label class="cbss-label"><input type="checkbox" data-setting="keyStock" {} /> Stock key</label>
           <label class="cbss-label"><input type="checkbox" data-setting="keyPid" {} /> Purchase ID key</label>
           <div class="cbss-row">
+            <label class="cbss-label">Strategy</label>
+            <select class="cbss-select" data-setting="strategy">
+              <option value="latest_by_date" {}>Latest by date</option>
+              <option value="first_seen" {}>First seen</option>
+              <option value="last_seen" {}>Last seen</option>
+            </select>
+          </div>
+          <div class="cbss-row">
             <label class="cbss-label">Date column mode</label>
             <select class="cbss-select" data-setting="dateMode">
               <option value="auto" {}>Auto-detect</option>
@@ -512,6 +533,21 @@ fn panel_html(state: &CarmaPanelState) -> String {
         checked(state.uniqueness.key_vin),
         checked(state.uniqueness.key_stock),
         checked(state.uniqueness.key_pid),
+        if state.uniqueness.strategy == "latest_by_date" {
+            "selected"
+        } else {
+            ""
+        },
+        if state.uniqueness.strategy == "first_seen" {
+            "selected"
+        } else {
+            ""
+        },
+        if state.uniqueness.strategy == "last_seen" {
+            "selected"
+        } else {
+            ""
+        },
         if state.uniqueness.date_mode == "auto" {
             "selected"
         } else {
@@ -970,6 +1006,8 @@ fn persist_state_from_form(panel: &web_sys::HtmlElement) -> Result<(), WasmRunti
     envelope.payload.uniqueness.key_stock =
         read_checkbox(panel, r#"[data-setting="keyStock"]"#, true);
     envelope.payload.uniqueness.key_pid = read_checkbox(panel, r#"[data-setting="keyPid"]"#, true);
+    envelope.payload.uniqueness.strategy =
+        read_select(panel, r#"[data-setting="strategy"]"#, "latest_by_date");
     envelope.payload.uniqueness.date_mode =
         read_select(panel, r#"[data-setting="dateMode"]"#, "auto");
     envelope.payload.uniqueness.date_header =
