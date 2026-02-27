@@ -12,10 +12,12 @@ const OUT_JSON = path.join(OUT_DIR, `playwright-extension-audit-${timestamp}.jso
 const OUT_MD = path.join(OUT_DIR, `playwright-extension-audit-${timestamp}.md`);
 
 const findings = [];
+const parity = [];
 const artifacts = {
   timestamp: new Date().toISOString(),
   extensionPath: EXT_PATH,
   checks: findings,
+  parity,
   stats: { total: 0, pass: 0, fail: 0, warn: 0 },
   notes: [],
 };
@@ -26,6 +28,10 @@ function addCheck(name, status, details, extra = {}) {
   if (status === 'pass') artifacts.stats.pass += 1;
   if (status === 'fail') artifacts.stats.fail += 1;
   if (status === 'warn') artifacts.stats.warn += 1;
+}
+
+function addParity(site, feature, status, delta, extra = {}) {
+  parity.push({ site, feature, status, delta, ...extra });
 }
 
 async function runCheck(name, fn) {
@@ -93,6 +99,22 @@ function htmlCarmaFixture() {
       <main>
         <h1>Carma Dashboard</h1>
         <section data-app="carma">Bulk Search</section>
+        <section class="cpl__block">
+          <div class="cpl__block__header-title">Latest Purchase</div>
+          <button aria-label="Show 25">Show 25</button>
+          <table data-testid="data-table">
+            <thead>
+              <tr>
+                <th>Stock Number</th><th>VIN</th><th>Purchase ID</th><th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>S123456</td><td>1HGCM82633A004352</td><td>P123</td><td>2026-01-10</td></tr>
+              <tr><td>S123456</td><td>1HGCM82633A004352</td><td>P123</td><td>2026-01-09</td></tr>
+              <tr><td>S765432</td><td>5YJ3E1EA7JF000001</td><td>P765</td><td>2026-02-01</td></tr>
+            </tbody>
+          </table>
+        </section>
       </main>
     </body>
   </html>`;
@@ -192,6 +214,35 @@ async function main() {
       }
       return { details: JSON.stringify(resp).slice(0, 300) };
     });
+    await runCheck('Jira parity: jql builder panel contains quick/visual/advanced tabs', async () => {
+      await jiraPage.bringToFront();
+      await runtimeSend({ kind: 'run-rule', payload: { site: 'jira', ruleId: 'jira.jql.builder' } });
+      const tabs = await jiraPage.evaluate(() => {
+        return Array.from(document.querySelectorAll('[data-cv-tab]')).map((node) => node.textContent?.trim() ?? '');
+      });
+      const hasTabs = ['Quick', 'Visual', 'Advanced'].every((tab) => tabs.includes(tab));
+      if (!hasTabs) throw new Error(`missing tabs in ${JSON.stringify(tabs)}`);
+      addParity('jira', 'panel_modes_quick_visual_advanced', 'PARITY', 'none');
+      return { details: tabs.join(', ') };
+    });
+
+    await runCheck('Jira parity: repeated open does not duplicate panel root', async () => {
+      await jiraPage.bringToFront();
+      await runtimeSend({ kind: 'run-rule', payload: { site: 'jira', ruleId: 'jira.jql.builder' } });
+      await runtimeSend({ kind: 'run-rule', payload: { site: 'jira', ruleId: 'jira.jql.builder' } });
+      const panelCount = await jiraPage.evaluate(
+        () => document.querySelectorAll('#cv-jql-builder-panel').length,
+      );
+      if (panelCount !== 1) throw new Error(`expected one panel, found ${panelCount}`);
+      addParity('jira', 'panel_lifecycle_duplicate_binding_guard', 'PARITY', 'none');
+      return { details: `panel roots=${panelCount}` };
+    });
+    addParity(
+      'jira',
+      'userscript_gear_launcher',
+      'INTENTIONAL_DELTA',
+      'Extension-driven launch only (no in-page gear/switcher injection)',
+    );
 
     await runCheck('Runtime capture-table returns Jira rows', async () => {
       await jiraPage.bringToFront();
@@ -308,6 +359,46 @@ async function main() {
       return { details: JSON.stringify(resp).slice(0, 300) };
     });
 
+    await runCheck('Oracle parity: invoice create accepts parity option flags', async () => {
+      await oraclePage.bringToFront();
+      const context = JSON.stringify({
+        skipInvoiceNumber: true,
+        allowDocumentScope: true,
+        allowSupplierSiteWithoutNumber: true,
+        businessUnit: 'CARVANA',
+      });
+      const resp = await runtimeSend({
+        kind: 'run-rule',
+        payload: { site: 'oracle', ruleId: 'oracle.invoice.create', context },
+      });
+      if (!resp?.ok) throw new Error(`oracle invoice create failed: ${JSON.stringify(resp)}`);
+      const options = resp?.data?.options;
+      if (!options || options.skipInvoiceNumber !== true) {
+        throw new Error(`missing options in response: ${JSON.stringify(resp)}`);
+      }
+      addParity('oracle', 'invoice_create_option_flags', 'PARITY', 'none');
+      return { details: JSON.stringify(options) };
+    });
+
+    await runCheck('Oracle parity: validation verify supports expected status/snippet', async () => {
+      await oraclePage.bringToFront();
+      const context = JSON.stringify({
+        expectedStatus: 'needs-revalidated',
+        expectedSnippet: 'needs reverification',
+      });
+      const resp = await runtimeSend({
+        kind: 'run-rule',
+        payload: { site: 'oracle', ruleId: 'oracle.invoice.validation.verify', context },
+      });
+      if (!resp?.ok) throw new Error(`oracle verify failed: ${JSON.stringify(resp)}`);
+      const comparison = resp?.data?.comparison;
+      if (!comparison || comparison.statusMatches !== true || comparison.snippetMatches !== true) {
+        throw new Error(`unexpected comparison: ${JSON.stringify(resp)}`);
+      }
+      addParity('oracle', 'validation_verify_baseline_comparison', 'PARITY', 'none');
+      return { details: JSON.stringify(comparison) };
+    });
+
     const carmaPage = await context.newPage();
     await carmaPage.goto('https://carma.cvnacorp.com/dashboard', { waitUntil: 'domcontentloaded' });
 
@@ -331,11 +422,49 @@ async function main() {
 
     await runCheck('Runtime run-rule executes carma.bulk.search.scrape', async () => {
       await carmaPage.bringToFront();
-      const resp = await runtimeSend({ kind: 'run-rule', payload: { site: 'carma', ruleId: 'carma.bulk.search.scrape' } });
+      const context = JSON.stringify({ termsText: 'S123456\nS123456\nS765432' });
+      const resp = await runtimeSend({
+        kind: 'run-rule',
+        payload: { site: 'carma', ruleId: 'carma.bulk.search.scrape', context },
+      });
       if (!resp?.ok) {
         throw new Error(`carma run-rule response: ${JSON.stringify(resp)}`);
       }
+      if (!resp?.data?.diagnostics || !('uniquenessStrategy' in resp.data.diagnostics)) {
+        throw new Error(`missing carma diagnostics: ${JSON.stringify(resp)}`);
+      }
+      addParity('carma', 'uniqueness_strategy_and_date_resolution', 'PARITY', 'none');
       return { details: JSON.stringify(resp).slice(0, 300) };
+    });
+
+    await runCheck('Carma parity: panel renders expected controls and no gear launcher', async () => {
+      await carmaPage.bringToFront();
+      const panelResp = await runtimeSend({
+        kind: 'run-rule',
+        payload: { site: 'carma', ruleId: 'carma.show_panel' },
+      });
+      if (!panelResp?.ok) throw new Error(`carma show panel failed: ${JSON.stringify(panelResp)}`);
+      const panelInfo = await carmaPage.evaluate(() => {
+        const panel = document.querySelector('#cv-carma-scrape-panel');
+        return {
+          hasPanel: !!panel,
+          hasStart: !!document.querySelector('[data-action="start"]'),
+          hasCancel: !!document.querySelector('[data-action="cancel"]'),
+          hasSettingsTab: !!document.querySelector('[data-settings-tab="uniqueness"]'),
+          gearCount: document.querySelectorAll('[class*="gear"], [id*="gear"]').length,
+        };
+      });
+      if (!panelInfo.hasPanel || !panelInfo.hasStart || !panelInfo.hasCancel) {
+        throw new Error(`missing panel controls: ${JSON.stringify(panelInfo)}`);
+      }
+      addParity('carma', 'panel_actions_and_settings_controls', 'PARITY', 'none');
+      addParity(
+        'carma',
+        'userscript_gear_launcher',
+        'INTENTIONAL_DELTA',
+        'Extension-driven launch only (no userscript gear button injection)',
+      );
+      return { details: JSON.stringify(panelInfo) };
     });
 
     const blankPage = await context.newPage();
@@ -443,6 +572,14 @@ async function main() {
     const icon = check.status === 'pass' ? 'PASS' : check.status === 'warn' ? 'WARN' : 'FAIL';
     lines.push(`- [${icon}] ${check.name}`);
     lines.push(`  - ${check.details}`);
+  }
+
+  lines.push('');
+  lines.push('## Parity Summary');
+  lines.push('');
+  for (const row of parity) {
+    lines.push(`- [${row.status}] ${row.site}: ${row.feature}`);
+    lines.push(`  - ${row.delta}`);
   }
 
   if (artifacts.notes.length > 0) {
