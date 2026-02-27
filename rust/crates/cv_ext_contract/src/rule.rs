@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::{Action, Site};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

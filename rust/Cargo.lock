@@ -93,6 +93,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cv_ext_ui_components"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cv_ext_wasm"
 version = "0.1.0"
 dependencies = [
@@ -100,6 +108,8 @@ dependencies = [
  "cv_ext_contract",
  "cv_ext_core",
  "cv_ext_sites_jira",
+ "cv_ext_ui_components",
+ "futures",
  "gloo-timers",
  "js-sys",
  "serde",

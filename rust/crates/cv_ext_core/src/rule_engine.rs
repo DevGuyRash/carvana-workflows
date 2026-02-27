@@ -25,7 +25,10 @@ impl RuleEngine {
     }
 
     pub fn all_rules(&self) -> Vec<&RuleDefinition> {
-        self.builtin_rules.iter().chain(self.user_rules.iter()).collect()
+        self.builtin_rules
+            .iter()
+            .chain(self.user_rules.iter())
+            .collect()
     }
 
     pub fn rules_for_site(&self, site: Site) -> Vec<&RuleDefinition> {
@@ -131,16 +134,19 @@ mod tests {
 
     #[test]
     fn separates_on_demand_from_auto() {
-        let engine = RuleEngine::new()
-            .with_user_rules(vec![
-                test_user_rule("auto.1", Site::Jira, RuleTrigger::OnPageLoad),
-            ]);
+        let engine = RuleEngine::new().with_user_rules(vec![test_user_rule(
+            "auto.1",
+            Site::Jira,
+            RuleTrigger::OnPageLoad,
+        )]);
 
         let auto = engine.auto_rules(Site::Jira);
         assert!(auto.iter().any(|r| r.id == "auto.1"));
 
         let on_demand = engine.on_demand_rules(Site::Jira);
-        assert!(on_demand.iter().all(|r| matches!(r.trigger, RuleTrigger::OnDemand)));
+        assert!(on_demand
+            .iter()
+            .all(|r| matches!(r.trigger, RuleTrigger::OnDemand)));
     }
 
     #[test]

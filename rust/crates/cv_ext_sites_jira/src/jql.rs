@@ -122,29 +122,167 @@ pub struct JqlOperatorDef {
 }
 
 const OPERATOR_DEFS: &[JqlOperatorDef] = &[
-    JqlOperatorDef { key: "equals", operator: "=", value_mode: JqlOperatorValueMode::Single, value_preset: None, history_mode: None },
-    JqlOperatorDef { key: "not-equals", operator: "!=", value_mode: JqlOperatorValueMode::Single, value_preset: None, history_mode: None },
-    JqlOperatorDef { key: "greater-than", operator: ">", value_mode: JqlOperatorValueMode::Single, value_preset: None, history_mode: None },
-    JqlOperatorDef { key: "greater-than-equals", operator: ">=", value_mode: JqlOperatorValueMode::Single, value_preset: None, history_mode: None },
-    JqlOperatorDef { key: "less-than", operator: "<", value_mode: JqlOperatorValueMode::Single, value_preset: None, history_mode: None },
-    JqlOperatorDef { key: "less-than-equals", operator: "<=", value_mode: JqlOperatorValueMode::Single, value_preset: None, history_mode: None },
-    JqlOperatorDef { key: "contains", operator: "~", value_mode: JqlOperatorValueMode::Single, value_preset: None, history_mode: None },
-    JqlOperatorDef { key: "not-contains", operator: "!~", value_mode: JqlOperatorValueMode::Single, value_preset: None, history_mode: None },
-    JqlOperatorDef { key: "in", operator: "IN", value_mode: JqlOperatorValueMode::List, value_preset: None, history_mode: None },
-    JqlOperatorDef { key: "not-in", operator: "NOT IN", value_mode: JqlOperatorValueMode::List, value_preset: None, history_mode: None },
-    JqlOperatorDef { key: "is", operator: "IS", value_mode: JqlOperatorValueMode::Single, value_preset: None, history_mode: None },
-    JqlOperatorDef { key: "is-not", operator: "IS NOT", value_mode: JqlOperatorValueMode::Single, value_preset: None, history_mode: None },
-    JqlOperatorDef { key: "is-empty", operator: "IS", value_mode: JqlOperatorValueMode::None, value_preset: Some("EMPTY"), history_mode: None },
-    JqlOperatorDef { key: "is-not-empty", operator: "IS NOT", value_mode: JqlOperatorValueMode::None, value_preset: Some("EMPTY"), history_mode: None },
-    JqlOperatorDef { key: "is-null", operator: "IS", value_mode: JqlOperatorValueMode::None, value_preset: Some("NULL"), history_mode: None },
-    JqlOperatorDef { key: "is-not-null", operator: "IS NOT", value_mode: JqlOperatorValueMode::None, value_preset: Some("NULL"), history_mode: None },
-    JqlOperatorDef { key: "was", operator: "WAS", value_mode: JqlOperatorValueMode::Single, value_preset: None, history_mode: Some(JqlOperatorHistoryMode::Was) },
-    JqlOperatorDef { key: "was-not", operator: "WAS NOT", value_mode: JqlOperatorValueMode::Single, value_preset: None, history_mode: Some(JqlOperatorHistoryMode::Was) },
-    JqlOperatorDef { key: "was-in", operator: "WAS IN", value_mode: JqlOperatorValueMode::List, value_preset: None, history_mode: Some(JqlOperatorHistoryMode::Was) },
-    JqlOperatorDef { key: "was-not-in", operator: "WAS NOT IN", value_mode: JqlOperatorValueMode::List, value_preset: None, history_mode: Some(JqlOperatorHistoryMode::Was) },
-    JqlOperatorDef { key: "was-empty", operator: "WAS", value_mode: JqlOperatorValueMode::None, value_preset: Some("EMPTY"), history_mode: Some(JqlOperatorHistoryMode::Was) },
-    JqlOperatorDef { key: "was-not-empty", operator: "WAS NOT", value_mode: JqlOperatorValueMode::None, value_preset: Some("EMPTY"), history_mode: Some(JqlOperatorHistoryMode::Was) },
-    JqlOperatorDef { key: "changed", operator: "CHANGED", value_mode: JqlOperatorValueMode::None, value_preset: None, history_mode: Some(JqlOperatorHistoryMode::Changed) },
+    JqlOperatorDef {
+        key: "equals",
+        operator: "=",
+        value_mode: JqlOperatorValueMode::Single,
+        value_preset: None,
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "not-equals",
+        operator: "!=",
+        value_mode: JqlOperatorValueMode::Single,
+        value_preset: None,
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "greater-than",
+        operator: ">",
+        value_mode: JqlOperatorValueMode::Single,
+        value_preset: None,
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "greater-than-equals",
+        operator: ">=",
+        value_mode: JqlOperatorValueMode::Single,
+        value_preset: None,
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "less-than",
+        operator: "<",
+        value_mode: JqlOperatorValueMode::Single,
+        value_preset: None,
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "less-than-equals",
+        operator: "<=",
+        value_mode: JqlOperatorValueMode::Single,
+        value_preset: None,
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "contains",
+        operator: "~",
+        value_mode: JqlOperatorValueMode::Single,
+        value_preset: None,
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "not-contains",
+        operator: "!~",
+        value_mode: JqlOperatorValueMode::Single,
+        value_preset: None,
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "in",
+        operator: "IN",
+        value_mode: JqlOperatorValueMode::List,
+        value_preset: None,
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "not-in",
+        operator: "NOT IN",
+        value_mode: JqlOperatorValueMode::List,
+        value_preset: None,
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "is",
+        operator: "IS",
+        value_mode: JqlOperatorValueMode::Single,
+        value_preset: None,
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "is-not",
+        operator: "IS NOT",
+        value_mode: JqlOperatorValueMode::Single,
+        value_preset: None,
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "is-empty",
+        operator: "IS",
+        value_mode: JqlOperatorValueMode::None,
+        value_preset: Some("EMPTY"),
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "is-not-empty",
+        operator: "IS NOT",
+        value_mode: JqlOperatorValueMode::None,
+        value_preset: Some("EMPTY"),
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "is-null",
+        operator: "IS",
+        value_mode: JqlOperatorValueMode::None,
+        value_preset: Some("NULL"),
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "is-not-null",
+        operator: "IS NOT",
+        value_mode: JqlOperatorValueMode::None,
+        value_preset: Some("NULL"),
+        history_mode: None,
+    },
+    JqlOperatorDef {
+        key: "was",
+        operator: "WAS",
+        value_mode: JqlOperatorValueMode::Single,
+        value_preset: None,
+        history_mode: Some(JqlOperatorHistoryMode::Was),
+    },
+    JqlOperatorDef {
+        key: "was-not",
+        operator: "WAS NOT",
+        value_mode: JqlOperatorValueMode::Single,
+        value_preset: None,
+        history_mode: Some(JqlOperatorHistoryMode::Was),
+    },
+    JqlOperatorDef {
+        key: "was-in",
+        operator: "WAS IN",
+        value_mode: JqlOperatorValueMode::List,
+        value_preset: None,
+        history_mode: Some(JqlOperatorHistoryMode::Was),
+    },
+    JqlOperatorDef {
+        key: "was-not-in",
+        operator: "WAS NOT IN",
+        value_mode: JqlOperatorValueMode::List,
+        value_preset: None,
+        history_mode: Some(JqlOperatorHistoryMode::Was),
+    },
+    JqlOperatorDef {
+        key: "was-empty",
+        operator: "WAS",
+        value_mode: JqlOperatorValueMode::None,
+        value_preset: Some("EMPTY"),
+        history_mode: Some(JqlOperatorHistoryMode::Was),
+    },
+    JqlOperatorDef {
+        key: "was-not-empty",
+        operator: "WAS NOT",
+        value_mode: JqlOperatorValueMode::None,
+        value_preset: Some("EMPTY"),
+        history_mode: Some(JqlOperatorHistoryMode::Was),
+    },
+    JqlOperatorDef {
+        key: "changed",
+        operator: "CHANGED",
+        value_mode: JqlOperatorValueMode::None,
+        value_preset: None,
+        history_mode: Some(JqlOperatorHistoryMode::Changed),
+    },
 ];
 
 fn resolve_operator(key: &str) -> &'static JqlOperatorDef {
@@ -274,33 +412,92 @@ pub fn default_state() -> JqlBuilderState {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum JqlAction {
-    SetClauseField { clause_id: String, field: String, field_label: Option<String> },
-    SetClauseOperator { clause_id: String, operator_key: String },
-    SetClauseNot { clause_id: String, not: bool },
-    SetClauseJoiner { clause_id: String, joiner: Option<JqlJoiner> },
-    SetValueMode { clause_id: String, mode: JqlValueMode },
-    SetValueText { clause_id: String, text: String },
-    SetValueList { clause_id: String, list: Vec<String>, list_mode: Option<JqlListMode> },
-    SetGroupMode { group_id: String, mode: JqlJoiner },
-    SetGroupNot { group_id: String, not: bool },
-    SetGroupJoiner { group_id: String, joiner: Option<JqlJoiner> },
-    AddClause { group_id: String, clause_id: String },
-    AddGroup { group_id: String, new_group_id: String, first_clause_id: String },
-    RemoveNode { node_id: String },
-    AddSort { sort_id: String, field: String, direction: SortDirection },
-    RemoveSort { sort_id: String },
-    SetSettings { auto_quote: Option<bool>, run_search: Option<bool>, show_all_operators: Option<bool>, prefer_field_ids: Option<bool> },
+    SetClauseField {
+        clause_id: String,
+        field: String,
+        field_label: Option<String>,
+    },
+    SetClauseOperator {
+        clause_id: String,
+        operator_key: String,
+    },
+    SetClauseNot {
+        clause_id: String,
+        not: bool,
+    },
+    SetClauseJoiner {
+        clause_id: String,
+        joiner: Option<JqlJoiner>,
+    },
+    SetValueMode {
+        clause_id: String,
+        mode: JqlValueMode,
+    },
+    SetValueText {
+        clause_id: String,
+        text: String,
+    },
+    SetValueList {
+        clause_id: String,
+        list: Vec<String>,
+        list_mode: Option<JqlListMode>,
+    },
+    SetGroupMode {
+        group_id: String,
+        mode: JqlJoiner,
+    },
+    SetGroupNot {
+        group_id: String,
+        not: bool,
+    },
+    SetGroupJoiner {
+        group_id: String,
+        joiner: Option<JqlJoiner>,
+    },
+    AddClause {
+        group_id: String,
+        clause_id: String,
+    },
+    AddGroup {
+        group_id: String,
+        new_group_id: String,
+        first_clause_id: String,
+    },
+    RemoveNode {
+        node_id: String,
+    },
+    AddSort {
+        sort_id: String,
+        field: String,
+        direction: SortDirection,
+    },
+    RemoveSort {
+        sort_id: String,
+    },
+    SetSettings {
+        auto_quote: Option<bool>,
+        run_search: Option<bool>,
+        show_all_operators: Option<bool>,
+        prefer_field_ids: Option<bool>,
+    },
 }
 
 pub fn apply_action(state: &mut JqlBuilderState, action: JqlAction) -> Result<(), String> {
     match action {
-        JqlAction::SetClauseField { clause_id, field, field_label } => {
+        JqlAction::SetClauseField {
+            clause_id,
+            field,
+            field_label,
+        } => {
             let clause = find_clause_mut(&mut state.root, &clause_id).ok_or("clause not found")?;
             clause.field = field;
             clause.field_label = field_label;
             Ok(())
         }
-        JqlAction::SetClauseOperator { clause_id, operator_key } => {
+        JqlAction::SetClauseOperator {
+            clause_id,
+            operator_key,
+        } => {
             let clause = find_clause_mut(&mut state.root, &clause_id).ok_or("clause not found")?;
             clause.operator_key = operator_key;
             Ok(())
@@ -325,7 +522,11 @@ pub fn apply_action(state: &mut JqlBuilderState, action: JqlAction) -> Result<()
             clause.value.text = text;
             Ok(())
         }
-        JqlAction::SetValueList { clause_id, list, list_mode } => {
+        JqlAction::SetValueList {
+            clause_id,
+            list,
+            list_mode,
+        } => {
             let clause = find_clause_mut(&mut state.root, &clause_id).ok_or("clause not found")?;
             clause.value.list = list;
             if let Some(mode) = list_mode {
@@ -348,7 +549,10 @@ pub fn apply_action(state: &mut JqlBuilderState, action: JqlAction) -> Result<()
             group.joiner = joiner;
             Ok(())
         }
-        JqlAction::AddClause { group_id, clause_id } => {
+        JqlAction::AddClause {
+            group_id,
+            clause_id,
+        } => {
             let group = find_group_mut(&mut state.root, &group_id).ok_or("group not found")?;
             group.children.push(JqlNodeState::Clause(JqlClauseState {
                 id: clause_id,
@@ -396,20 +600,45 @@ pub fn apply_action(state: &mut JqlBuilderState, action: JqlAction) -> Result<()
                 Err("node not found".to_string())
             }
         }
-        JqlAction::AddSort { sort_id, field, direction } => {
-            state.sorts.push(JqlSortState { id: sort_id, field, direction });
+        JqlAction::AddSort {
+            sort_id,
+            field,
+            direction,
+        } => {
+            state.sorts.push(JqlSortState {
+                id: sort_id,
+                field,
+                direction,
+            });
             Ok(())
         }
         JqlAction::RemoveSort { sort_id } => {
             let before = state.sorts.len();
             state.sorts.retain(|s| s.id != sort_id);
-            if state.sorts.len() < before { Ok(()) } else { Err("sort not found".to_string()) }
+            if state.sorts.len() < before {
+                Ok(())
+            } else {
+                Err("sort not found".to_string())
+            }
         }
-        JqlAction::SetSettings { auto_quote, run_search, show_all_operators, prefer_field_ids } => {
-            if let Some(v) = auto_quote { state.settings.auto_quote = v; }
-            if let Some(v) = run_search { state.settings.run_search = v; }
-            if let Some(v) = show_all_operators { state.settings.show_all_operators = v; }
-            if let Some(v) = prefer_field_ids { state.settings.prefer_field_ids = v; }
+        JqlAction::SetSettings {
+            auto_quote,
+            run_search,
+            show_all_operators,
+            prefer_field_ids,
+        } => {
+            if let Some(v) = auto_quote {
+                state.settings.auto_quote = v;
+            }
+            if let Some(v) = run_search {
+                state.settings.run_search = v;
+            }
+            if let Some(v) = show_all_operators {
+                state.settings.show_all_operators = v;
+            }
+            if let Some(v) = prefer_field_ids {
+                state.settings.prefer_field_ids = v;
+            }
             Ok(())
         }
     }
@@ -464,8 +693,8 @@ fn remove_node_by_id(group: &mut JqlGroupState, id: &str) -> bool {
 }
 
 const RESERVED_WORDS: &[&str] = &[
-    "and", "or", "not", "in", "is", "was", "changed", "empty", "null", "order by", "asc",
-    "desc", "from", "to", "by", "after", "before", "on", "during",
+    "and", "or", "not", "in", "is", "was", "changed", "empty", "null", "order by", "asc", "desc",
+    "from", "to", "by", "after", "before", "on", "during",
 ];
 
 #[derive(Debug, Clone, Copy)]
@@ -526,7 +755,11 @@ fn build_group(group: &JqlGroupState, opts: BuildOptions) -> String {
 
     let joined = pieces.join(" ");
     let needs_wrap = pieces.len() > 1;
-    let mut value = if needs_wrap { format!("({joined})") } else { joined };
+    let mut value = if needs_wrap {
+        format!("({joined})")
+    } else {
+        joined
+    };
     if group.not {
         value = format!("NOT ({value})");
     }
@@ -587,14 +820,28 @@ fn build_clause(clause: &JqlClauseState, opts: BuildOptions) -> String {
     }
 }
 
-fn build_history(history: &JqlHistoryState, mode: JqlOperatorHistoryMode, opts: BuildOptions) -> String {
+fn build_history(
+    history: &JqlHistoryState,
+    mode: JqlOperatorHistoryMode,
+    opts: BuildOptions,
+) -> String {
     let mut parts: Vec<String> = Vec::new();
     match mode {
         JqlOperatorHistoryMode::Changed => {
-            if let Some(from) = history.from.as_ref().map(|v| v.trim()).filter(|v| !v.is_empty()) {
+            if let Some(from) = history
+                .from
+                .as_ref()
+                .map(|v| v.trim())
+                .filter(|v| !v.is_empty())
+            {
                 parts.push(format!("FROM {}", quote_if_needed(from, opts)));
             }
-            if let Some(to) = history.to.as_ref().map(|v| v.trim()).filter(|v| !v.is_empty()) {
+            if let Some(to) = history
+                .to
+                .as_ref()
+                .map(|v| v.trim())
+                .filter(|v| !v.is_empty())
+            {
                 parts.push(format!("TO {}", quote_if_needed(to, opts)));
             }
         }
@@ -643,7 +890,9 @@ fn format_value(value: &JqlValueState, opts: BuildOptions, _mode: JqlOperatorVal
     match value.mode {
         JqlValueMode::List => format_list_value(value, opts),
         JqlValueMode::Function | JqlValueMode::Raw => value.text.trim().to_string(),
-        JqlValueMode::Number | JqlValueMode::Date | JqlValueMode::Relative => value.text.trim().to_string(),
+        JqlValueMode::Number | JqlValueMode::Date | JqlValueMode::Relative => {
+            value.text.trim().to_string()
+        }
         _ => {
             let text = value.text.trim();
             if text.is_empty() {
@@ -670,15 +919,27 @@ fn format_text_search_value(value: &JqlValueState) -> String {
         TextSearchMode::Wildcard => escape_lucene(term, true, false, false),
         TextSearchMode::Prefix => {
             let escaped = escape_lucene(term, true, false, false);
-            if escaped.ends_with('*') { escaped } else { format!("{escaped}*") }
+            if escaped.ends_with('*') {
+                escaped
+            } else {
+                format!("{escaped}*")
+            }
         }
         TextSearchMode::Suffix => {
             let escaped = escape_lucene(term, true, false, false);
-            if escaped.starts_with('*') { escaped } else { format!("*{escaped}") }
+            if escaped.starts_with('*') {
+                escaped
+            } else {
+                format!("*{escaped}")
+            }
         }
         TextSearchMode::Fuzzy => {
             let escaped = escape_lucene(term, false, true, false);
-            if escaped.ends_with('~') { escaped } else { format!("{escaped}~") }
+            if escaped.ends_with('~') {
+                escaped
+            } else {
+                format!("{escaped}~")
+            }
         }
         TextSearchMode::Proximity => {
             let escaped = escape_lucene(term, false, false, false);
@@ -689,7 +950,11 @@ fn format_text_search_value(value: &JqlValueState) -> String {
         TextSearchMode::Boost => {
             let escaped = escape_lucene(term, false, false, true);
             let boost = value.text_search_boost.trim();
-            if boost.is_empty() { escaped } else { format!("{escaped}^{boost}") }
+            if boost.is_empty() {
+                escaped
+            } else {
+                format!("{escaped}^{boost}")
+            }
         }
         TextSearchMode::Raw => term.to_string(),
         TextSearchMode::Simple => escape_lucene(term, false, false, false),
@@ -698,14 +963,35 @@ fn format_text_search_value(value: &JqlValueState) -> String {
     wrap_jql_string(&lucene)
 }
 
-fn escape_lucene(input: &str, allow_wildcards: bool, allow_fuzzy: bool, allow_boost: bool) -> String {
+fn escape_lucene(
+    input: &str,
+    allow_wildcards: bool,
+    allow_fuzzy: bool,
+    allow_boost: bool,
+) -> String {
     let mut out = String::with_capacity(input.len());
     for ch in input.chars() {
         let is_wildcard = ch == '*' || ch == '?';
-        let is_allowed = (allow_wildcards && is_wildcard) || (allow_fuzzy && ch == '~') || (allow_boost && ch == '^');
+        let is_allowed = (allow_wildcards && is_wildcard)
+            || (allow_fuzzy && ch == '~')
+            || (allow_boost && ch == '^');
         let is_special = matches!(
             ch,
-            '+' | '-' | '&' | '|' | '!' | '(' | ')' | '{' | '}' | '[' | ']' | '^' | '~' | '*' | '?' | ':'
+            '+' | '-'
+                | '&'
+                | '|'
+                | '!'
+                | '('
+                | ')'
+                | '{'
+                | '}'
+                | '['
+                | ']'
+                | '^'
+                | '~'
+                | '*'
+                | '?'
+                | ':'
         );
         if is_special && !is_allowed {
             out.push('\\');
@@ -745,7 +1031,9 @@ fn quote_if_needed(raw: &str, opts: BuildOptions) -> String {
     }
     let lower = raw.to_lowercase();
     let is_reserved = RESERVED_WORDS.iter().any(|word| *word == lower);
-    let simple = raw.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'));
+    let simple = raw
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'));
     if simple && !is_reserved {
         return raw.to_string();
     }

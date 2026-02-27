@@ -1,6 +1,6 @@
+use crate::settings::LogLevel;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crate::settings::LogLevel;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LogEntry {

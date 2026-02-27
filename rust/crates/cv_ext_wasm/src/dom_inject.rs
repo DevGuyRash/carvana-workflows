@@ -1,4 +1,4 @@
-use wasm_bindgen::{closure::Closure, JsCast};
+use wasm_bindgen::JsCast;
 
 use crate::errors::WasmRuntimeError;
 
@@ -72,33 +72,5 @@ pub fn remove_element(id: &str) -> Result<(), WasmRuntimeError> {
                 .map_err(|_| WasmRuntimeError::from("failed to remove element"))?;
         }
     }
-    Ok(())
-}
-
-pub fn create_element_with_attrs(
-    tag: &str,
-    attrs: &[(&str, &str)],
-) -> Result<web_sys::HtmlElement, WasmRuntimeError> {
-    let doc = document()?;
-    let el = doc
-        .create_element(tag)
-        .map_err(|_| WasmRuntimeError::from(format!("failed to create <{tag}>")))?
-        .dyn_into::<web_sys::HtmlElement>()
-        .map_err(|_| WasmRuntimeError::from("element cast failed"))?;
-    for (k, v) in attrs {
-        el.set_attribute(k, v)
-            .map_err(|_| WasmRuntimeError::from(format!("failed to set attr {k}")))?;
-    }
-    Ok(el)
-}
-
-pub fn on_click(
-    el: &web_sys::HtmlElement,
-    handler: impl FnMut(web_sys::Event) + 'static,
-) -> Result<(), WasmRuntimeError> {
-    let closure = Closure::<dyn FnMut(web_sys::Event)>::wrap(Box::new(handler));
-    el.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
-        .map_err(|_| WasmRuntimeError::from("failed to add click listener"))?;
-    closure.forget();
     Ok(())
 }

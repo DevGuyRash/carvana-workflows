@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use cv_ext_ui_components::{table_capture, table_model::TableDataset};
 use js_sys::Date;
 use wasm_bindgen::JsCast;
 
@@ -22,7 +23,8 @@ pub fn query_selector(selector: &str) -> Result<Option<web_sys::Element>, WasmRu
 }
 
 pub fn query_selector_required(selector: &str) -> Result<web_sys::Element, WasmRuntimeError> {
-    query_selector(selector)?.ok_or_else(|| WasmRuntimeError::from(format!("selector not found: {selector}")))
+    query_selector(selector)?
+        .ok_or_else(|| WasmRuntimeError::from(format!("selector not found: {selector}")))
 }
 
 pub fn element_is_visible(element: &web_sys::Element) -> bool {
@@ -73,14 +75,19 @@ pub async fn wait_for_selector(selector: &str, timeout_ms: u32) -> Result<(), Wa
 
 pub fn click_selector(selector: &str) -> Result<(), WasmRuntimeError> {
     let element = query_selector_required(selector)?;
-    let html = element
-        .dyn_into::<web_sys::HtmlElement>()
-        .map_err(|_| WasmRuntimeError::from(format!("selector '{selector}' is not clickable html element")))?;
+    let html = element.dyn_into::<web_sys::HtmlElement>().map_err(|_| {
+        WasmRuntimeError::from(format!(
+            "selector '{selector}' is not clickable html element"
+        ))
+    })?;
     html.click();
     Ok(())
 }
 
-fn dispatch_bubbling_event(target: &web_sys::EventTarget, name: &str) -> Result<(), WasmRuntimeError> {
+fn dispatch_bubbling_event(
+    target: &web_sys::EventTarget,
+    name: &str,
+) -> Result<(), WasmRuntimeError> {
     let init = web_sys::EventInit::new();
     init.set_bubbles(true);
     init.set_cancelable(true);
@@ -127,7 +134,9 @@ pub fn type_selector(selector: &str, text: &str) -> Result<(), WasmRuntimeError>
     }
 
     element.set_attribute("value", text).map_err(|_| {
-        WasmRuntimeError::from(format!("failed to set value attribute for selector '{selector}'"))
+        WasmRuntimeError::from(format!(
+            "failed to set value attribute for selector '{selector}'"
+        ))
     })?;
     element.set_text_content(Some(text));
 
@@ -196,7 +205,11 @@ fn cell_value(cell: &web_sys::Element) -> Result<String, WasmRuntimeError> {
         if let Ok(input) = found.clone().dyn_into::<web_sys::HtmlInputElement>() {
             let input_type = input.type_().to_lowercase();
             if input_type == "checkbox" || input_type == "radio" {
-                return Ok(if input.checked() { "TRUE".to_string() } else { "FALSE".to_string() });
+                return Ok(if input.checked() {
+                    "TRUE".to_string()
+                } else {
+                    "FALSE".to_string()
+                });
             }
             return Ok(normalize_whitespace(&input.value()));
         }
@@ -216,7 +229,11 @@ fn cell_value(cell: &web_sys::Element) -> Result<String, WasmRuntimeError> {
         }
     }
 
-    let text = cell.text_content().unwrap_or_default();
+    let text = if let Ok(html) = cell.clone().dyn_into::<web_sys::HtmlElement>() {
+        html.inner_text()
+    } else {
+        cell.text_content().unwrap_or_default()
+    };
     let mut normalized = normalize_whitespace(&text);
 
     if let Ok(links) = cell.query_selector_all("a[href]") {
@@ -226,8 +243,13 @@ fn cell_value(cell: &web_sys::Element) -> Result<String, WasmRuntimeError> {
                     let href = anchor.href();
                     if href.starts_with("http://") || href.starts_with("https://") {
                         if !normalized.contains(&href) {
-                            let anchor_text = normalize_whitespace(&anchor.text_content().unwrap_or_default());
-                            let label = if normalized.is_empty() { anchor_text } else { normalized.clone() };
+                            let anchor_text =
+                                normalize_whitespace(&anchor.text_content().unwrap_or_default());
+                            let label = if normalized.is_empty() {
+                                anchor_text
+                            } else {
+                                normalized.clone()
+                            };
                             if !label.is_empty() && label != href {
                                 normalized = format!("{label} ({href})");
                             } else if normalized.is_empty() {
@@ -256,7 +278,9 @@ fn row_cells(row: &web_sys::Element) -> Result<Vec<web_sys::Element>, WasmRuntim
         if node_list.length() > 0 {
             let mut out = Vec::new();
             for i in 0..node_list.length() {
-                let Some(node) = node_list.item(i) else { continue };
+                let Some(node) = node_list.item(i) else {
+                    continue;
+                };
                 let el = node
                     .dyn_into::<web_sys::Element>()
                     .map_err(|_| WasmRuntimeError::from("cell cast failed"))?;
@@ -267,7 +291,9 @@ fn row_cells(row: &web_sys::Element) -> Result<Vec<web_sys::Element>, WasmRuntim
     }
 
     let nodes = row
-        .query_selector_all(":scope > [role='cell'], :scope > [role='gridcell'], :scope > [role='columnheader']")
+        .query_selector_all(
+            ":scope > [role='cell'], :scope > [role='gridcell'], :scope > [role='columnheader']",
+        )
         .map_err(|_| WasmRuntimeError::from("query role cells failed"))?;
 
     let mut out = Vec::new();
@@ -362,43 +388,6 @@ fn build_grid(rows: &[web_sys::Element]) -> Result<(Vec<Vec<String>>, usize), Wa
     Ok((grid, max_cols))
 }
 
-fn merge_header_rows(header_grid: &[Vec<String>]) -> Vec<String> {
-    if header_grid.is_empty() {
-        return Vec::new();
-    }
-    let cols = header_grid[0].len();
-    let mut merged = vec![String::new(); cols];
-    for c in 0..cols {
-        let mut parts: Vec<String> = Vec::new();
-        for r in header_grid {
-            let text = normalize_whitespace(r.get(c).map(String::as_str).unwrap_or_default());
-            if !text.is_empty() && !parts.iter().any(|p| p.eq_ignore_ascii_case(&text)) {
-                parts.push(text);
-            }
-        }
-        merged[c] = normalize_whitespace(&parts.join(" "));
-    }
-    merged
-}
-
-fn make_headers_unique(headers: &[String]) -> Vec<String> {
-    let mut seen: BTreeMap<String, usize> = BTreeMap::new();
-    let mut out = Vec::with_capacity(headers.len());
-    for (index, header) in headers.iter().enumerate() {
-        let base = normalize_whitespace(header);
-        let base = if base.is_empty() { format!("Column {}", index + 1) } else { base };
-        let key = base.to_lowercase();
-        let entry = seen.entry(key).or_insert(0);
-        *entry += 1;
-        if *entry == 1 {
-            out.push(base);
-        } else {
-            out.push(format!("{base} ({})", *entry));
-        }
-    }
-    out
-}
-
 fn is_direct_row(table: &web_sys::Element, row: &web_sys::Element) -> bool {
     if let Ok(Some(found)) = row.closest("table") {
         found == *table
@@ -407,52 +396,104 @@ fn is_direct_row(table: &web_sys::Element, row: &web_sys::Element) -> bool {
     }
 }
 
-pub fn capture_table_rows(selector: &str) -> Result<Vec<BTreeMap<String, String>>, WasmRuntimeError> {
-    let table = document()?
+fn table_from_element(element: &web_sys::Element) -> Option<web_sys::Element> {
+    if element.tag_name().eq_ignore_ascii_case("table") {
+        return Some(element.clone());
+    }
+    if let Ok(Some(closest)) = element.closest("table") {
+        return Some(closest);
+    }
+    element.query_selector("table").ok().flatten()
+}
+
+pub fn capture_table_aoa(selector: &str) -> Result<Vec<Vec<String>>, WasmRuntimeError> {
+    let root = document()?
         .query_selector(selector)
         .map_err(|_| WasmRuntimeError::from("query_selector failed"))?
-        .ok_or("no matching table")?;
+        .ok_or("no matching element")?;
+
+    let table = table_from_element(&root);
 
     let mut all_rows: Vec<web_sys::Element> = Vec::new();
-    if let Ok(row_nodes) = table.query_selector_all("tr") {
-        for i in 0..row_nodes.length() {
-            let Some(node) = row_nodes.item(i) else { continue };
-            let Ok(row_el) = node.dyn_into::<web_sys::Element>() else { continue };
-            if is_direct_row(&table, &row_el) {
+    let mut header_rows: Vec<web_sys::Element> = Vec::new();
+    let body_rows: Vec<web_sys::Element>;
+
+    if let Some(table) = table {
+        if let Ok(row_nodes) = table.query_selector_all("tr") {
+            for i in 0..row_nodes.length() {
+                let Some(node) = row_nodes.item(i) else {
+                    continue;
+                };
+                let Ok(row_el) = node.dyn_into::<web_sys::Element>() else {
+                    continue;
+                };
+                if is_direct_row(&table, &row_el) {
+                    all_rows.push(row_el);
+                }
+            }
+        }
+
+        if all_rows.is_empty() {
+            return Err(WasmRuntimeError::from("no matching rows found in table"));
+        }
+
+        if let Ok(thead_rows) = table.query_selector_all("thead tr") {
+            for i in 0..thead_rows.length() {
+                let Some(node) = thead_rows.item(i) else {
+                    continue;
+                };
+                let Ok(row_el) = node.dyn_into::<web_sys::Element>() else {
+                    continue;
+                };
+                if is_direct_row(&table, &row_el) {
+                    header_rows.push(row_el);
+                }
+            }
+        }
+        if header_rows.is_empty() {
+            header_rows.push(all_rows[0].clone());
+        }
+
+        body_rows = all_rows
+            .into_iter()
+            .filter(|row| !header_rows.iter().any(|header| header == row))
+            .collect();
+    } else {
+        if let Ok(role_rows) = root.query_selector_all(r#"[role="row"]"#) {
+            for i in 0..role_rows.length() {
+                let Some(node) = role_rows.item(i) else {
+                    continue;
+                };
+                let Ok(row_el) = node.dyn_into::<web_sys::Element>() else {
+                    continue;
+                };
                 all_rows.push(row_el);
             }
         }
-    }
-
-    if all_rows.is_empty() {
-        return Err(WasmRuntimeError::from("no matching rows found in table"));
-    }
-
-    let mut header_rows: Vec<web_sys::Element> = Vec::new();
-    if let Ok(thead_rows) = table.query_selector_all("thead tr") {
-        for i in 0..thead_rows.length() {
-            let Some(node) = thead_rows.item(i) else { continue };
-            let Ok(row_el) = node.dyn_into::<web_sys::Element>() else { continue };
-            if is_direct_row(&table, &row_el) {
-                header_rows.push(row_el);
+        if all_rows.is_empty() {
+            if let Ok(children) = root.query_selector_all(":scope > *") {
+                for i in 0..children.length() {
+                    let Some(node) = children.item(i) else { continue };
+                    let Ok(child) = node.dyn_into::<web_sys::Element>() else {
+                        continue;
+                    };
+                    all_rows.push(child);
+                }
             }
         }
-    }
-    if header_rows.is_empty() {
+        if all_rows.is_empty() {
+            return Err(WasmRuntimeError::from("no rows found in selected element"));
+        }
         header_rows.push(all_rows[0].clone());
+        body_rows = all_rows.into_iter().skip(1).collect();
     }
-
-    let body_rows: Vec<web_sys::Element> = all_rows
-        .into_iter()
-        .filter(|row| !header_rows.iter().any(|header| header == row))
-        .collect();
 
     let (header_grid, header_cols) = build_grid(&header_rows)?;
     if header_grid.is_empty() || header_cols == 0 {
         return Err(WasmRuntimeError::from("unable to extract headers"));
     }
-    let merged_headers = merge_header_rows(&header_grid);
-    let headers = make_headers_unique(&merged_headers);
+    let merged_headers = table_capture::merge_header_rows(&header_grid);
+    let headers = table_capture::make_headers_unique(&merged_headers);
 
     let (body_grid, body_cols) = build_grid(&body_rows)?;
     let col_count = headers.len().max(header_cols).max(body_cols);
@@ -461,22 +502,40 @@ pub fn capture_table_rows(selector: &str) -> Result<Vec<BTreeMap<String, String>
         padded_headers.push(format!("Column {}", padded_headers.len() + 1));
     }
 
-    let mut records = Vec::new();
-    for row in body_grid {
+    let mut aoa = Vec::with_capacity(body_grid.len() + 1);
+    aoa.push(padded_headers);
+    for mut row in body_grid {
+        while row.len() < col_count {
+            row.push(String::new());
+        }
+        aoa.push(row);
+    }
+    Ok(table_capture::ensure_valid_aoa(aoa))
+}
+
+pub fn capture_table_dataset(selector: &str) -> Result<TableDataset, WasmRuntimeError> {
+    let aoa = capture_table_aoa(selector)?;
+    let headers = aoa.first().cloned().unwrap_or_default();
+    let rows = aoa.into_iter().skip(1).collect::<Vec<_>>();
+    Ok(TableDataset::new(headers, rows))
+}
+
+pub fn capture_table_rows(selector: &str) -> Result<Vec<BTreeMap<String, String>>, WasmRuntimeError> {
+    let dataset = capture_table_dataset(selector)?;
+    let mut records = Vec::with_capacity(dataset.rows.len());
+    for row in dataset.rows {
         let mut record = BTreeMap::new();
         let mut any = false;
-        for (idx, header) in padded_headers.iter().enumerate() {
+        for (idx, header) in dataset.columns.iter().enumerate() {
             let value = row.get(idx).cloned().unwrap_or_default();
             if !value.trim().is_empty() {
                 any = true;
             }
             record.insert(header.clone(), value);
         }
-
         if any {
             records.push(record);
         }
     }
-
     Ok(records)
 }

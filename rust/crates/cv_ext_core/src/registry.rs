@@ -1,4 +1,4 @@
-use cv_ext_contract::{Site, WorkflowDefinition, RuleDefinition};
+use cv_ext_contract::{RuleDefinition, Site, WorkflowDefinition};
 use cv_ext_sites_carma::carma_rules;
 use cv_ext_sites_jira::jira_rules;
 use cv_ext_sites_oracle::oracle_rules;

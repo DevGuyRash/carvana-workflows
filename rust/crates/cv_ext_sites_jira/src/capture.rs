@@ -1,7 +1,12 @@
 use std::collections::BTreeMap;
 
 fn normalize(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ").trim().to_string()
+    value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_string()
 }
 
 fn normalize_header(value: &str) -> String {
@@ -27,7 +32,11 @@ fn extract_first_regex(text: &str, pattern: &str) -> Option<String> {
 }
 
 fn derive_identifiers(row: &BTreeMap<String, String>) -> (String, String, String) {
-    let joined = row.values().map(|v| normalize(v)).collect::<Vec<_>>().join(" |");
+    let joined = row
+        .values()
+        .map(|v| normalize(v))
+        .collect::<Vec<_>>()
+        .join(" |");
 
     let stock = find_value(row, &["stock", "stock number", "stocknumber"])
         .map(normalize)
@@ -68,7 +77,9 @@ fn build_invoice(stock: &str) -> String {
     "MMDDYYYY-TR".to_string()
 }
 
-pub fn rows_with_derived_fields(rows: Vec<BTreeMap<String, String>>) -> Vec<BTreeMap<String, String>> {
+pub fn rows_with_derived_fields(
+    rows: Vec<BTreeMap<String, String>>,
+) -> Vec<BTreeMap<String, String>> {
     rows.into_iter()
         .map(|mut row| {
             let identifiers = derive_identifiers(&row);
@@ -97,7 +108,10 @@ mod tests {
     #[test]
     fn derives_reference_fields() {
         let mut row = BTreeMap::new();
-        row.insert("Summary".to_string(), "Need title check 123456 VIN 1M8GDM9AXKP042788 PID 7654321".to_string());
+        row.insert(
+            "Summary".to_string(),
+            "Need title check 123456 VIN 1M8GDM9AXKP042788 PID 7654321".to_string(),
+        );
 
         let rows = rows_with_derived_fields(vec![row]);
         let first = rows.first().expect("row exists");
@@ -105,7 +119,10 @@ mod tests {
         assert_eq!(first.get("StockNumber").expect("stock"), "123456");
         assert_eq!(first.get("VIN").expect("vin"), "1M8GDM9AXKP042788");
         assert_eq!(first.get("PID").expect("pid"), "7654321");
-        assert!(first.get("Reference").expect("reference").starts_with("HUB-123456-"));
+        assert!(first
+            .get("Reference")
+            .expect("reference")
+            .starts_with("HUB-123456-"));
         assert!(first.get("Invoice").expect("invoice").ends_with("-TR"));
     }
 }

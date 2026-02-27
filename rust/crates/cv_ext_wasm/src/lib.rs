@@ -1,15 +1,17 @@
-mod bridge_rules;
 mod bridge_jql;
+mod bridge_rules;
 mod bridge_settings;
 mod bridge_theme;
 mod bridge_ui;
-mod dom_inject;
-mod jql_panel;
-mod oracle_banner;
 mod carma_ui;
 mod commands;
 mod dom;
+mod dom_inject;
 mod errors;
+mod jql_panel;
+mod menu_state;
+mod oracle_banner;
+mod ui_runtime;
 
 use cv_ext_contract::{Site, WorkflowDefinition};
 use cv_ext_core::executor::ActionExecutor;
@@ -77,8 +79,9 @@ impl ActionExecutor for WasmActionExecutor {
     async fn extract_table(&mut self, selector: &str) -> Result<Value, String> {
         dom::capture_table_rows(selector)
             .and_then(|rows| {
-                serde_json::to_value(rows)
-                    .map_err(|error| WasmRuntimeError::from(format!("serialize extract table rows: {error}")))
+                serde_json::to_value(rows).map_err(|error| {
+                    WasmRuntimeError::from(format!("serialize extract table rows: {error}"))
+                })
             })
             .map_err(|error: WasmRuntimeError| error.to_string())
     }

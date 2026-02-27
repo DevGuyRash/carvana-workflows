@@ -1,5 +1,7 @@
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 
+use cv_ext_ui_components::status_model::StatusSurfaceModel;
+
 use crate::{dom_inject, errors::WasmRuntimeError};
 
 const BANNER_ID: &str = "cv-oracle-validation-banner";
@@ -26,36 +28,10 @@ animation:cv-banner-in .25s ease}
 #cv-oracle-validation-banner .cv-banner-close:hover{opacity:1}
 "#;
 
-fn status_icon(status: &str) -> &'static str {
-    match status {
-        "validated" => "✅",
-        "needs-revalidated" => "⚠️",
-        "checking" => "🔄",
-        _ => "❓",
-    }
-}
-
-fn status_title(status: &str) -> &'static str {
-    match status {
-        "validated" => "Validated",
-        "needs-revalidated" => "Needs Revalidation",
-        "checking" => "Checking...",
-        _ => "Status Unknown",
-    }
-}
-
-fn status_css_class(status: &str) -> &'static str {
-    match status {
-        "validated" => "cv-validated",
-        "needs-revalidated" => "cv-needs-revalidated",
-        "checking" => "cv-checking",
-        _ => "cv-unknown",
-    }
-}
-
 fn build_banner_html(status: &str, detail: &str) -> String {
-    let icon = status_icon(status);
-    let title = status_title(status);
+    let model = StatusSurfaceModel::for_oracle_validation(status);
+    let icon = model.icon;
+    let title = model.title;
     format!(
         r#"<div class="cv-banner-row">
   <span class="cv-banner-icon">{icon}</span>
@@ -70,7 +46,7 @@ fn build_banner_html(status: &str, detail: &str) -> String {
 
 pub fn show_banner(status: &str, detail: &str) -> Result<(), WasmRuntimeError> {
     dom_inject::inject_style(STYLE_ID, BANNER_CSS)?;
-    let css_class = status_css_class(status);
+    let css_class = StatusSurfaceModel::for_oracle_validation(status).css_class;
     let html = build_banner_html(status, detail);
     let banner = dom_inject::inject_or_update_banner(BANNER_ID, css_class, &html)?;
 

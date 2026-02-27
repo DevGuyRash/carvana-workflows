@@ -1,5 +1,6 @@
 use cv_ext_sites_jira::{
-    apply_jql_action, build_jql_query, default_jql_state, JqlAction, JqlBuildOptions, JqlBuilderState,
+    apply_jql_action, build_jql_query, default_jql_state, JqlAction, JqlBuildOptions,
+    JqlBuilderState,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -65,8 +66,7 @@ fn builtin_presets() -> Vec<JqlPreset> {
 }
 
 fn load_custom_presets() -> Vec<JqlPreset> {
-    let storage = web_sys::window()
-        .and_then(|w| w.local_storage().ok().flatten());
+    let storage = web_sys::window().and_then(|w| w.local_storage().ok().flatten());
     let Some(storage) = storage else {
         return Vec::new();
     };
@@ -145,4 +145,3 @@ pub fn jql_presets_save(presets: JsValue) -> Result<JsValue, JsValue> {
         custom: load_custom_presets(),
     })
 }
-

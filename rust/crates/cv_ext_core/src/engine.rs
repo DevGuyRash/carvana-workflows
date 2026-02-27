@@ -1,5 +1,6 @@
 use cv_ext_contract::{
-    Action, ArtifactKind, ArtifactMeta, RunArtifact, RunReport, RunStatus, RunStepReport, RuntimeError, Site,
+    Action, ArtifactKind, ArtifactMeta, RunArtifact, RunReport, RunStatus, RunStepReport,
+    RuntimeError, Site,
 };
 use serde_json::{json, Value};
 
@@ -10,7 +11,10 @@ pub struct RuntimeEngine;
 
 impl RuntimeEngine {
     pub fn list_workflows(&self, site: Site) -> Vec<String> {
-        workflows_for_site(site).into_iter().map(|wf| wf.id).collect()
+        workflows_for_site(site)
+            .into_iter()
+            .map(|wf| wf.id)
+            .collect()
     }
 
     pub async fn run_workflow_with_executor<E: ActionExecutor>(
@@ -23,7 +27,8 @@ impl RuntimeEngine {
 
         let Some(workflow) = workflows_for_site(site)
             .into_iter()
-            .find(|wf| wf.id == workflow_id) else {
+            .find(|wf| wf.id == workflow_id)
+        else {
             return RunReport {
                 workflow_id: workflow_id.to_string(),
                 site: site.as_str().to_string(),
@@ -35,7 +40,10 @@ impl RuntimeEngine {
                 artifacts: Vec::new(),
                 error: Some(RuntimeError {
                     code: "workflow_missing".to_string(),
-                    message: format!("workflow '{workflow_id}' is not registered for site {}", site.as_str()),
+                    message: format!(
+                        "workflow '{workflow_id}' is not registered for site {}",
+                        site.as_str()
+                    ),
                 }),
             };
         };
@@ -68,7 +76,9 @@ impl RuntimeEngine {
                     if let Action::Execute { command } = action {
                         if let Some(found) = data.get("artifacts").and_then(Value::as_array) {
                             for (artifact_index, artifact) in found.iter().enumerate() {
-                                if let Ok(parsed) = serde_json::from_value::<RunArtifact>(artifact.clone()) {
+                                if let Ok(parsed) =
+                                    serde_json::from_value::<RunArtifact>(artifact.clone())
+                                {
                                     artifacts.push(parsed);
                                 } else {
                                     artifacts.push(RunArtifact {
@@ -317,7 +327,8 @@ mod tests {
     fn reports_missing_workflow() {
         let engine = RuntimeEngine;
         let mut executor = TestExecutor;
-        let report = block_on(engine.run_workflow_with_executor(Site::Jira, "missing", &mut executor));
+        let report =
+            block_on(engine.run_workflow_with_executor(Site::Jira, "missing", &mut executor));
 
         assert_eq!(report.workflow_id, "missing");
         assert!(report.error.is_some());

@@ -6,6 +6,7 @@ members = [
   "crates/cv_ext_sites_jira",
   "crates/cv_ext_sites_oracle",
   "crates/cv_ext_sites_carma",
+  "crates/cv_ext_ui_components",
   "crates/cv_ext_wasm"
 ]
 resolver = "2"
@@ -29,6 +30,8 @@ gloo-timers = { version = "0.3", features = ["futures"] }
 web-sys = { version = "0.3", features = [
   "Window",
   "Document",
+  "CustomEvent",
+  "CustomEventInit",
   "Element",
   "Event",
   "EventInit",

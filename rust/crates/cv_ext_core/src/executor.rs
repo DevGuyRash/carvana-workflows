@@ -16,7 +16,9 @@ pub trait ActionExecutor {
 pub struct NoopExecutor;
 
 fn unsupported(action: &str) -> Result<Value, String> {
-    Err(format!("action '{action}' requires a concrete runtime executor"))
+    Err(format!(
+        "action '{action}' requires a concrete runtime executor"
+    ))
 }
 
 #[async_trait::async_trait(?Send)]
