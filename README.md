@@ -1,99 +1,82 @@
-# Carvana Automation Userscripts — Foundation
+# Carvana Extension
 
-Production-ready skeleton for DRY, SOLID, KISS, YAGNI Tampermonkey automation targeting:
+Enterprise-grade Chrome + Firefox WebExtension for automating Carvana internal web applications, powered by Rust + WebAssembly.
 
-- **Jira** - `https://jira.carvana.com/*`
-- **Oracle (Carvana)** - `https://edsk.fa.us2.oraclecloud.com/*`
-- **Carma** - `https://carma.cvnacorp.com/*`
+## What It Does
 
-Shared TypeScript core:
-- Non‑brittle selectors (`css/id/role/tag/type/attributes/text`, `and/or/not/within/nth`, `visible`)
-- Wait utilities with MutationObserver + polling + stability time
-- Declarative workflows (click/type/wait/extract/branch/error) with persistence/resume
-- Dynamic menu (Shadow DOM): **Actions**, **Automations**, **Settings** (Theme/Storage/Logs) + **Developer mode** for selectors/JSON
+- **Site Rules**: Declarative automations — "when on site X, apply behavior Y"
+- **Dedicated Extension Page**: Full-tab control center with Dashboard, Rules, Data, Settings, and Logs tabs
+- **Shared UI Components**: Reusable tables, modals, toasts, cards used across all surfaces
+- **Theme System**: Multiple built-in themes (Midnight, Obsidian, Daylight, Carvana Blue)
+- **Data Capture**: Extract and export table data from Jira, Oracle, Carma
 
-> Looking to build your own pages/workflows? See **[AGENTS.md](./AGENTS.md)**.
+## Supported Sites
 
----
+- Jira: `https://jira.carvana.com/*`
+- Oracle FA: `https://*.fa.us2.oraclecloud.com/*`
+- Carma: `https://carma.cvnacorp.com/*`
 
-## Quick Start
+## Architecture
 
-Requirements: Node 18+, npm.
+- **Rust/WASM** owns all business logic, rule evaluation, data extraction, and DOM manipulation
+- **TypeScript** is minimal glue for browser APIs, UI rendering, and bootstrap
+- **Shared component library** (`src/ui/`) provides design tokens + vanilla TS components
+- **Rule engine** replaces the old workflow model — scalable, toggleable, categorized
+
+## Prerequisites
+
+- Node.js 20+
+- Rust stable toolchain
+- `wasm-pack` (`cargo install wasm-pack`)
+
+### Windows Rust Toolchain
+
+- Windows workflows are GNU-first for deterministic builds and tests.
+- Install Scoop `mingw` so `gcc` provides `libgcc_eh.a`.
+- Use project commands (`npm run typecheck`, `npm test`, `npm run build`) instead of raw `cargo` for consistent toolchain/linker setup.
+- If you hit linker errors, ensure `stable-x86_64-pc-windows-gnu` is installed:
+  - `rustup toolchain install stable-x86_64-pc-windows-gnu`
+  - `scoop install mingw`
+
+## Build
 
 ```bash
-npm i
+npm install
 npm run build
 ```
 
-This outputs userscripts in `dist/` (one per `packages/*-userscript`):
+Outputs:
+- `dist/chrome-extension`
+- `dist/firefox-extension`
 
-* `jira.user.js`
-* `oracle.user.js`
-* `carma-bulk-search-scraper.user.js`
-
-Install each in Tampermonkey (drag into the browser or paste into a new script).
-
----
-
-## Development (Auto-Update)
-
-To enable Tampermonkey auto-update during development, run the local userscript server
-and build with a local `US_BASE_URL` so `@downloadURL` / `@updateURL` point to localhost.
-
-Recommended (one command):
+## Dev Auto Rebuild
 
 ```bash
 npm run dev
 ```
 
-This runs the userscript server and a build watcher in parallel.
-If you prefer separate terminals:
+Watches Rust and extension source files. Browser extension reload remains manual.
 
-Terminal 1:
-```bash
-npm run serve:userscripts
-```
-
-Terminal 2:
-```bash
-npm run build:watch
-```
-
-Then install the script from `http://localhost:4873/<script>.user.js` (e.g. open the
-root `http://localhost:4873/` and click the file). After rebuilds, Tampermonkey
-will auto-update from the local server.
-
-Optional overrides:
+## Check + Test
 
 ```bash
-US_HOST=localhost US_PORT=4873 npm run serve:userscripts
-US_BASE_URL=http://localhost:4873 npm run build
+npm run typecheck
+npm test
 ```
 
----
-
-## Release build (GitHub links)
-
-To build userscripts with `@downloadURL`/`@updateURL` pointing at the latest GitHub
-release artifacts (mirrors CI behavior):
+## Package
 
 ```bash
-npm run build:release
+npm run package:extensions
 ```
 
-If your git remote is not GitHub, you can set the repository explicitly:
+## Load Extension Locally
 
-```bash
-GITHUB_REPOSITORY=owner/repo npm run build:release
-```
+1. **Chrome**: `chrome://extensions` → Enable Developer Mode → Load unpacked → select `dist/chrome-extension`
+2. **Firefox**: `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → select `dist/firefox-extension/manifest.json`
 
----
+## Repository Notes
 
-## First Run / Demo Workflows
-
-The default registry is **demo‑only**. On a matching site, click the **gear**:
-
-* Run **Demo: Title → Clipboard** to copy the page title and show a preview.
-* Try **Demo: Page Info** and **Demo: List Links** to validate extraction & presentation.
-
-Then jump to **AGENTS.md** to add your own pages and real workflows.
+- `excel/` remains in-repo and is intentionally outside extension runtime scope.
+- Legacy userscript/runtime packages were removed as part of the extension migration.
+- See `MASTER_PLAN.md` for the full architectural design document.

@@ -1,0 +1,147 @@
+[workspace]
+members = [
+  "crates/cv_ext_contract",
+  "crates/cv_ext_storage",
+  "crates/cv_ext_core",
+  "crates/cv_ext_sites_jira",
+  "crates/cv_ext_sites_oracle",
+  "crates/cv_ext_sites_carma",
+  "crates/cv_ext_ui_components",
+  "crates/cv_ext_wasm"
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+authors = ["Carvana Automation"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+regex = "1"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+serde-wasm-bindgen = "0.6"
+async-trait = "0.1"
+futures = "0.3"
+gloo-timers = { version = "0.3", features = ["futures"] }
+web-sys = { version = "0.3", features = [
+  "Window",
+  "Navigator",
+  "Clipboard",
+  "Document",
+  "CustomEvent",
+  "CustomEventInit",
+  "Element",
+  "DomRect",
+  "DomTokenList",
+  "Event",
+  "EventInit",
+  "EventTarget",
+  "FocusEvent",
+  "MouseEvent",
+  "PointerEvent",
+  "HtmlElement",
+  "HtmlAnchorElement",
+  "HtmlInputElement",
+  "HtmlSelectElement",
+  "HtmlTextAreaElement",
+  "HtmlIFrameElement",
+  "Storage",
+  "Node",
+  "NodeList",
+  "MutationObserver",
+  "MutationObserverInit",
+  "console",
+  "CssStyleDeclaration",
+  "HtmlHeadElement"
+] }
+js-sys = "0.3"
+
+# rust-development-skill:clippy-lints:start
+# Workspace Clippy + rustc lint configuration.
+#
+# Where to put:
+# - Workspace repo: paste these two sections into the top-level Cargo.toml.
+# - If your workspace requires it, add `[lints] workspace = true` to each member crate.
+# - Single-crate repo: translate to crate-root attributes (see bottom of file).
+#
+# Enforcement:
+#   cargo clippy --workspace --all-targets -- -D warnings
+#   Optional strict mode: add --all-features and --locked.
+#
+# Notes:
+# - Clippy does NOT ban `unwrap_or*` variants; use the banned_family test for that.
+# - `unsafe_code` is a rustc lint (not clippy) and can be forbidden repo-wide.
+# - If you need exceptions (e.g., a CLI printing to stdout), use crate-level `#![allow(...)]`.
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+# Unused/dead code hygiene
+unused_imports = "warn"
+unused_variables = "warn"
+unused_mut = "warn"
+unused_must_use = "warn"
+dead_code = "warn"
+unreachable_pub = "allow"
+missing_docs = "allow"
+
+[workspace.lints.clippy]
+# Broad non-idiomatic coverage
+all = { level = "allow", priority = -1 }
+cargo = { level = "allow", priority = -1 }
+# Most internal crates lack publish metadata; enable for crates.io packages.
+cargo_common_metadata = "allow"
+# Optional strict profile:
+# pedantic = "warn"
+# nursery = "warn"
+
+# Explicit non-idiomatic bans (restriction-style lints)
+#
+# `unwrap/expect/unreachable` are enforced via verify/banned-family checks with
+# same-line invariant comments, so clippy leaves those to the repository policy.
+unwrap_used = "allow"
+expect_used = "allow"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "allow"
+dbg_macro = "deny"
+indexing_slicing = "deny"
+panic_in_result_fn = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+
+# --- Single-crate alternative (paste into lib.rs or main.rs) ---
+# #![forbid(unsafe_code)]
+# #![warn(
+#     unused_imports,
+#     unused_variables,
+#     unused_mut,
+#     unused_must_use,
+#     dead_code,
+#     unreachable_pub,
+#     missing_docs,
+#     clippy::all,
+#     clippy::cargo,
+# )]
+# Optional strict profile:
+# #![warn(clippy::pedantic, clippy::nursery)]
+# #![deny(
+#     clippy::unwrap_used,
+#     clippy::expect_used,
+#     clippy::panic,
+#     clippy::todo,
+#     clippy::unimplemented,
+#     clippy::unreachable,
+#     clippy::dbg_macro,
+#     clippy::indexing_slicing,
+#     clippy::panic_in_result_fn,
+#     clippy::print_stdout,
+#     clippy::print_stderr,
+# )]
+
+# rust-development-skill:clippy-lints:end

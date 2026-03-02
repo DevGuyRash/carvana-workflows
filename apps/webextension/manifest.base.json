@@ -1,0 +1,35 @@
+{
+  "name": "Carvana Extension",
+  "description": "Enterprise automation platform for Carvana internal web applications.",
+  "version": "0.2.0",
+  "action": {
+    "default_title": "Carvana Extension",
+    "default_popup": "popup.html"
+  },
+  "host_permissions": [
+    "https://jira.carvana.com/*",
+    "https://*.fa.us2.oraclecloud.com/*",
+    "https://carma.cvnacorp.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://jira.carvana.com/*",
+        "https://*.fa.us2.oraclecloud.com/*",
+        "https://carma.cvnacorp.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["pkg/*"],
+      "matches": [
+        "https://jira.carvana.com/*",
+        "https://*.fa.us2.oraclecloud.com/*",
+        "https://carma.cvnacorp.com/*"
+      ]
+    }
+  ]
+}

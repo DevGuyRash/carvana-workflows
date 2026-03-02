@@ -1,48 +1,84 @@
-name: Release userscripts
+name: Build Extensions
 
 on:
+  push:
+    branches:
+      - main
+      - feat/**
+      - fix/**
+      - refactor/**
+      - docs/**
+      - chore/**
+  pull_request:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build-and-upload:
+  build-and-package:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --version 0.13.1 --locked
 
       - name: Install deps
         run: npm ci
 
-      - name: Run typecheck
+      - name: Typecheck
         run: npm run typecheck
 
-      - name: Run tests
+      - name: Test
         run: npm test
 
-      - name: Build userscripts
-        env:
-          US_BASE_URL: https://github.com/${{ github.repository }}/releases/latest/download
-          US_VERSION: ${{ github.ref_name }}
+      - name: Build extensions
         run: npm run build
 
-      - name: Upload artifacts to release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
+      - name: Package extensions
+        run: npm run package:extensions
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: extensions-${{ github.sha }}
+          path: |
+            dist/chrome-extension.zip
+            dist/firefox-extension.zip
+          if-no-files-found: error
+
+  upload-release-assets:
+    if: github.event_name == 'release'
+    needs: build-and-package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: extensions-${{ github.sha }}
+          path: dist
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           files: |
-            dist/*.user.js
-      - name: Upload sourcemaps to release
-        if: ${{ env.PUBLISH_SOURCEMAPS == '1' }}
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
-        with:
-          files: |
-            dist/*.user.js.map
+            dist/chrome-extension.zip
+            dist/firefox-extension.zip

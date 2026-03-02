@@ -43,3 +43,7 @@ vba_dump/
 *.xlsb
 *.xltx
 *.xltm
+
+# rust
+rust/target/
+apps/webextension/pkg/
