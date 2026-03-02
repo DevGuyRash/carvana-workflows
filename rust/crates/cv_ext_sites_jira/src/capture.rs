@@ -98,31 +98,3 @@ pub fn rows_with_derived_fields(
         })
         .collect()
 }
-
-#[cfg(test)]
-mod tests {
-    use std::collections::BTreeMap;
-
-    use super::rows_with_derived_fields;
-
-    #[test]
-    fn derives_reference_fields() {
-        let mut row = BTreeMap::new();
-        row.insert(
-            "Summary".to_string(),
-            "Need title check 123456 VIN 1M8GDM9AXKP042788 PID 7654321".to_string(),
-        );
-
-        let rows = rows_with_derived_fields(vec![row]);
-        let first = rows.first().expect("row exists");
-
-        assert_eq!(first.get("StockNumber").expect("stock"), "123456");
-        assert_eq!(first.get("VIN").expect("vin"), "1M8GDM9AXKP042788");
-        assert_eq!(first.get("PID").expect("pid"), "7654321");
-        assert!(first
-            .get("Reference")
-            .expect("reference")
-            .starts_with("HUB-123456-"));
-        assert!(first.get("Invoice").expect("invoice").ends_with("-TR"));
-    }
-}

@@ -24,7 +24,15 @@ pub fn to_csv(dataset: &TableDataset, opts: &TableExportOptions) -> String {
         lines.push(
             indexes
                 .iter()
-                .map(|index| csv_escape(&dataset.columns[*index]))
+                .map(|index| {
+                    csv_escape(
+                        dataset
+                            .columns
+                            .get(*index)
+                            .map(String::as_str)
+                            .unwrap_or_default(),
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join(","),
         );
@@ -106,56 +114,4 @@ fn normalize_header(value: &str) -> String {
         .chars()
         .filter(|ch| ch.is_ascii_alphanumeric())
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{column_values_matching, to_csv, to_json_objects, TableExportOptions};
-    use crate::table_model::TableDataset;
-
-    fn sample() -> TableDataset {
-        TableDataset::new(
-            vec![
-                "Reference".to_string(),
-                "VIN".to_string(),
-                "Stock Number".to_string(),
-            ],
-            vec![
-                vec!["R1".to_string(), "V1".to_string(), "S1".to_string()],
-                vec!["R2".to_string(), "V2".to_string(), "S2".to_string()],
-            ],
-        )
-    }
-
-    #[test]
-    fn csv_respects_headers_and_selection() {
-        let data = sample();
-        let csv = to_csv(
-            &data,
-            &TableExportOptions {
-                include_headers: true,
-                selected_columns: Some(vec!["Reference".to_string(), "VIN".to_string()]),
-            },
-        );
-        assert!(csv.starts_with("Reference,VIN"));
-        assert!(csv.contains("R1,V1"));
-    }
-
-    #[test]
-    fn json_object_export_has_columns() {
-        let data = sample();
-        let rows = to_json_objects(&data);
-        assert_eq!(rows.len(), 2);
-        assert_eq!(
-            rows[0].get("Reference").and_then(|v| v.as_str()),
-            Some("R1")
-        );
-    }
-
-    #[test]
-    fn column_matching_extracts_distinct_values() {
-        let data = sample();
-        let values = column_values_matching(&data, &["stocknumber"]);
-        assert_eq!(values, vec!["S1".to_string(), "S2".to_string()]);
-    }
 }

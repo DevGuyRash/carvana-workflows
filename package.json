@@ -12,14 +12,16 @@
     "clean": "rimraf dist apps/webextension/pkg",
     "typecheck": "tsc --project apps/webextension/tsconfig.json --noEmit && node scripts/run-rust-cargo.mjs check --manifest-path rust/Cargo.toml",
     "test:rust": "node scripts/run-rust-cargo.mjs test --manifest-path rust/Cargo.toml",
+    "test:webextension": "vitest run apps/webextension/test/background.persistence-regression.test.ts",
     "test:e2e": "node -e \"const fs=require('fs');if(!fs.existsSync('tests/e2e/playwright.config.ts')){console.error('E2E harness missing: tests/e2e/playwright.config.ts');process.exit(2)}\" && npx playwright test --config tests/e2e/playwright.config.ts",
-    "test": "npm run test:rust"
+    "test": "npm run test:rust && npm run test:webextension"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.37",
     "chokidar": "^5.0.0",
     "esbuild": "^0.25.11",
     "rimraf": "^5.0.5",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^3.2.4"
   }
 }

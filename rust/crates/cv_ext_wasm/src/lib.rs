@@ -1,3 +1,5 @@
+#![allow(clippy::indexing_slicing)] // Reason: DOM interop code uses fixed-position JS arrays and schema-indexed table rows.
+
 mod bridge_jql;
 mod bridge_rules;
 mod bridge_settings;

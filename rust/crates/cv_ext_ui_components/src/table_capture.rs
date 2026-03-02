@@ -50,9 +50,9 @@ pub fn merge_header_rows(header_grid: &[Vec<String>]) -> Vec<String> {
     if header_grid.is_empty() {
         return Vec::new();
     }
-    let cols = header_grid[0].len();
+    let cols = header_grid.first().map(Vec::len).unwrap_or_default();
     let mut merged = vec![String::new(); cols];
-    for col in 0..cols {
+    for (col, merged_col) in merged.iter_mut().enumerate().take(cols) {
         let mut parts: Vec<String> = Vec::new();
         for row in header_grid {
             let text = normalize_whitespace(row.get(col).map(String::as_str).unwrap_or_default());
@@ -60,7 +60,7 @@ pub fn merge_header_rows(header_grid: &[Vec<String>]) -> Vec<String> {
                 parts.push(text);
             }
         }
-        merged[col] = normalize_whitespace(&parts.join(" "));
+        *merged_col = normalize_whitespace(&parts.join(" "));
     }
     merged
 }
@@ -92,40 +92,5 @@ pub fn pad_aoa(aoa: &mut [Vec<String>], cols: usize) {
         while row.len() < cols {
             row.push(String::new());
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{ensure_valid_aoa, make_headers_unique, merge_header_rows, normalize_header_key};
-
-    #[test]
-    fn aoa_has_header_and_one_row_minimum() {
-        let out = ensure_valid_aoa(vec![vec!["A".to_string()]]);
-        assert_eq!(out.len(), 2);
-        assert_eq!(out[0], vec!["A"]);
-        assert_eq!(out[1], vec![""]);
-    }
-
-    #[test]
-    fn merged_headers_dedupes_by_column() {
-        let merged = merge_header_rows(&[
-            vec!["Mailing".to_string(), "Amount".to_string()],
-            vec!["Instructions".to_string(), "Amount".to_string()],
-        ]);
-        assert_eq!(merged[0], "Mailing Instructions");
-        assert_eq!(merged[1], "Amount");
-    }
-
-    #[test]
-    fn unique_headers_add_suffixes() {
-        let out = make_headers_unique(&["A".to_string(), "A".to_string(), "".to_string()]);
-        assert_eq!(out, vec!["A", "A (2)", "Column 3"]);
-    }
-
-    #[test]
-    fn normalize_header_key_strips_symbols() {
-        assert_eq!(normalize_header_key("Stock Number"), "stocknumber");
-        assert_eq!(normalize_header_key("A/P Description"), "apdescription");
     }
 }

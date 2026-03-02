@@ -12,8 +12,14 @@ import { storageGet, storageSet, sendRuntimeMessage } from './shared/webext-asyn
 import { createResultViewer, ResultArtifact } from './ui/components/result-viewer';
 import { ProgressTracker } from './ui/components/progress-tracker';
 import { ValidationAlert } from './ui/components/validation-alert';
-import { loadCapturedData, saveCapturedData } from './shared/storage-bridge';
+import { clearLogs, loadCapturedData, loadLogs, saveCapturedData, StoredLogEntry } from './shared/storage-bridge';
 import { loadRuntime, UiRuleSummary } from './shared/runtime';
+import {
+  executionFailureMessage,
+  extractCaptureRows,
+  normalizeRuleExecution,
+  toPrimaryResultArtifact,
+} from './shared/rule-result';
 
 /* ─── Shared types ──────────────────────────────────────────────── */
 
@@ -84,19 +90,6 @@ function classifyRule(rule: UiRuleSummary) {
     isValidation: rule.is_validation,
     isLongRunning: rule.is_long_running,
   };
-}
-
-function runtimeFailureMessage(result: unknown): string | null {
-  if (!result || typeof result !== 'object') return 'Rule execution did not return a response';
-  const responseLike = result as Record<string, unknown>;
-  if (responseLike.ok === false) {
-    return String(responseLike.error ?? responseLike.message ?? 'Rule execution failed');
-  }
-  const status = typeof responseLike.status === 'string' ? responseLike.status.toLowerCase() : '';
-  if (status === 'failed' || status === 'error' || status === 'partial') {
-    return String(responseLike.error ?? responseLike.message ?? `Rule execution ended with status: ${status}`);
-  }
-  return null;
 }
 
 function initRunFeedback(
@@ -170,12 +163,14 @@ function handleValidationResult(
   result: unknown,
   retryFn: () => void,
 ): void {
-  const resp = result as Record<string, unknown> | undefined;
-  const ok = resp?.ok !== false;
+  const normalized = normalizeRuleExecution(result);
+  const ok = !executionFailureMessage(normalized, { treatPartialAsFailure: true });
   alert.update({
     variant: ok ? 'valid' : 'invalid',
     title: ok ? 'Validation passed' : 'Validation failed',
-    message: ok ? 'All checks completed successfully.' : String((resp as any)?.error ?? 'See details.'),
+    message: ok
+      ? 'All checks completed successfully.'
+      : (normalized.errorMessage ?? 'See details.'),
     onRetry: retryFn,
   });
 }
@@ -185,30 +180,23 @@ function handleDataCaptureResult(
   result: unknown,
   resultSlot: HTMLElement,
 ): void {
-  const resp = (result ?? {}) as Record<string, unknown>;
-  const data = resp.data ?? resp;
-  if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
-    const rows = data as Record<string, string>[];
-    const cols = Object.keys(rows[0]).map((k) => ({ key: k, label: k, sortable: true }));
-    const artifact: ResultArtifact = {
-      type: 'table',
-      title: rule.label,
-      columns: cols,
-      rows,
-      meta: { Rule: rule.id, Rows: String(rows.length), Captured: new Date().toLocaleTimeString() },
-    };
-    const viewer = createResultViewer({
-      artifact,
-      onDownload: (filename, mime, d) => {
-        void sendRuntimeMessage({ kind: 'download-result', payload: { filename, mime, data: d } });
-      },
-      onCopy: (d) => {
-        void sendRuntimeMessage({ kind: 'copy-result', payload: { data: d } });
-      },
-    });
-    resultSlot.appendChild(viewer);
-    void saveCapturedData(rule.site + '_' + rule.id, rows).catch(() => {});
-  }
+  const normalized = normalizeRuleExecution(result);
+  const artifact = toPrimaryResultArtifact(normalized, rule.id, rule.label);
+  if (!artifact || artifact.type !== 'table') return;
+
+  const viewer = createResultViewer({
+    artifact,
+    onDownload: (filename, mime, d) => {
+      void sendRuntimeMessage({ kind: 'download-result', payload: { filename, mime, data: d } });
+    },
+    onCopy: (d) => {
+      void sendRuntimeMessage({ kind: 'copy-result', payload: { data: d } });
+    },
+  });
+  resultSlot.appendChild(viewer);
+
+  const rows = extractCaptureRows(normalized);
+  void saveCapturedData(rule.site + '_' + rule.id, rows).catch(() => {});
 }
 
 function handleRunError(
@@ -470,7 +458,10 @@ function renderDashboard(): HTMLElement {
     const pill = glowButton(`▶ ${rule.label.split(': ')[1] ?? rule.label}`, () => {
       void sendRuntimeMessage({ kind: 'run-rule', payload: { ruleId: rule.id, site: rule.site } })
         .then((result) => {
-          const runtimeFailure = runtimeFailureMessage(result);
+          const runtimeFailure = executionFailureMessage(
+            normalizeRuleExecution(result),
+            { treatPartialAsFailure: true },
+          );
           if (runtimeFailure) {
             showToast({ message: runtimeFailure, variant: 'error' });
           }
@@ -712,7 +703,10 @@ function renderRules(): HTMLElement {
             payload: { ruleId: rule.id, site: rule.site, resultMode: 'return' },
           });
 
-          const runtimeFailure = runtimeFailureMessage(result);
+          const normalized = normalizeRuleExecution(result);
+          const runtimeFailure = executionFailureMessage(normalized, {
+            treatPartialAsFailure: true,
+          });
           if (runtimeFailure) {
             throw new Error(runtimeFailure);
           }
@@ -840,15 +834,19 @@ function renderData(): HTMLElement {
       const indexRows: Record<string, string>[] = [];
       for (const site of sites) {
         for (const ruleId of (captureRules[site] ?? [])) {
-          const stored = await storageGet<Record<string, unknown> | null>('cv_last_run_' + site, null);
+          const runKey = 'cv_last_run_' + site + '_' + ruleId;
+          const fallbackKey = 'cv_last_run_' + site;
+          const stored = await storageGet<Record<string, unknown> | null>(runKey, null)
+            || await storageGet<Record<string, unknown> | null>(fallbackKey, null);
           if (stored) {
-            const resp = stored as Record<string, unknown>;
-            const data = resp.data ?? resp;
-            const rowCount = Array.isArray(data) ? String(data.length) : '—';
+            const normalized = normalizeRuleExecution(stored);
+            const rowCount = String(extractCaptureRows(normalized).length || 0);
             indexRows.push({
               rule: ruleId,
               site: site,
-              status: resp.ok !== false ? '\u2713 OK' : '\u2715 Error',
+              status: executionFailureMessage(normalized, { treatPartialAsFailure: true })
+                ? '\u2715 Error'
+                : '\u2713 OK',
               rows: rowCount,
               timestamp: new Date().toLocaleString(),
             });
@@ -1117,13 +1115,9 @@ function renderLogs(): HTMLElement {
     { key: 'message', label: 'Message' },
   ];
 
-  const sampleLogs = [
-    { timestamp: new Date().toISOString(), level: 'info', source: 'extension', message: 'Extension loaded — all systems nominal' },
-  ];
-
   const table = new DataTable({
     columns,
-    data: sampleLogs,
+    data: [],
     title: 'Activity Logs',
     searchable: true,
     exportable: true,
@@ -1131,7 +1125,57 @@ function renderLogs(): HTMLElement {
     pageSize: 50,
   });
 
+  const controls = document.createElement('div');
+  Object.assign(controls.style, {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  });
+  const refreshBtn = createButton('Refresh', 'secondary');
+  const clearBtn = createButton('Clear Logs', 'danger');
+  controls.appendChild(refreshBtn);
+  controls.appendChild(clearBtn);
+  container.appendChild(controls);
   container.appendChild(table.getElement());
+
+  const toRows = (entries: StoredLogEntry[]): Record<string, string>[] => {
+    return entries
+      .slice()
+      .sort((a, b) => b.timestamp_ms - a.timestamp_ms)
+      .map((entry) => ({
+        timestamp: new Date(entry.timestamp_ms).toLocaleString(),
+        level: String(entry.level ?? ''),
+        source: String(entry.source ?? ''),
+        message: String(entry.message ?? ''),
+      }));
+  };
+
+  const refreshLogs = async () => {
+    const entries = await loadLogs();
+    table.setData(toRows(entries));
+  };
+
+  refreshBtn.addEventListener('click', () => {
+    void refreshLogs();
+  });
+  clearBtn.addEventListener('click', () => {
+    void clearLogs()
+      .then(() => {
+        table.setData([]);
+        showToast({ message: 'Logs cleared', variant: 'success' });
+      })
+      .catch((err) => {
+        showToast({ message: `Failed to clear logs: ${String(err)}`, variant: 'error' });
+      });
+  });
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    if (!changes.cv_logs) return;
+    void refreshLogs();
+  });
+  void refreshLogs();
 
   return container;
 }

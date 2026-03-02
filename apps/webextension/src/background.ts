@@ -1,5 +1,6 @@
 import { formatError, queryActiveTab, sendTabMessage, storageGet, storageSet } from './shared/webext-async';
 import type { RuntimeCommand, RuntimeResponse } from './shared/messages';
+import { executionFailureMessage, normalizeRuleExecution } from './shared/rule-result';
 
 type OpenControlCenterCommand = Extract<RuntimeCommand, { kind: 'open-control-center' }>;
 
@@ -104,6 +105,18 @@ function isRuntimeResponse(value: unknown): value is RuntimeResponse {
   );
 }
 
+async function persistLastRunBestEffort(site: string | undefined, ruleId: string, data: unknown): Promise<void> {
+  if (!site) return;
+  try {
+    await storageSet({
+      [`cv_last_run_${site}`]: data,
+      [`cv_last_run_${site}_${ruleId}`]: data,
+    });
+  } catch {
+    // best effort
+  }
+}
+
 async function handleMessage(
   message: RuntimeCommand,
   sender: chrome.runtime.MessageSender,
@@ -137,14 +150,17 @@ async function handleMessage(
           await appendLogEntry('error', `rule:${ruleId}`, result.error ?? 'Rule execution failed');
           return result;
         }
-        await appendLogEntry('info', `rule:${ruleId}`, `Executed rule ${ruleId}`);
-        try {
-          if (site) {
-            await storageSet({ [`cv_last_run_${site}`]: result.data });
-          }
-        } catch {
-          // best effort
+        const normalized = normalizeRuleExecution(result);
+        const nestedFailure = executionFailureMessage(normalized, {
+          treatPartialAsFailure: true,
+        });
+        if (nestedFailure) {
+          const level = normalized.workflowStatus === 'partial' ? 'warn' : 'error';
+          await appendLogEntry(level, `rule:${ruleId}`, nestedFailure);
+          return { ok: false, error: nestedFailure, data: result.data };
         }
+        await appendLogEntry('info', `rule:${ruleId}`, `Executed rule ${ruleId}`);
+        await persistLastRunBestEffort(site, ruleId, result.data);
         return result;
       } catch (err) {
         await appendLogEntry('error', `rule:${ruleId}`, formatError(err));
@@ -153,7 +169,7 @@ async function handleMessage(
     }
 
     case 'run-rule-with-result-mode': {
-      const { ruleId, site, context, resultMode } = message.payload;
+      const { ruleId, site, context } = message.payload;
       if (!(await isRuleEnabled(ruleId))) {
         return { ok: false, error: `Rule ${ruleId} is disabled` };
       }
@@ -171,10 +187,17 @@ async function handleMessage(
           await appendLogEntry('error', `rule:${ruleId}`, result.error ?? 'Rule execution failed');
           return result;
         }
-        await appendLogEntry('info', `rule:${ruleId}`, `Executed rule ${ruleId}`);
-        if (site && resultMode === 'store') {
-          await storageSet({ [`cv_last_run_${site}`]: result.data });
+        const normalized = normalizeRuleExecution(result);
+        const nestedFailure = executionFailureMessage(normalized, {
+          treatPartialAsFailure: true,
+        });
+        if (nestedFailure) {
+          const level = normalized.workflowStatus === 'partial' ? 'warn' : 'error';
+          await appendLogEntry(level, `rule:${ruleId}`, nestedFailure);
+          return { ok: false, error: nestedFailure, data: result.data };
         }
+        await appendLogEntry('info', `rule:${ruleId}`, `Executed rule ${ruleId}`);
+        await persistLastRunBestEffort(site, ruleId, result.data);
         return result;
       } catch (err) {
         await appendLogEntry('error', `rule:${ruleId}`, formatError(err));

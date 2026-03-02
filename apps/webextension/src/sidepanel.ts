@@ -3,12 +3,20 @@ import { createCard, getCardBody } from './ui/components/card';
 import { createBadge } from './ui/components/badge';
 import { createButton } from './ui/components/modal';
 import { showToast } from './ui/components/toast';
-import { createResultViewer, ResultArtifact } from './ui/components/result-viewer';
+import { createResultViewer } from './ui/components/result-viewer';
+import type { ResultArtifact } from './ui/components/result-viewer';
 import { ProgressTracker } from './ui/components/progress-tracker';
 import { ValidationAlert } from './ui/components/validation-alert';
 import { sendRuntimeMessage, sendTabMessage, queryActiveTab } from './shared/webext-async';
 import type { RuntimeResponse } from './shared/messages';
 import type { UiRuleSummary } from './shared/runtime';
+import { saveCapturedData } from './shared/storage-bridge';
+import {
+  executionFailureMessage,
+  extractCaptureRows,
+  normalizeRuleExecution,
+  toPrimaryResultArtifact,
+} from './shared/rule-result';
 
 async function detectSite(): Promise<string | null> {
   try {
@@ -50,22 +58,9 @@ async function loadRulesForSite(site: string): Promise<UiRuleSummary[]> {
   }
 }
 
-function parseResultToArtifact(ruleId: string, ruleLabel: string, raw: unknown): ResultArtifact | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const resp = raw as Record<string, unknown>;
-  const data = resp.data ?? resp;
-
-  if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && data[0] !== null) {
-    const rows = data as Record<string, string>[];
-    const keys = Object.keys(rows[0]);
-    return {
-      type: 'table',
-      title: ruleLabel,
-      columns: keys.map((k) => ({ key: k, label: k, sortable: true })),
-      rows,
-      meta: { Rule: ruleId, Rows: String(rows.length), Captured: new Date().toLocaleTimeString() },
-    };
-  }
+function fallbackResultArtifact(ruleId: string, ruleLabel: string, raw: unknown): ResultArtifact {
+  const resp = raw as Record<string, unknown> | null;
+  const data = resp && typeof resp === 'object' && 'data' in resp ? resp.data : raw;
 
   if (typeof data === 'object' && data !== null) {
     return {
@@ -82,19 +77,6 @@ function parseResultToArtifact(ruleId: string, ruleLabel: string, raw: unknown):
     text: String(data),
     meta: { Rule: ruleId },
   };
-}
-
-function runtimeFailureMessage(result: unknown): string | null {
-  if (!result || typeof result !== 'object') return 'Rule execution did not return a response';
-  const responseLike = result as Record<string, unknown>;
-  if (responseLike.ok === false) {
-    return String(responseLike.error ?? responseLike.message ?? 'Rule execution failed');
-  }
-  const status = typeof responseLike.status === 'string' ? responseLike.status.toLowerCase() : '';
-  if (status === 'failed' || status === 'error' || status === 'partial') {
-    return String(responseLike.error ?? responseLike.message ?? `Rule execution ended with status: ${status}`);
-  }
-  return null;
 }
 
 async function init() {
@@ -330,9 +312,6 @@ async function init() {
         }
 
         try {
-          const tab = await queryActiveTab();
-          if (!tab?.id) throw new Error('No active tab');
-
           if (tracker) {
             tracker.update({
               steps: [
@@ -344,12 +323,15 @@ async function init() {
             });
           }
 
-          const result = await sendTabMessage(tab.id, {
+          const result = await sendRuntimeMessage({
             kind: 'run-rule-with-result-mode' as const,
             payload: { ruleId: rule.id, site: rule.site, resultMode: 'return' },
           });
 
-          const runtimeFailure = runtimeFailureMessage(result);
+          const normalized = normalizeRuleExecution(result);
+          const runtimeFailure = executionFailureMessage(normalized, {
+            treatPartialAsFailure: true,
+          });
           if (runtimeFailure) {
             throw new Error(runtimeFailure);
           }
@@ -368,18 +350,20 @@ async function init() {
           }
 
           if (alert) {
-            const resp = result as Record<string, unknown> | undefined;
-            const ok = resp?.ok !== false;
+            const ok = !executionFailureMessage(normalized, { treatPartialAsFailure: true });
             alert.update({
               variant: ok ? 'valid' : 'invalid',
               title: ok ? 'Validation passed' : 'Validation failed',
-              message: ok ? 'All checks completed successfully.' : String((resp as any)?.error ?? 'Check details below.'),
+              message: ok
+                ? 'All checks completed successfully.'
+                : (normalized.errorMessage ?? 'Check details below.'),
               onRetry: () => runBtn.click(),
             });
           }
 
           if (isDataCapture || (!isValidation && !isLongRunning)) {
-            const artifact = parseResultToArtifact(rule.id, rule.label, result);
+            const artifact = toPrimaryResultArtifact(normalized, rule.id, rule.label)
+              ?? fallbackResultArtifact(rule.id, rule.label, result);
             if (artifact) {
               const viewer = createResultViewer({
                 artifact,
@@ -391,6 +375,9 @@ async function init() {
                 },
               });
               resultArea.prepend(viewer);
+              if (isDataCapture && artifact.type === 'table') {
+                void saveCapturedData(rule.site + '_' + rule.id, extractCaptureRows(normalized)).catch(() => {});
+              }
             }
           }
 

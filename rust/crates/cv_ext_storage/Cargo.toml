@@ -6,3 +6,6 @@ edition = "2021"
 [dependencies]
 serde.workspace = true
 cv_ext_contract = { path = "../cv_ext_contract" }
+
+[lints]
+workspace = true

@@ -1,7 +1,7 @@
+use crate::errors::WasmRuntimeError;
 use js_sys::Date;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
-use crate::errors::WasmRuntimeError;
 
 pub const MENU_STATE_EVENT: &str = "cv:menu-state-change";
 pub const JIRA_STATE_KEY: &str = "cv.menu.jira.jql.state.v1";
